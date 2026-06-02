@@ -12,3 +12,11 @@ Poke-clo.*/
 *.ilk
 *.exe
 *.tlog
+
+# Repo-local native build tools
+.tools/
+
+# Generated SCons output
+.sconsign.dblite
+compile_commands.json
+poke-clone-esports-ui/bin/
