@@ -69,6 +69,73 @@ BattleResult BattleSystem::Run(Player& player, Opponent& opponent)
     return won ? BattleResult::Victory : BattleResult::Defeat;
 }
 
+AutomatedBattleResult BattleSystem::RunAutomated(Player player, Opponent opponent)
+{
+    // DEV BALANCE TOOL ONLY:
+    // Copies are intentional. A simulated fight must not mutate a real save or
+    // print thousands of combat messages. Both sides use the same simple AI.
+    constexpr int MaximumTurns = 100;
+    AutomatedBattleResult result;
+
+    while (player.hp > 0 && opponent.hp > 0 && result.turns < MaximumTurns)
+    {
+        ++result.turns;
+
+        SkillProgress* playerSkill = SelectAutomatedSkill(player.knownSkills, player.style, player.focus);
+        const Skill* playerDefinition = playerSkill == nullptr ? nullptr : data_.FindSkill(playerSkill->skillId);
+        if (playerDefinition == nullptr)
+        {
+            result.draw = true;
+            break;
+        }
+
+        player.focus -= GetFocusCost(*playerDefinition, *playerSkill);
+        if (Chance(GetAccuracy(*playerDefinition, *playerSkill)))
+        {
+            opponent.hp = std::max(0, opponent.hp - CalculateDamage(
+                *playerDefinition,
+                *playerSkill,
+                player.basePower,
+                player.spec,
+                opponent.spec,
+                false));
+        }
+        AwardSkillXp(*playerSkill, *playerDefinition, false);
+
+        if (opponent.hp <= 0)
+        {
+            break;
+        }
+
+        SkillProgress* opponentSkill = SelectAutomatedSkill(opponent.skills, opponent.style, opponent.focus);
+        const Skill* opponentDefinition = opponentSkill == nullptr ? nullptr : data_.FindSkill(opponentSkill->skillId);
+        if (opponentDefinition == nullptr)
+        {
+            result.draw = true;
+            break;
+        }
+
+        opponent.focus -= GetFocusCost(*opponentDefinition, *opponentSkill);
+        if (Chance(GetAccuracy(*opponentDefinition, *opponentSkill)))
+        {
+            player.hp = std::max(0, player.hp - CalculateDamage(
+                *opponentDefinition,
+                *opponentSkill,
+                opponent.basePower,
+                opponent.spec,
+                player.spec,
+                false));
+        }
+        AwardSkillXp(*opponentSkill, *opponentDefinition, false);
+    }
+
+    result.playerWon = opponent.hp <= 0 && player.hp > 0;
+    result.draw = result.draw || (player.hp > 0 && opponent.hp > 0);
+    result.playerHpRemaining = player.hp;
+    result.opponentHpRemaining = opponent.hp;
+    return result;
+}
+
 void BattleSystem::DisplayStatus(const Player& player, const Opponent& opponent) const
 {
     // SANDBOX UI ONLY:
@@ -140,19 +207,30 @@ SkillProgress* BattleSystem::SelectPlayerSkill(Player& player) const
 
 SkillProgress* BattleSystem::SelectEnemySkill(Opponent& opponent)
 {
+    return SelectAutomatedSkill(opponent.skills, opponent.style, opponent.focus);
+}
+
+SkillProgress* BattleSystem::SelectAutomatedSkill(std::vector<SkillProgress>& skills, Style style, int focus)
+{
     std::vector<SkillProgress*> affordableSkills;
-    for (SkillProgress& skill : opponent.skills)
+    for (SkillProgress& skill : skills)
     {
         const Skill* definition = data_.FindSkill(skill.skillId);
         if (definition != nullptr
-            && IsAvailableForStyle(*definition, opponent.style)
-            && GetFocusCost(*definition, skill) <= opponent.focus)
+            && IsAvailableForStyle(*definition, style)
+            && GetFocusCost(*definition, skill) <= focus)
         {
             affordableSkills.push_back(&skill);
         }
     }
 
-    // Every opponent receives a free basic skill, so there is always an action.
+    // Every competitor should receive a free basic skill. Returning nullptr
+    // keeps the developer simulator safe if sample data is edited incorrectly.
+    if (affordableSkills.empty())
+    {
+        return nullptr;
+    }
+
     std::uniform_int_distribution<int> chooseSkill(0, static_cast<int>(affordableSkills.size()) - 1);
     return affordableSkills[chooseSkill(randomEngine_)];
 }
@@ -252,14 +330,15 @@ int BattleSystem::CalculateDamage(
     const SkillProgress& skill,
     int attackerBasePower,
     Spec attackerSpec,
-    Spec defenderSpec) const
+    Spec defenderSpec,
+    bool showFeedback) const
 {
     const double modifier = GetSpecModifier(attackerSpec, defenderSpec);
-    if (modifier > Balance::NeutralModifier)
+    if (showFeedback && modifier > Balance::NeutralModifier)
     {
         std::cout << "Super effective! ";
     }
-    else if (modifier < Balance::NeutralModifier)
+    else if (showFeedback && modifier < Balance::NeutralModifier)
     {
         std::cout << "Not very effective... ";
     }
@@ -271,14 +350,17 @@ int BattleSystem::CalculateDamage(
         (attackerBasePower + GetPower(definition, skill)) * modifier)));
 }
 
-void BattleSystem::AwardSkillXp(SkillProgress& skill, const Skill& definition) const
+void BattleSystem::AwardSkillXp(SkillProgress& skill, const Skill& definition, bool showFeedback) const
 {
     skill.xp += Balance::SkillXpPerUse;
     while (skill.xp >= Balance::SkillXpPerLevel)
     {
         skill.xp -= Balance::SkillXpPerLevel;
         ++skill.level;
-        std::cout << definition.name << " reached skill level " << skill.level << "!\n";
+        if (showFeedback)
+        {
+            std::cout << definition.name << " reached skill level " << skill.level << "!\n";
+        }
     }
 }
 

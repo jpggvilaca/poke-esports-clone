@@ -12,17 +12,30 @@ enum class BattleResult
     Defeat
 };
 
+// DEV BALANCE TOOL ONLY:
+// The batch simulator uses this quiet result instead of parsing console text.
+struct AutomatedBattleResult
+{
+    bool playerWon = false;
+    bool draw = false;
+    int turns = 0;
+    int playerHpRemaining = 0;
+    int opponentHpRemaining = 0;
+};
+
 class BattleSystem
 {
 public:
     BattleSystem(const SimulationData& data, std::mt19937& randomEngine);
 
     BattleResult Run(Player& player, Opponent& opponent);
+    AutomatedBattleResult RunAutomated(Player player, Opponent opponent);
 
 private:
     void DisplayStatus(const Player& player, const Opponent& opponent) const;
     SkillProgress* SelectPlayerSkill(Player& player) const;
     SkillProgress* SelectEnemySkill(Opponent& opponent);
+    SkillProgress* SelectAutomatedSkill(std::vector<SkillProgress>& skills, Style style, int focus);
     void SelectPlayerStyle(Player& player) const;
     void RunPlayerTurn(Player& player, Opponent& opponent, SkillProgress& skill);
     void RunEnemyTurn(Player& player, Opponent& opponent, SkillProgress& skill);
@@ -35,8 +48,9 @@ private:
         const SkillProgress& skill,
         int attackerBasePower,
         Spec attackerSpec,
-        Spec defenderSpec) const;
-    void AwardSkillXp(SkillProgress& skill, const Skill& definition) const;
+        Spec defenderSpec,
+        bool showFeedback = true) const;
+    void AwardSkillXp(SkillProgress& skill, const Skill& definition, bool showFeedback = true) const;
     bool Chance(double probability);
 
     bool IsAvailableForStyle(const Skill& definition, Style style) const;

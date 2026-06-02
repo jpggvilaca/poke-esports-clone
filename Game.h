@@ -13,6 +13,7 @@ class Game
 public:
     Game();
     void Run();
+    void RunBalanceSimulation(int battlePairsPerMatchup);
 
 private:
     void DisplayMenu() const;

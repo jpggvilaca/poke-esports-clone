@@ -27,3 +27,12 @@ Godot UI is built. It is not the final game loop or final presentation layer.
   own display labels.
 
 Search for `SANDBOX UI ONLY` to find temporary console code quickly.
+
+## Developer Balance Tool
+
+- Run `Poke-clone-esports.exe --balance 250` to execute mirrored automated
+  battles and print a spec win-rate matrix.
+- Mirrored battles swap turn order so first-attacker advantage does not make a
+  spec look stronger than it is.
+- Styles are randomized for each automated battle.
+- Search for `DEV BALANCE TOOL ONLY` when this temporary workflow is replaced.

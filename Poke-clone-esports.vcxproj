@@ -144,18 +144,21 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClCompile Include="BalanceSimulator.cpp" />
     <ClCompile Include="BattleSystem.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="SimulationData.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BalanceSimulator.h" />
     <ClInclude Include="BattleSystem.h" />
     <ClInclude Include="Game.h" />
     <ClInclude Include="SimulationData.h" />
     <ClInclude Include="Models.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="BALANCE_NOTES.md" />
     <None Include="SANDBOX_NOTES.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

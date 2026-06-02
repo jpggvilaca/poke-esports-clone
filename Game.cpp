@@ -1,5 +1,7 @@
 #include "Game.h"
 
+#include "BalanceSimulator.h"
+
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -65,7 +67,7 @@ void Game::Run()
     while (running)
     {
         DisplayMenu();
-        switch (ReadInt("> ", 1, 9))
+        switch (ReadInt("> ", 1, 10))
         {
         case 1: CreateCompetitor(); break;
         case 2: ViewProfile(); break;
@@ -75,7 +77,8 @@ void Game::Run()
         case 6: RestoreCompetitor(); break;
         case 7: RunSampleTournament(); break;
         case 8: RunManualRivalBattle(); break;
-        case 9: running = false; break;
+        case 9: RunBalanceSimulation(ReadInt("Battle pairs per matchup (10-2000): ", 10, 2000)); break;
+        case 10: running = false; break;
         }
     }
 
@@ -95,7 +98,22 @@ void Game::DisplayMenu() const
         << "6. Restore HP and focus\n"
         << "7. Run configurable sample tournament\n"
         << "8. Generate rival battle manually\n"
-        << "9. Exit\n";
+        << "9. Run developer balance simulation\n"
+        << "10. Exit\n";
+}
+
+void Game::RunBalanceSimulation(int battlePairsPerMatchup)
+{
+    // DEV BALANCE TOOL ONLY:
+    // This uses mirrored automated battles to measure tuning changes quickly.
+    if (battlePairsPerMatchup < 1)
+    {
+        std::cout << "Battle-pair count must be at least 1.\n";
+        return;
+    }
+
+    BalanceSimulator simulator(data_, battleSystem_, randomEngine_);
+    simulator.Run(battlePairsPerMatchup);
 }
 
 void Game::CreateCompetitor()
