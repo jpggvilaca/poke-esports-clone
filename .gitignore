@@ -1,0 +1,14 @@
+# Visual Studio user settings and cache
+.vs/
+*.vcxproj.user
+
+# C++ build output
+x64/
+Debug/
+Release/
+Poke-clo.*/
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.tlog
