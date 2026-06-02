@@ -4,9 +4,8 @@
 #include <string>
 #include <vector>
 
-// CORE MODEL FILE
-// These structs are the small amount of game state worth keeping when the
-// temporary console sandbox is replaced by Godot.
+// This file contains small data-only types. The simulation owns ordinary C++
+// structs so it can stay independent from Godot, a console, or any future UI.
 
 enum class GameType
 {
@@ -29,26 +28,6 @@ enum class Style
     Balanced
 };
 
-enum class RankTier
-{
-    Bronze,
-    Silver,
-    Gold,
-    Platinum,
-    Diamond,
-    Master,
-    Challenger
-};
-
-enum class StoreItemType
-{
-    SkillManual,
-    RestoreHp,
-    RestoreFocus,
-    AttackBoost,
-    DefenseBoost
-};
-
 enum class SkillEffectType
 {
     None,
@@ -63,8 +42,39 @@ enum class SkillEffectTarget
     Opponent
 };
 
-// SANDBOX UI ONLY:
-// Godot will eventually decide how enum values appear on screen.
+enum class BattleActor
+{
+    None,
+    Player,
+    Opponent
+};
+
+enum class BattleWinner
+{
+    None,
+    Player,
+    Opponent
+};
+
+// Events describe what happened without deciding how it should look. Godot can
+// turn these into labels now and animations later without changing combat math.
+enum class BattleEventType
+{
+    BattleStarted,
+    SkillUsed,
+    Missed,
+    DamageDealt,
+    Healed,
+    SuperEffective,
+    NotVeryEffective,
+    AttackModified,
+    DefenseModified,
+    StyleChanged,
+    SkillLeveledUp,
+    BattleFinished,
+    ActionRejected
+};
+
 inline std::string ToString(GameType gameType)
 {
     switch (gameType)
@@ -101,25 +111,8 @@ inline std::string ToString(Style style)
     return "Unknown";
 }
 
-inline std::string ToString(RankTier tier)
-{
-    switch (tier)
-    {
-    case RankTier::Bronze: return "Bronze";
-    case RankTier::Silver: return "Silver";
-    case RankTier::Gold: return "Gold";
-    case RankTier::Platinum: return "Platinum";
-    case RankTier::Diamond: return "Diamond";
-    case RankTier::Master: return "Master";
-    case RankTier::Challenger: return "Challenger";
-    }
-
-    return "Unknown";
-}
-
-// Skill stores shared rules. A missing requiredStyle means that every loadout
-// can use the skill. Power above zero deals damage. A skill can also apply one
-// small secondary effect, which is enough for the first style experiments.
+// Skill stores rules shared by every competitor. A missing requiredStyle means
+// every loadout can use the skill. SkillProgress below stores personal growth.
 struct Skill
 {
     std::string id;
@@ -134,10 +127,6 @@ struct Skill
     int effectUses = 0;
 };
 
-// SkillProgress stores one competitor's changing relationship with a skill.
-// Example: Skill says Basic Attack starts at 16 power. SkillProgress says the
-// player's copy is level 2 with 25 XP. Both are needed because shared rules and
-// personal progress change for different reasons.
 struct SkillProgress
 {
     std::string skillId;
@@ -145,8 +134,6 @@ struct SkillProgress
     int xp = 0;
 };
 
-// SpecData groups skills and records one future-proof matchup rule.
-// counteredSpec means "this spec deals bonus damage to that spec."
 struct SpecData
 {
     Spec spec;
@@ -155,41 +142,8 @@ struct SpecData
     Spec counteredSpec;
 };
 
-// GameTypeData lets one game genre own its available specs.
-// Only League exists in the MVP, so the console skips a genre selection menu.
-struct GameTypeData
-{
-    GameType gameType;
-    std::string name;
-    std::vector<Spec> specs;
-};
-
-// A store item can teach a skill, restore a resource, or add a bonus later.
-// Price belongs here because stores sell items, not skills directly.
-struct StoreItem
-{
-    std::string id;
-    std::string name;
-    StoreItemType type;
-    std::string taughtSkillId;
-    int price;
-};
-
-// DATA FOUNDATION ONLY:
-// Tournament requirements are stored now but enforced in a later increment.
-struct TournamentData
-{
-    std::string id;
-    std::string name;
-    int minimumRankPoints;
-    int entryFee;
-};
-
-// CORE BATTLE STATE:
-// These modifiers last only for the current fight. New effects replace old
-// effects instead of stacking forever. Remaining uses are measured in hits:
-// attack modifiers affect outgoing damage hits; defense modifiers affect
-// incoming damage hits.
+// These modifiers exist for one battle only. Remaining uses are measured in
+// hits: attack modifiers affect outgoing hits and defense modifiers incoming.
 struct BattleStatus
 {
     int attackModifierPercent = 0;
@@ -198,28 +152,24 @@ struct BattleStatus
     int defenseModifierHits = 0;
 };
 
-struct Player
+// Both sides follow the same combat rules, so one type replaces the earlier
+// duplicated Player and Opponent structs.
+struct Competitor
 {
     std::string name;
     GameType gameType = GameType::LeagueOfLegends;
     Spec spec = Spec::Top;
     Style style = Style::Balanced;
-    int level = 1;
-    int xp = 0;
-    int xpToNextLevel = 100;
-    int rankPoints = 0;
-    RankTier rankTier = RankTier::Bronze;
     int hp = 100;
     int maxHp = 100;
     int focus = 50;
     int maxFocus = 50;
     int basePower = 5;
-    int currency = 100;
-    std::vector<SkillProgress> knownSkills;
+    std::vector<SkillProgress> skills;
 
     SkillProgress* FindSkill(const std::string& skillId)
     {
-        for (SkillProgress& skill : knownSkills)
+        for (SkillProgress& skill : skills)
         {
             if (skill.skillId == skillId)
             {
@@ -232,7 +182,7 @@ struct Player
 
     const SkillProgress* FindSkill(const std::string& skillId) const
     {
-        for (const SkillProgress& skill : knownSkills)
+        for (const SkillProgress& skill : skills)
         {
             if (skill.skillId == skillId)
             {
@@ -242,32 +192,70 @@ struct Player
 
         return nullptr;
     }
-
-    bool KnowsSkill(const std::string& skillId) const
-    {
-        return FindSkill(skillId) != nullptr;
-    }
-
-    void LearnSkill(const std::string& skillId)
-    {
-        if (!KnowsSkill(skillId))
-        {
-            knownSkills.push_back({ skillId });
-        }
-    }
 };
 
-struct Opponent
+struct BattleSetup
+{
+    GameType gameType = GameType::LeagueOfLegends;
+    Spec playerSpec = Spec::Top;
+    Style playerStyle = Style::Balanced;
+    Spec opponentSpec = Spec::Jungle;
+    Style opponentStyle = Style::Balanced;
+};
+
+// Views are read-only snapshots. A UI receives copies instead of pointers, so
+// it cannot accidentally mutate simulation state behind BattleSession's back.
+struct CompetitorView
 {
     std::string name;
-    GameType gameType = GameType::LeagueOfLegends;
     Spec spec = Spec::Top;
     Style style = Style::Balanced;
+    int hp = 0;
+    int maxHp = 0;
+    int focus = 0;
+    int maxFocus = 0;
+    int basePower = 0;
+    BattleStatus status;
+};
+
+struct BattleState
+{
+    bool started = false;
+    bool finished = false;
+    BattleWinner winner = BattleWinner::None;
+    CompetitorView player;
+    CompetitorView opponent;
+};
+
+struct SkillView
+{
+    std::string id;
+    std::string name;
+    int power = 0;
+    int focusCost = 0;
+    double accuracy = 0.0;
     int level = 1;
-    int hp = 100;
-    int maxHp = 100;
-    int focus = 50;
-    int maxFocus = 50;
-    int basePower = 5;
-    std::vector<SkillProgress> skills;
+    int xp = 0;
+    SkillEffectType effectType = SkillEffectType::None;
+    SkillEffectTarget effectTarget = SkillEffectTarget::Self;
+    int effectValue = 0;
+    int effectUses = 0;
+};
+
+struct BattleEvent
+{
+    BattleEventType type = BattleEventType::BattleStarted;
+    BattleActor actor = BattleActor::None;
+    BattleActor target = BattleActor::None;
+    std::string skillId;
+    std::string message;
+    int value = 0;
+    int duration = 0;
+};
+
+struct BattleActionResult
+{
+    bool accepted = false;
+    std::string error;
+    std::vector<BattleEvent> events;
 };

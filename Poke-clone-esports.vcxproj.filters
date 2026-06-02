@@ -15,16 +15,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BalanceSimulator.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="BattleSystem.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="Game.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="BattleSession.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="SimulationData.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="main.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BalanceSimulator.h"><Filter>Header Files</Filter></ClInclude>
-    <ClInclude Include="BattleSystem.h"><Filter>Header Files</Filter></ClInclude>
-    <ClInclude Include="Game.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="BattleSession.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="SimulationData.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="Models.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
