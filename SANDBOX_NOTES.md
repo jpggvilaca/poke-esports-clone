@@ -11,7 +11,7 @@ Godot UI is built. It is not the final game loop or final presentation layer.
   generic sample rows with real content later.
 - The calculations inside `BattleSystem.cpp`: focus spending, style-filtered
   loadouts, affordable enemy actions, accuracy, damage, spec modifiers, minimum
-  damage, and skill XP.
+  damage, healing, temporary attack and defense modifiers, and skill XP.
 - The small progression calculations in `Game.cpp`: player XP, leveling, rank
   tiers, generated opponents, recovery, store purchase, and tournament rounds.
   Move these into their own Godot-facing simulation API only when that becomes
@@ -21,7 +21,7 @@ Godot UI is built. It is not the final game loop or final presentation layer.
 
 - `main.cpp`.
 - The menu loop, input helpers, and formatted console output in `Game.cpp`.
-- The input helper, free in-battle style switching menu, and formatted
+- The input helper, turn-consuming in-battle style switching menu, and formatted
   `std::cout` text in `BattleSystem.cpp`.
 - Console labels returned by `ToString(...)` in `Models.h` if Godot stores its
   own display labels.
@@ -35,4 +35,7 @@ Search for `SANDBOX UI ONLY` to find temporary console code quickly.
 - Mirrored battles swap turn order so first-attacker advantage does not make a
   spec look stronger than it is.
 - Styles are randomized for each automated battle.
+- A neutral fixed-loadout style-vs-style matrix helps tune burst, healing, and
+  utility independently from spec counters. It intentionally does not simulate
+  the player's tactical style switching.
 - Search for `DEV BALANCE TOOL ONLY` when this temporary workflow is replaced.

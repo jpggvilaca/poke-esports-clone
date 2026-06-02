@@ -52,15 +52,35 @@ BattleResult BattleSystem::Run(Player& player, Opponent& opponent)
         return BattleResult::Defeat;
     }
 
+    BattleStatus playerStatus;
+    BattleStatus opponentStatus;
+
     // Edit this loop if you want to change the order of a combat turn.
     while (player.hp > 0 && opponent.hp > 0)
     {
         DisplayStatus(player, opponent);
-        RunPlayerTurn(player, opponent, *SelectPlayerSkill(player));
+        SkillProgress* playerSkill = SelectPlayerSkill(player);
+        if (playerSkill != nullptr)
+        {
+            RunPlayerTurn(player, opponent, playerStatus, opponentStatus, *playerSkill);
+        }
+        else
+        {
+            // Changing loadout style is deliberately a meaningful action.
+            std::cout << player.name << " spends the turn changing style.\n";
+        }
 
         if (opponent.hp > 0)
         {
-            RunEnemyTurn(player, opponent, *SelectEnemySkill(opponent));
+            SkillProgress* opponentSkill = SelectAutomatedSkill(
+                opponent.skills,
+                opponent.style,
+                opponent.hp,
+                opponent.maxHp,
+                opponent.focus,
+                opponentStatus,
+                playerStatus);
+            RunEnemyTurn(player, opponent, playerStatus, opponentStatus, *opponentSkill);
         }
     }
 
@@ -76,12 +96,21 @@ AutomatedBattleResult BattleSystem::RunAutomated(Player player, Opponent opponen
     // print thousands of combat messages. Both sides use the same simple AI.
     constexpr int MaximumTurns = 100;
     AutomatedBattleResult result;
+    BattleStatus playerStatus;
+    BattleStatus opponentStatus;
 
     while (player.hp > 0 && opponent.hp > 0 && result.turns < MaximumTurns)
     {
         ++result.turns;
 
-        SkillProgress* playerSkill = SelectAutomatedSkill(player.knownSkills, player.style, player.focus);
+        SkillProgress* playerSkill = SelectAutomatedSkill(
+            player.knownSkills,
+            player.style,
+            player.hp,
+            player.maxHp,
+            player.focus,
+            playerStatus,
+            opponentStatus);
         const Skill* playerDefinition = playerSkill == nullptr ? nullptr : data_.FindSkill(playerSkill->skillId);
         if (playerDefinition == nullptr)
         {
@@ -89,25 +118,33 @@ AutomatedBattleResult BattleSystem::RunAutomated(Player player, Opponent opponen
             break;
         }
 
-        player.focus -= GetFocusCost(*playerDefinition, *playerSkill);
-        if (Chance(GetAccuracy(*playerDefinition, *playerSkill)))
-        {
-            opponent.hp = std::max(0, opponent.hp - CalculateDamage(
-                *playerDefinition,
-                *playerSkill,
-                player.basePower,
-                player.spec,
-                opponent.spec,
-                false));
-        }
-        AwardSkillXp(*playerSkill, *playerDefinition, false);
+        UseSkill(
+            player.name,
+            player.hp,
+            player.maxHp,
+            player.focus,
+            player.basePower,
+            player.spec,
+            playerStatus,
+            opponent.hp,
+            opponent.spec,
+            opponentStatus,
+            *playerSkill,
+            false);
 
         if (opponent.hp <= 0)
         {
             break;
         }
 
-        SkillProgress* opponentSkill = SelectAutomatedSkill(opponent.skills, opponent.style, opponent.focus);
+        SkillProgress* opponentSkill = SelectAutomatedSkill(
+            opponent.skills,
+            opponent.style,
+            opponent.hp,
+            opponent.maxHp,
+            opponent.focus,
+            opponentStatus,
+            playerStatus);
         const Skill* opponentDefinition = opponentSkill == nullptr ? nullptr : data_.FindSkill(opponentSkill->skillId);
         if (opponentDefinition == nullptr)
         {
@@ -115,18 +152,19 @@ AutomatedBattleResult BattleSystem::RunAutomated(Player player, Opponent opponen
             break;
         }
 
-        opponent.focus -= GetFocusCost(*opponentDefinition, *opponentSkill);
-        if (Chance(GetAccuracy(*opponentDefinition, *opponentSkill)))
-        {
-            player.hp = std::max(0, player.hp - CalculateDamage(
-                *opponentDefinition,
-                *opponentSkill,
-                opponent.basePower,
-                opponent.spec,
-                player.spec,
-                false));
-        }
-        AwardSkillXp(*opponentSkill, *opponentDefinition, false);
+        UseSkill(
+            opponent.name,
+            opponent.hp,
+            opponent.maxHp,
+            opponent.focus,
+            opponent.basePower,
+            opponent.spec,
+            opponentStatus,
+            player.hp,
+            player.spec,
+            playerStatus,
+            *opponentSkill,
+            false);
     }
 
     result.playerWon = opponent.hp <= 0 && player.hp > 0;
@@ -183,15 +221,16 @@ SkillProgress* BattleSystem::SelectPlayerSkill(Player& player) const
                 << " | Power " << GetPower(*definition, skill)
                 << " | Focus " << GetFocusCost(*definition, skill)
                 << " | Accuracy " << static_cast<int>(GetAccuracy(*definition, skill) * 100)
-                << "% | Skill Lv " << skill.level << "\n";
+                << "% | Skill Lv " << skill.level
+                << DescribeEffect(*definition, skill) << "\n";
         }
-        std::cout << availableSkills.size() + 1 << ". Change style loadout (free action)\n";
+        std::cout << availableSkills.size() + 1 << ". Change style loadout (uses turn)\n";
 
         const int choice = ReadInt("> ", 1, static_cast<int>(availableSkills.size()) + 1);
         if (choice == static_cast<int>(availableSkills.size()) + 1)
         {
             SelectPlayerStyle(player);
-            continue;
+            return nullptr;
         }
 
         SkillProgress* selected = availableSkills[choice - 1];
@@ -205,12 +244,14 @@ SkillProgress* BattleSystem::SelectPlayerSkill(Player& player) const
     }
 }
 
-SkillProgress* BattleSystem::SelectEnemySkill(Opponent& opponent)
-{
-    return SelectAutomatedSkill(opponent.skills, opponent.style, opponent.focus);
-}
-
-SkillProgress* BattleSystem::SelectAutomatedSkill(std::vector<SkillProgress>& skills, Style style, int focus)
+SkillProgress* BattleSystem::SelectAutomatedSkill(
+    std::vector<SkillProgress>& skills,
+    Style style,
+    int hp,
+    int maxHp,
+    int focus,
+    const BattleStatus& selfStatus,
+    const BattleStatus& opponentStatus)
 {
     std::vector<SkillProgress*> affordableSkills;
     for (SkillProgress& skill : skills)
@@ -218,6 +259,7 @@ SkillProgress* BattleSystem::SelectAutomatedSkill(std::vector<SkillProgress>& sk
         const Skill* definition = data_.FindSkill(skill.skillId);
         if (definition != nullptr
             && IsAvailableForStyle(*definition, style)
+            && IsUsefulAutomatedSkill(*definition, hp, maxHp, selfStatus, opponentStatus)
             && GetFocusCost(*definition, skill) <= focus)
         {
             affordableSkills.push_back(&skill);
@@ -248,7 +290,63 @@ void BattleSystem::SelectPlayerStyle(Player& player) const
     std::cout << "Changed to the " << ToString(player.style) << " loadout.\n";
 }
 
-void BattleSystem::RunPlayerTurn(Player& player, Opponent& opponent, SkillProgress& skill)
+void BattleSystem::RunPlayerTurn(
+    Player& player,
+    Opponent& opponent,
+    BattleStatus& playerStatus,
+    BattleStatus& opponentStatus,
+    SkillProgress& skill)
+{
+    UseSkill(
+        player.name,
+        player.hp,
+        player.maxHp,
+        player.focus,
+        player.basePower,
+        player.spec,
+        playerStatus,
+        opponent.hp,
+        opponent.spec,
+        opponentStatus,
+        skill,
+        true);
+}
+
+void BattleSystem::RunEnemyTurn(
+    Player& player,
+    Opponent& opponent,
+    BattleStatus& playerStatus,
+    BattleStatus& opponentStatus,
+    SkillProgress& skill)
+{
+    UseSkill(
+        opponent.name,
+        opponent.hp,
+        opponent.maxHp,
+        opponent.focus,
+        opponent.basePower,
+        opponent.spec,
+        opponentStatus,
+        player.hp,
+        player.spec,
+        playerStatus,
+        skill,
+        true);
+}
+
+void BattleSystem::UseSkill(
+    const std::string& attackerName,
+    int& attackerHp,
+    int attackerMaxHp,
+    int& attackerFocus,
+    int attackerBasePower,
+    Spec attackerSpec,
+    BattleStatus& attackerStatus,
+    int& defenderHp,
+    Spec defenderSpec,
+    BattleStatus& defenderStatus,
+    SkillProgress& skill,
+    bool showFeedback)
 {
     const Skill* definition = data_.FindSkill(skill.skillId);
     if (definition == nullptr)
@@ -256,47 +354,48 @@ void BattleSystem::RunPlayerTurn(Player& player, Opponent& opponent, SkillProgre
         return;
     }
 
-    player.focus -= GetFocusCost(*definition, skill);
-    std::cout << player.name << " uses " << definition->name << ".\n";
+    attackerFocus -= GetFocusCost(*definition, skill);
+    if (showFeedback)
+    {
+        std::cout << attackerName << " uses " << definition->name << ".\n";
+    }
 
     if (Chance(GetAccuracy(*definition, skill)))
     {
-        const int damage = CalculateDamage(*definition, skill, player.basePower, player.spec, opponent.spec);
-        opponent.hp = std::max(0, opponent.hp - damage);
-        std::cout << "It deals " << damage << " damage.\n";
+        if (definition->power > 0)
+        {
+            const int damage = CalculateDamage(
+                *definition,
+                skill,
+                attackerBasePower,
+                attackerSpec,
+                defenderSpec,
+                attackerStatus,
+                defenderStatus,
+                showFeedback);
+            defenderHp = std::max(0, defenderHp - damage);
+            if (showFeedback)
+            {
+                std::cout << "It deals " << damage << " damage.\n";
+            }
+        }
+
+        ApplySecondaryEffect(
+            *definition,
+            skill,
+            attackerHp,
+            attackerMaxHp,
+            attackerStatus,
+            defenderStatus,
+            showFeedback);
     }
-    else
+    else if (showFeedback)
     {
         std::cout << "The skill misses.\n";
     }
 
     // Edit Balance::SkillXpPerUse if skills level too quickly or too slowly.
-    AwardSkillXp(skill, *definition);
-}
-
-void BattleSystem::RunEnemyTurn(Player& player, Opponent& opponent, SkillProgress& skill)
-{
-    const Skill* definition = data_.FindSkill(skill.skillId);
-    if (definition == nullptr)
-    {
-        return;
-    }
-
-    opponent.focus -= GetFocusCost(*definition, skill);
-    std::cout << opponent.name << " uses " << definition->name << ".\n";
-
-    if (Chance(GetAccuracy(*definition, skill)))
-    {
-        const int damage = CalculateDamage(*definition, skill, opponent.basePower, opponent.spec, player.spec);
-        player.hp = std::max(0, player.hp - damage);
-        std::cout << "It deals " << damage << " damage.\n";
-    }
-    else
-    {
-        std::cout << "The skill misses.\n";
-    }
-
-    AwardSkillXp(skill, *definition);
+    AwardSkillXp(skill, *definition, showFeedback);
 }
 
 int BattleSystem::GetPower(const Skill& definition, const SkillProgress& skill) const
@@ -321,8 +420,50 @@ int BattleSystem::GetFocusCost(const Skill& definition, const SkillProgress& ski
 
 double BattleSystem::GetAccuracy(const Skill& definition, const SkillProgress& skill) const
 {
-    // Edit 0.98 or 0.02 to change the accuracy cap or improvement per level.
-    return std::min(0.98, definition.accuracy + (skill.level - 1) * 0.02);
+    // Edit 0.98 or 0.02 to change the attack accuracy cap or improvement per
+    // level. Pure utility skills may reach 100% so reliable heals and buffs do
+    // not unexpectedly miss. Damage skills always retain a small miss chance.
+    const double improvedAccuracy = definition.accuracy + (skill.level - 1) * 0.02;
+    return definition.power == 0
+        ? std::min(1.0, improvedAccuracy)
+        : std::min(0.98, improvedAccuracy);
+}
+
+int BattleSystem::GetEffectValue(const Skill& definition, const SkillProgress& skill) const
+{
+    // Utility skills improve as they level too. Positive values grow upward;
+    // negative values grow downward so debuffs become more potent.
+    const int growth = (skill.level - 1) * Balance::SkillLevelUpEffectValue;
+    return definition.effectValue < 0
+        ? definition.effectValue - growth
+        : definition.effectValue + growth;
+}
+
+std::string BattleSystem::DescribeEffect(const Skill& definition, const SkillProgress& skill) const
+{
+    // SANDBOX UI ONLY:
+    // Delete this text formatting when Godot renders skill details visually.
+    if (definition.effectType == SkillEffectType::None)
+    {
+        return "";
+    }
+
+    const int effectValue = GetEffectValue(definition, skill);
+    if (definition.effectType == SkillEffectType::Heal)
+    {
+        return " | Heal " + std::to_string(effectValue) + " HP";
+    }
+
+    const std::string target = definition.effectTarget == SkillEffectTarget::Opponent
+        ? "Enemy "
+        : "";
+    const std::string stat = definition.effectType == SkillEffectType::AttackModifier
+        ? "attack "
+        : "defense ";
+    const std::string sign = effectValue >= 0 ? "+" : "";
+
+    return " | " + target + stat + sign + std::to_string(effectValue)
+        + "% for " + std::to_string(definition.effectUses) + " hit(s)";
 }
 
 int BattleSystem::CalculateDamage(
@@ -331,6 +472,8 @@ int BattleSystem::CalculateDamage(
     int attackerBasePower,
     Spec attackerSpec,
     Spec defenderSpec,
+    BattleStatus& attackerStatus,
+    BattleStatus& defenderStatus,
     bool showFeedback) const
 {
     const double modifier = GetSpecModifier(attackerSpec, defenderSpec);
@@ -343,11 +486,85 @@ int BattleSystem::CalculateDamage(
         std::cout << "Not very effective... ";
     }
 
+    double damage = (attackerBasePower + GetPower(definition, skill)) * modifier;
+
+    if (attackerStatus.attackModifierHits > 0)
+    {
+        damage *= (100.0 + attackerStatus.attackModifierPercent) / 100.0;
+        --attackerStatus.attackModifierHits;
+        if (attackerStatus.attackModifierHits == 0)
+        {
+            attackerStatus.attackModifierPercent = 0;
+        }
+    }
+
+    if (defenderStatus.defenseModifierHits > 0)
+    {
+        damage *= (100.0 - defenderStatus.defenseModifierPercent) / 100.0;
+        --defenderStatus.defenseModifierHits;
+        if (defenderStatus.defenseModifierHits == 0)
+        {
+            defenderStatus.defenseModifierPercent = 0;
+        }
+    }
+
     // CORE COMBAT FORMULA:
-    // Edit this expression if base power and skill power should combine differently.
-    // A successful hit always deals at least one damage.
-    return std::max(1, static_cast<int>(std::round(
-        (attackerBasePower + GetPower(definition, skill)) * modifier)));
+    // Edit the status percentages in SimulationData.cpp to tune buffs. A
+    // successful hit always deals at least one damage.
+    return std::max(1, static_cast<int>(std::round(damage)));
+}
+
+void BattleSystem::ApplySecondaryEffect(
+    const Skill& definition,
+    const SkillProgress& skill,
+    int& attackerHp,
+    int attackerMaxHp,
+    BattleStatus& attackerStatus,
+    BattleStatus& defenderStatus,
+    bool showFeedback) const
+{
+    if (definition.effectType == SkillEffectType::None)
+    {
+        return;
+    }
+
+    const int effectValue = GetEffectValue(definition, skill);
+    BattleStatus& targetStatus = definition.effectTarget == SkillEffectTarget::Self
+        ? attackerStatus
+        : defenderStatus;
+
+    if (definition.effectType == SkillEffectType::Heal)
+    {
+        const int oldHp = attackerHp;
+        attackerHp = std::min(attackerMaxHp, attackerHp + effectValue);
+        if (showFeedback)
+        {
+            std::cout << "Recovered " << attackerHp - oldHp << " HP.\n";
+        }
+        return;
+    }
+
+    if (definition.effectType == SkillEffectType::AttackModifier)
+    {
+        targetStatus.attackModifierPercent = effectValue;
+        targetStatus.attackModifierHits = definition.effectUses;
+        if (showFeedback)
+        {
+            std::cout
+                << (effectValue >= 0 ? "Attack increased" : "Attack reduced")
+                << " for " << definition.effectUses << " hit(s).\n";
+        }
+        return;
+    }
+
+    targetStatus.defenseModifierPercent = effectValue;
+    targetStatus.defenseModifierHits = definition.effectUses;
+    if (showFeedback)
+    {
+        std::cout
+            << (effectValue >= 0 ? "Defense increased" : "Defense reduced")
+            << " for " << definition.effectUses << " hit(s).\n";
+    }
 }
 
 void BattleSystem::AwardSkillXp(SkillProgress& skill, const Skill& definition, bool showFeedback) const
@@ -375,6 +592,38 @@ bool BattleSystem::IsAvailableForStyle(const Skill& definition, Style style) con
     // Universal basic skills have no required style. Special skills require the
     // active loadout style and can be presented as colored actions in Godot.
     return !definition.requiredStyle.has_value() || definition.requiredStyle.value() == style;
+}
+
+bool BattleSystem::IsUsefulAutomatedSkill(
+    const Skill& definition,
+    int hp,
+    int maxHp,
+    const BattleStatus& selfStatus,
+    const BattleStatus& opponentStatus) const
+{
+    // DEV BALANCE TOOL ONLY:
+    // Keep AI intentionally simple, but do not waste pure utility actions when
+    // their effect cannot help. Damage skills remain valid even with a drawback.
+    if (definition.power > 0 || definition.effectType == SkillEffectType::None)
+    {
+        return true;
+    }
+
+    if (definition.effectType == SkillEffectType::Heal)
+    {
+        return hp < maxHp;
+    }
+
+    const BattleStatus& targetStatus = definition.effectTarget == SkillEffectTarget::Self
+        ? selfStatus
+        : opponentStatus;
+
+    if (definition.effectType == SkillEffectType::AttackModifier)
+    {
+        return targetStatus.attackModifierHits == 0;
+    }
+
+    return targetStatus.defenseModifierHits == 0;
 }
 
 double BattleSystem::GetSpecModifier(Spec attackerSpec, Spec defenderSpec) const

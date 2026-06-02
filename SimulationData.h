@@ -19,6 +19,7 @@ namespace Balance
     inline constexpr int SkillXpPerLevel = 100;
     inline constexpr int SkillLevelUpPower = 4;
     inline constexpr int SkillLevelUpFocusCost = 2;
+    inline constexpr int SkillLevelUpEffectValue = 4;
     inline constexpr double AdvantageModifier = 1.05;
     inline constexpr double DisadvantageModifier = 0.95;
     inline constexpr double NeutralModifier = 1.0;
@@ -43,4 +44,3 @@ private:
     std::vector<StoreItem> storeItems_;
     std::vector<TournamentData> tournaments_;
 };
-

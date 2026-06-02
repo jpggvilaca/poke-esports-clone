@@ -147,12 +147,12 @@ void Game::CreateCompetitor()
     player_->style = static_cast<Style>(styleChoice - 1);
     player_->basePower = Balance::StartingBasePower;
 
-    // Edit these lines to change starting skills. The player begins with the
-    // universal basic action and one special action for each style loadout.
-    player_->LearnSkill(spec.skillIds[0]);
-    player_->LearnSkill(spec.skillIds[1]);
-    player_->LearnSkill(spec.skillIds[2]);
-    player_->LearnSkill(spec.skillIds[3]);
+    // Edit this count to change starting skills. The first 10 rows are the
+    // universal basic action plus three actions for each style loadout.
+    for (int index = 0; index < 10; ++index)
+    {
+        player_->LearnSkill(spec.skillIds[index]);
+    }
 
     std::cout
         << "\nCreated " << player_->name
@@ -380,7 +380,7 @@ Opponent Game::GenerateOpponent(bool isRival)
 std::vector<SkillProgress> Game::BuildOpponentSkills(Spec spec, bool includeAdvanced) const
 {
     const std::vector<std::string>& skillIds = data_.GetSpec(spec).skillIds;
-    const int count = includeAdvanced ? 5 : 4;
+    const int count = includeAdvanced ? 11 : 10;
 
     std::vector<SkillProgress> skills;
     for (int index = 0; index < count; ++index)

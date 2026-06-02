@@ -49,6 +49,20 @@ enum class StoreItemType
     DefenseBoost
 };
 
+enum class SkillEffectType
+{
+    None,
+    Heal,
+    AttackModifier,
+    DefenseModifier
+};
+
+enum class SkillEffectTarget
+{
+    Self,
+    Opponent
+};
+
 // SANDBOX UI ONLY:
 // Godot will eventually decide how enum values appear on screen.
 inline std::string ToString(GameType gameType)
@@ -104,7 +118,8 @@ inline std::string ToString(RankTier tier)
 }
 
 // Skill stores shared rules. A missing requiredStyle means that every loadout
-// can use the skill. The zero-focus basic skills use that universal option.
+// can use the skill. Power above zero deals damage. A skill can also apply one
+// small secondary effect, which is enough for the first style experiments.
 struct Skill
 {
     std::string id;
@@ -113,6 +128,10 @@ struct Skill
     int focusCost;
     int power;
     double accuracy;
+    SkillEffectType effectType = SkillEffectType::None;
+    SkillEffectTarget effectTarget = SkillEffectTarget::Self;
+    int effectValue = 0;
+    int effectUses = 0;
 };
 
 // SkillProgress stores one competitor's changing relationship with a skill.
@@ -164,6 +183,19 @@ struct TournamentData
     std::string name;
     int minimumRankPoints;
     int entryFee;
+};
+
+// CORE BATTLE STATE:
+// These modifiers last only for the current fight. New effects replace old
+// effects instead of stacking forever. Remaining uses are measured in hits:
+// attack modifiers affect outgoing damage hits; defense modifiers affect
+// incoming damage hits.
+struct BattleStatus
+{
+    int attackModifierPercent = 0;
+    int attackModifierHits = 0;
+    int defenseModifierPercent = 0;
+    int defenseModifierHits = 0;
 };
 
 struct Player
@@ -239,4 +271,3 @@ struct Opponent
     int basePower = 5;
     std::vector<SkillProgress> skills;
 };
-

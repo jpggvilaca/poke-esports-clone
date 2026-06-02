@@ -10,7 +10,10 @@ Poke-clone-esports.exe --balance 250
 
 This executes 500 mirrored battles per matrix cell: 250 with each spec acting
 first and 250 with turn order reversed. Across five specs, that is 12,500
-automated fights. Styles are randomized.
+automated fights. Styles are randomized. The report also prints neutral
+fixed-loadout style-vs-style results so burst, healing, and utility can be tuned
+independently from spec counters. Automated fighters do not switch styles, so
+that second matrix is a diagnostic rather than a model of optimal play.
 
 ## Baseline: June 2, 2026
 
@@ -38,12 +41,28 @@ matchup.
   observed performance and win rates:
   https://na.finalfantasyxiv.com/jobguide/adjustments/
 
-## Next Tuning Hypothesis
+## First Tuning Experiment
 
-Test softer spec modifiers before changing other values. A reasonable first
-experiment is advantage `1.10x` and disadvantage `0.90x`, then compare the
-counter-spec win rates with this baseline.
+The first experiment was to soften spec modifiers before changing other values:
+advantage `1.10x` and disadvantage `0.90x`, compared with the original
+baseline.
 
-Keep skill power, focus costs, accuracy, and HP unchanged during that experiment
-so the effect of the spec modifiers remains easy to understand.
+Keeping skill power, focus costs, accuracy, and HP unchanged during a tuning
+experiment makes the effect of the chosen modifier easier to understand.
 
+## Utility Loadout Baseline: June 2, 2026
+
+With the first aggressive, defensive, and balanced utility skills in place and
+the softer advantage `1.05x` and disadvantage `0.95x`, counter specs won roughly
+`58%` to `64%` of automated fights.
+
+The fixed-loadout style audit shows that aggressive loadouts win isolated damage
+races. This is useful information, not a target result: defensive and balanced
+skills are intended to create tactical moments before the player switches back
+to damage.
+
+## Next Tuning Question
+
+Play manually and observe whether spending one turn to switch styles creates
+interesting choices. If defensive or balanced skills rarely justify that cost,
+tune their effect values before adding more kinds of effects.
