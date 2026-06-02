@@ -78,46 +78,60 @@ void BattleSystem::DisplayStatus(const Player& player, const Opponent& opponent)
         << " | HP " << player.hp << "/" << player.maxHp
         << " | Focus " << player.focus << "/" << player.maxFocus
         << " | Level " << player.level
+        << " | Spec " << ToString(player.spec)
+        << " | Style " << ToString(player.style)
         << " | Rank " << ToString(player.rankTier) << " (" << player.rankPoints << " RP)\n"
         << opponent.name
         << " | HP " << opponent.hp << "/" << opponent.maxHp
         << " | Focus " << opponent.focus << "/" << opponent.maxFocus
         << " | Level " << opponent.level
+        << " | Spec " << ToString(opponent.spec)
         << " | Style " << ToString(opponent.style) << "\n";
 }
 
 SkillProgress* BattleSystem::SelectPlayerSkill(Player& player) const
 {
     // SANDBOX UI ONLY:
-    // Godot should eventually pass the chosen skill ID into the simulation.
+    // Godot should eventually pass the chosen style and skill ID into the simulation.
     while (true)
     {
-        std::cout << "\nChoose a skill:\n";
-        for (int index = 0; index < static_cast<int>(player.knownSkills.size()); ++index)
+        std::vector<SkillProgress*> availableSkills;
+        for (SkillProgress& skill : player.knownSkills)
         {
-            const SkillProgress& skill = player.knownSkills[index];
             const Skill* definition = data_.FindSkill(skill.skillId);
-            if (definition == nullptr)
+            if (definition != nullptr && IsAvailableForStyle(*definition, player.style))
             {
-                continue;
+                availableSkills.push_back(&skill);
             }
+        }
+
+        std::cout << "\nChoose a skill for the " << ToString(player.style) << " loadout:\n";
+        for (int index = 0; index < static_cast<int>(availableSkills.size()); ++index)
+        {
+            const SkillProgress& skill = *availableSkills[index];
+            const Skill* definition = data_.FindSkill(skill.skillId);
 
             std::cout
                 << index + 1 << ". " << definition->name
-                << " | " << ToString(definition->style)
                 << " | Power " << GetPower(*definition, skill)
                 << " | Focus " << GetFocusCost(*definition, skill)
                 << " | Accuracy " << static_cast<int>(GetAccuracy(*definition, skill) * 100)
                 << "% | Skill Lv " << skill.level << "\n";
         }
+        std::cout << availableSkills.size() + 1 << ". Change style loadout (free action)\n";
 
-        const int choice = ReadInt("> ", 1, static_cast<int>(player.knownSkills.size()));
-        SkillProgress& selected = player.knownSkills[choice - 1];
-        const Skill* definition = data_.FindSkill(selected.skillId);
-
-        if (definition != nullptr && GetFocusCost(*definition, selected) <= player.focus)
+        const int choice = ReadInt("> ", 1, static_cast<int>(availableSkills.size()) + 1);
+        if (choice == static_cast<int>(availableSkills.size()) + 1)
         {
-            return &selected;
+            SelectPlayerStyle(player);
+            continue;
+        }
+
+        SkillProgress* selected = availableSkills[choice - 1];
+        const Skill* definition = data_.FindSkill(selected->skillId);
+        if (definition != nullptr && GetFocusCost(*definition, *selected) <= player.focus)
+        {
+            return selected;
         }
 
         std::cout << "Not enough focus for that skill. Choose another action.\n";
@@ -130,7 +144,9 @@ SkillProgress* BattleSystem::SelectEnemySkill(Opponent& opponent)
     for (SkillProgress& skill : opponent.skills)
     {
         const Skill* definition = data_.FindSkill(skill.skillId);
-        if (definition != nullptr && GetFocusCost(*definition, skill) <= opponent.focus)
+        if (definition != nullptr
+            && IsAvailableForStyle(*definition, opponent.style)
+            && GetFocusCost(*definition, skill) <= opponent.focus)
         {
             affordableSkills.push_back(&skill);
         }
@@ -139,6 +155,19 @@ SkillProgress* BattleSystem::SelectEnemySkill(Opponent& opponent)
     // Every opponent receives a free basic skill, so there is always an action.
     std::uniform_int_distribution<int> chooseSkill(0, static_cast<int>(affordableSkills.size()) - 1);
     return affordableSkills[chooseSkill(randomEngine_)];
+}
+
+void BattleSystem::SelectPlayerStyle(Player& player) const
+{
+    // SANDBOX UI ONLY:
+    // Godot will eventually render this as a loadout control with colors.
+    std::cout
+        << "\nChoose style loadout:\n"
+        << "1. Aggressive\n"
+        << "2. Defensive\n"
+        << "3. Balanced\n";
+    player.style = static_cast<Style>(ReadInt("> ", 1, 3) - 1);
+    std::cout << "Changed to the " << ToString(player.style) << " loadout.\n";
 }
 
 void BattleSystem::RunPlayerTurn(Player& player, Opponent& opponent, SkillProgress& skill)
@@ -154,7 +183,7 @@ void BattleSystem::RunPlayerTurn(Player& player, Opponent& opponent, SkillProgre
 
     if (Chance(GetAccuracy(*definition, skill)))
     {
-        const int damage = CalculateDamage(*definition, skill, opponent.style);
+        const int damage = CalculateDamage(*definition, skill, player.basePower, player.spec, opponent.spec);
         opponent.hp = std::max(0, opponent.hp - damage);
         std::cout << "It deals " << damage << " damage.\n";
     }
@@ -180,7 +209,7 @@ void BattleSystem::RunEnemyTurn(Player& player, Opponent& opponent, SkillProgres
 
     if (Chance(GetAccuracy(*definition, skill)))
     {
-        const int damage = CalculateDamage(*definition, skill, player.style);
+        const int damage = CalculateDamage(*definition, skill, opponent.basePower, opponent.spec, player.spec);
         player.hp = std::max(0, player.hp - damage);
         std::cout << "It deals " << damage << " damage.\n";
     }
@@ -194,14 +223,22 @@ void BattleSystem::RunEnemyTurn(Player& player, Opponent& opponent, SkillProgres
 
 int BattleSystem::GetPower(const Skill& definition, const SkillProgress& skill) const
 {
-    // Edit the number 4 to change how much power each skill level adds.
-    return definition.power + (skill.level - 1) * 4;
+    // Edit Balance::SkillLevelUpPower to change power gained per skill level.
+    return definition.power + (skill.level - 1) * Balance::SkillLevelUpPower;
 }
 
 int BattleSystem::GetFocusCost(const Skill& definition, const SkillProgress& skill) const
 {
-    // Edit the number 2 to change how quickly skills become cheaper when leveled.
-    return std::max(0, definition.focusCost - (skill.level - 1) * 2);
+    // Universal basic skills stay free forever. This guarantees that a
+    // competitor cannot run out of available actions during a battle.
+    if (definition.focusCost == 0)
+    {
+        return 0;
+    }
+
+    // A leveled skill becomes stronger and more expensive to use.
+    // Edit Balance::SkillLevelUpFocusCost to tune that resource tradeoff.
+    return definition.focusCost + (skill.level - 1) * Balance::SkillLevelUpFocusCost;
 }
 
 double BattleSystem::GetAccuracy(const Skill& definition, const SkillProgress& skill) const
@@ -213,20 +250,25 @@ double BattleSystem::GetAccuracy(const Skill& definition, const SkillProgress& s
 int BattleSystem::CalculateDamage(
     const Skill& definition,
     const SkillProgress& skill,
-    Style defenderStyle) const
+    int attackerBasePower,
+    Spec attackerSpec,
+    Spec defenderSpec) const
 {
-    const double modifier = GetStyleModifier(definition.style, defenderStyle);
+    const double modifier = GetSpecModifier(attackerSpec, defenderSpec);
     if (modifier > Balance::NeutralModifier)
     {
-        std::cout << "Style advantage! ";
+        std::cout << "Super effective! ";
     }
     else if (modifier < Balance::NeutralModifier)
     {
-        std::cout << "Style disadvantage. ";
+        std::cout << "Not very effective... ";
     }
 
+    // CORE COMBAT FORMULA:
+    // Edit this expression if base power and skill power should combine differently.
     // A successful hit always deals at least one damage.
-    return std::max(1, static_cast<int>(std::round(GetPower(definition, skill) * modifier)));
+    return std::max(1, static_cast<int>(std::round(
+        (attackerBasePower + GetPower(definition, skill)) * modifier)));
 }
 
 void BattleSystem::AwardSkillXp(SkillProgress& skill, const Skill& definition) const
@@ -246,23 +288,24 @@ bool BattleSystem::Chance(double probability)
     return roll(randomEngine_) < probability;
 }
 
-double BattleSystem::GetStyleModifier(Style attackerStyle, Style defenderStyle)
+bool BattleSystem::IsAvailableForStyle(const Skill& definition, Style style) const
 {
-    if (attackerStyle == defenderStyle)
-    {
-        return Balance::NeutralModifier;
-    }
-
-    return HasAdvantage(attackerStyle, defenderStyle)
-        ? Balance::AdvantageModifier
-        : Balance::DisadvantageModifier;
+    // Universal basic skills have no required style. Special skills require the
+    // active loadout style and can be presented as colored actions in Godot.
+    return !definition.requiredStyle.has_value() || definition.requiredStyle.value() == style;
 }
 
-bool BattleSystem::HasAdvantage(Style attackerStyle, Style defenderStyle)
+double BattleSystem::GetSpecModifier(Spec attackerSpec, Spec defenderSpec) const
 {
-    // Edit these comparisons if you ever want to change the style triangle.
-    return
-        (attackerStyle == Style::Aggressive && defenderStyle == Style::Balanced)
-        || (attackerStyle == Style::Balanced && defenderStyle == Style::Defensive)
-        || (attackerStyle == Style::Defensive && defenderStyle == Style::Aggressive);
+    if (data_.GetSpec(attackerSpec).counteredSpec == defenderSpec)
+    {
+        return Balance::AdvantageModifier;
+    }
+
+    if (data_.GetSpec(defenderSpec).counteredSpec == attackerSpec)
+    {
+        return Balance::DisadvantageModifier;
+    }
+
+    return Balance::NeutralModifier;
 }

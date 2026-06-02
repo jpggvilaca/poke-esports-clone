@@ -23,18 +23,24 @@ private:
     void DisplayStatus(const Player& player, const Opponent& opponent) const;
     SkillProgress* SelectPlayerSkill(Player& player) const;
     SkillProgress* SelectEnemySkill(Opponent& opponent);
+    void SelectPlayerStyle(Player& player) const;
     void RunPlayerTurn(Player& player, Opponent& opponent, SkillProgress& skill);
     void RunEnemyTurn(Player& player, Opponent& opponent, SkillProgress& skill);
 
     int GetPower(const Skill& definition, const SkillProgress& skill) const;
     int GetFocusCost(const Skill& definition, const SkillProgress& skill) const;
     double GetAccuracy(const Skill& definition, const SkillProgress& skill) const;
-    int CalculateDamage(const Skill& definition, const SkillProgress& skill, Style defenderStyle) const;
+    int CalculateDamage(
+        const Skill& definition,
+        const SkillProgress& skill,
+        int attackerBasePower,
+        Spec attackerSpec,
+        Spec defenderSpec) const;
     void AwardSkillXp(SkillProgress& skill, const Skill& definition) const;
     bool Chance(double probability);
 
-    static double GetStyleModifier(Style attackerStyle, Style defenderStyle);
-    static bool HasAdvantage(Style attackerStyle, Style defenderStyle);
+    bool IsAvailableForStyle(const Skill& definition, Style style) const;
+    double GetSpecModifier(Spec attackerSpec, Spec defenderSpec) const;
 
     const SimulationData& data_;
     std::mt19937& randomEngine_;

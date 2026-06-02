@@ -20,18 +20,18 @@ private:
     void ViewProfile() const;
     void RunGeneratedBattle();
     void VisitShop();
+    void ChangeStyleLoadout();
     void RestoreCompetitor();
     void RunSampleTournament();
     void RunManualRivalBattle();
 
     Opponent GenerateOpponent(bool isRival = false);
-    std::vector<SkillProgress> BuildOpponentSkills(Spec spec, int extraSkills) const;
+    std::vector<SkillProgress> BuildOpponentSkills(Spec spec, bool includeAdvanced) const;
     void AwardVictory(const Opponent& opponent);
     void AwardPlayerXp(int xp);
     void UpdateRankTier();
 
     int RandomInt(int minimum, int maximum);
-    static Style CounterStyle(Style style);
     static RankTier CalculateRankTier(int rankPoints);
     bool RequirePlayer() const;
 

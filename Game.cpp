@@ -65,16 +65,17 @@ void Game::Run()
     while (running)
     {
         DisplayMenu();
-        switch (ReadInt("> ", 1, 8))
+        switch (ReadInt("> ", 1, 9))
         {
         case 1: CreateCompetitor(); break;
         case 2: ViewProfile(); break;
         case 3: RunGeneratedBattle(); break;
         case 4: VisitShop(); break;
-        case 5: RestoreCompetitor(); break;
-        case 6: RunSampleTournament(); break;
-        case 7: RunManualRivalBattle(); break;
-        case 8: running = false; break;
+        case 5: ChangeStyleLoadout(); break;
+        case 6: RestoreCompetitor(); break;
+        case 7: RunSampleTournament(); break;
+        case 8: RunManualRivalBattle(); break;
+        case 9: running = false; break;
         }
     }
 
@@ -90,23 +91,28 @@ void Game::DisplayMenu() const
         << "2. View profile and skills\n"
         << "3. Generate opponent battle\n"
         << "4. Visit skill manual shop\n"
-        << "5. Restore HP and focus\n"
-        << "6. Run configurable sample tournament\n"
-        << "7. Generate rival battle manually\n"
-        << "8. Exit\n";
+        << "5. Change style loadout\n"
+        << "6. Restore HP and focus\n"
+        << "7. Run configurable sample tournament\n"
+        << "8. Generate rival battle manually\n"
+        << "9. Exit\n";
 }
 
 void Game::CreateCompetitor()
 {
     const std::string name = ReadName();
 
-    std::cout << "\nChoose a spec:\n";
-    const std::vector<SpecData>& specs = data_.GetSpecs();
-    for (int index = 0; index < static_cast<int>(specs.size()); ++index)
+    // MVP: Only League of Legends exists, so genre selection is skipped.
+    // Add a GameType prompt here when SimulationData contains another genre.
+    const GameType gameType = GameType::LeagueOfLegends;
+    const GameTypeData& gameTypeData = data_.GetGameType(gameType);
+    std::cout << "\nGame type: " << gameTypeData.name << "\n";
+    std::cout << "Choose a spec:\n";
+    for (int index = 0; index < static_cast<int>(gameTypeData.specs.size()); ++index)
     {
-        std::cout << index + 1 << ". " << specs[index].name << "\n";
+        std::cout << index + 1 << ". " << ToString(gameTypeData.specs[index]) << "\n";
     }
-    const int specChoice = ReadInt("> ", 1, static_cast<int>(specs.size()));
+    const int specChoice = ReadInt("> ", 1, static_cast<int>(gameTypeData.specs.size()));
 
     std::cout
         << "\nChoose a personal style:\n"
@@ -115,21 +121,27 @@ void Game::CreateCompetitor()
         << "3. Balanced\n";
     const int styleChoice = ReadInt("> ", 1, 3);
 
-    const SpecData& spec = specs[specChoice - 1];
+    const SpecData& spec = data_.GetSpec(gameTypeData.specs[specChoice - 1]);
     player_ = Player{};
     player_->name = name;
+    player_->gameType = gameType;
     player_->spec = spec.spec;
     player_->style = static_cast<Style>(styleChoice - 1);
+    player_->basePower = Balance::StartingBasePower;
 
-    // Edit these two lines if you want players to start with more or fewer skills.
+    // Edit these lines to change starting skills. The player begins with the
+    // universal basic action and one special action for each style loadout.
     player_->LearnSkill(spec.skillIds[0]);
     player_->LearnSkill(spec.skillIds[1]);
+    player_->LearnSkill(spec.skillIds[2]);
+    player_->LearnSkill(spec.skillIds[3]);
 
     std::cout
         << "\nCreated " << player_->name
+        << " | Game type " << ToString(player_->gameType)
         << " | Spec " << ToString(player_->spec)
         << " | Style " << ToString(player_->style) << "\n"
-        << "Learned a free basic skill and one starter skill.\n";
+        << "Learned a free basic skill and one starter skill for each style.\n";
 }
 
 void Game::ViewProfile() const
@@ -142,12 +154,14 @@ void Game::ViewProfile() const
     std::cout
         << "\n=== Competitor Profile ===\n"
         << "Name: " << player_->name << "\n"
+        << "Game type: " << ToString(player_->gameType) << "\n"
         << "Spec: " << ToString(player_->spec) << "\n"
         << "Style: " << ToString(player_->style) << "\n"
         << "Level: " << player_->level << " | XP: " << player_->xp << "/" << player_->xpToNextLevel << "\n"
         << "Rank: " << ToString(player_->rankTier) << " | RP: " << player_->rankPoints << "\n"
         << "HP: " << player_->hp << "/" << player_->maxHp << "\n"
         << "Focus: " << player_->focus << "/" << player_->maxFocus << "\n"
+        << "Base power: " << player_->basePower << "\n"
         << "Currency: " << player_->currency << "\n"
         << "\nKnown skills:\n";
 
@@ -158,7 +172,10 @@ void Game::ViewProfile() const
         {
             std::cout
                 << "- " << definition->name
-                << " | " << ToString(definition->style)
+                << " | Loadout "
+                << (definition->requiredStyle.has_value()
+                    ? ToString(definition->requiredStyle.value())
+                    : "Universal")
                 << " | Skill Lv " << skill.level
                 << " | XP " << skill.xp << "/" << Balance::SkillXpPerLevel
                 << " | Base power " << definition->power
@@ -194,7 +211,9 @@ void Game::VisitShop()
     {
         const std::vector<std::string>& specSkills = data_.GetSpec(player_->spec).skillIds;
         const bool belongsToSpec = std::find(specSkills.begin(), specSkills.end(), item.taughtSkillId) != specSkills.end();
-        if (belongsToSpec && !player_->KnowsSkill(item.taughtSkillId))
+        if (item.type == StoreItemType::SkillManual
+            && belongsToSpec
+            && !player_->KnowsSkill(item.taughtSkillId))
         {
             availableItems.push_back(&item);
         }
@@ -231,6 +250,24 @@ void Game::VisitShop()
     player_->currency -= item.price;
     player_->LearnSkill(item.taughtSkillId);
     std::cout << "Purchased " << item.name << ".\n";
+}
+
+void Game::ChangeStyleLoadout()
+{
+    if (!RequirePlayer())
+    {
+        return;
+    }
+
+    // SANDBOX UI ONLY:
+    // Godot will eventually render this loadout selection with colors.
+    std::cout
+        << "\nChoose style loadout:\n"
+        << "1. Aggressive\n"
+        << "2. Defensive\n"
+        << "3. Balanced\n";
+    player_->style = static_cast<Style>(ReadInt("> ", 1, 3) - 1);
+    std::cout << "Changed to the " << ToString(player_->style) << " loadout.\n";
 }
 
 void Game::RestoreCompetitor()
@@ -287,8 +324,9 @@ void Game::RunManualRivalBattle()
     Opponent rival = GenerateOpponent(true);
     std::cout
         << "\nGenerated rival manually: " << rival.name
+        << " | Game type " << ToString(rival.gameType)
         << " | Spec " << ToString(rival.spec)
-        << " | Counter style " << ToString(rival.style)
+        << " | Style " << ToString(rival.style)
         << " | Level " << rival.level << "\n";
 
     if (battleSystem_.Run(*player_, rival) == BattleResult::Victory)
@@ -306,8 +344,9 @@ Opponent Game::GenerateOpponent(bool isRival)
 
     Opponent opponent;
     opponent.name = isRival ? "Old Friend" : names[RandomInt(0, static_cast<int>(names.size()) - 1)];
-    opponent.spec = isRival ? player_->spec : static_cast<Spec>(RandomInt(0, 2));
-    opponent.style = isRival ? CounterStyle(player_->style) : static_cast<Style>(RandomInt(0, 2));
+    opponent.gameType = player_->gameType;
+    opponent.spec = isRival ? data_.GetCounterSpec(player_->spec) : static_cast<Spec>(RandomInt(0, 4));
+    opponent.style = static_cast<Style>(RandomInt(0, 2));
     opponent.level = isRival ? player_->level + 1 : std::max(1, player_->level + RandomInt(-1, 1));
 
     // Edit these formulas to change generated opponent durability and focus.
@@ -315,14 +354,15 @@ Opponent Game::GenerateOpponent(bool isRival)
     opponent.hp = opponent.maxHp;
     opponent.maxFocus = 42 + opponent.level * 8;
     opponent.focus = opponent.maxFocus;
-    opponent.skills = BuildOpponentSkills(opponent.spec, opponent.level >= 3 ? 2 : 1);
+    opponent.basePower = Balance::StartingBasePower + (opponent.level - 1) * Balance::PlayerLevelUpBasePower;
+    opponent.skills = BuildOpponentSkills(opponent.spec, opponent.level >= 3);
     return opponent;
 }
 
-std::vector<SkillProgress> Game::BuildOpponentSkills(Spec spec, int extraSkills) const
+std::vector<SkillProgress> Game::BuildOpponentSkills(Spec spec, bool includeAdvanced) const
 {
     const std::vector<std::string>& skillIds = data_.GetSpec(spec).skillIds;
-    const int count = std::min(static_cast<int>(skillIds.size()), extraSkills + 1);
+    const int count = includeAdvanced ? 5 : 4;
 
     std::vector<SkillProgress> skills;
     for (int index = 0; index < count; ++index)
@@ -360,6 +400,7 @@ void Game::AwardPlayerXp(int xp)
         player_->xpToNextLevel = 100 + (player_->level - 1) * 50;
         player_->maxHp += Balance::PlayerLevelUpHp;
         player_->maxFocus += Balance::PlayerLevelUpFocus;
+        player_->basePower += Balance::PlayerLevelUpBasePower;
         player_->hp += Balance::PlayerLevelUpHp;
         player_->focus += Balance::PlayerLevelUpFocus;
 
@@ -376,19 +417,6 @@ int Game::RandomInt(int minimum, int maximum)
 {
     std::uniform_int_distribution<int> roll(minimum, maximum);
     return roll(randomEngine_);
-}
-
-Style Game::CounterStyle(Style style)
-{
-    // Edit this switch if you want to change which style a rival chooses.
-    switch (style)
-    {
-    case Style::Aggressive: return Style::Defensive;
-    case Style::Defensive: return Style::Balanced;
-    case Style::Balanced: return Style::Aggressive;
-    }
-
-    return Style::Balanced;
 }
 
 RankTier Game::CalculateRankTier(int rankPoints)

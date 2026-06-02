@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -7,11 +8,18 @@
 // These structs are the small amount of game state worth keeping when the
 // temporary console sandbox is replaced by Godot.
 
+enum class GameType
+{
+    LeagueOfLegends
+};
+
 enum class Spec
 {
-    SpecA,
-    SpecB,
-    SpecC
+    Top,
+    Jungle,
+    Mid,
+    Adc,
+    Support
 };
 
 enum class Style
@@ -32,15 +40,36 @@ enum class RankTier
     Challenger
 };
 
+enum class StoreItemType
+{
+    SkillManual,
+    RestoreHp,
+    RestoreFocus,
+    AttackBoost,
+    DefenseBoost
+};
+
 // SANDBOX UI ONLY:
 // Godot will eventually decide how enum values appear on screen.
+inline std::string ToString(GameType gameType)
+{
+    switch (gameType)
+    {
+    case GameType::LeagueOfLegends: return "League of Legends";
+    }
+
+    return "Unknown";
+}
+
 inline std::string ToString(Spec spec)
 {
     switch (spec)
     {
-    case Spec::SpecA: return "Spec A";
-    case Spec::SpecB: return "Spec B";
-    case Spec::SpecC: return "Spec C";
+    case Spec::Top: return "Top";
+    case Spec::Jungle: return "Jungle";
+    case Spec::Mid: return "Mid";
+    case Spec::Adc: return "ADC";
+    case Spec::Support: return "Support";
     }
 
     return "Unknown";
@@ -74,13 +103,13 @@ inline std::string ToString(RankTier tier)
     return "Unknown";
 }
 
-// Skill stores shared rules: name, style, focus cost, power, and accuracy.
-// It does NOT contain a store price because a skill is not a store item.
+// Skill stores shared rules. A missing requiredStyle means that every loadout
+// can use the skill. The zero-focus basic skills use that universal option.
 struct Skill
 {
     std::string id;
     std::string name;
-    Style style;
+    std::optional<Style> requiredStyle;
     int focusCost;
     int power;
     double accuracy;
@@ -97,29 +126,51 @@ struct SkillProgress
     int xp = 0;
 };
 
-// SpecData groups the skills available to one spec.
-// Edit the actual spec contents in SimulationData.cpp.
+// SpecData groups skills and records one future-proof matchup rule.
+// counteredSpec means "this spec deals bonus damage to that spec."
 struct SpecData
 {
     Spec spec;
     std::string name;
     std::vector<std::string> skillIds;
+    Spec counteredSpec;
 };
 
-// A store item can teach a skill, restore focus, or do something else later.
+// GameTypeData lets one game genre own its available specs.
+// Only League exists in the MVP, so the console skips a genre selection menu.
+struct GameTypeData
+{
+    GameType gameType;
+    std::string name;
+    std::vector<Spec> specs;
+};
+
+// A store item can teach a skill, restore a resource, or add a bonus later.
 // Price belongs here because stores sell items, not skills directly.
 struct StoreItem
 {
     std::string id;
     std::string name;
+    StoreItemType type;
     std::string taughtSkillId;
     int price;
+};
+
+// DATA FOUNDATION ONLY:
+// Tournament requirements are stored now but enforced in a later increment.
+struct TournamentData
+{
+    std::string id;
+    std::string name;
+    int minimumRankPoints;
+    int entryFee;
 };
 
 struct Player
 {
     std::string name;
-    Spec spec = Spec::SpecA;
+    GameType gameType = GameType::LeagueOfLegends;
+    Spec spec = Spec::Top;
     Style style = Style::Balanced;
     int level = 1;
     int xp = 0;
@@ -130,6 +181,7 @@ struct Player
     int maxHp = 100;
     int focus = 50;
     int maxFocus = 50;
+    int basePower = 5;
     int currency = 100;
     std::vector<SkillProgress> knownSkills;
 
@@ -176,13 +228,15 @@ struct Player
 struct Opponent
 {
     std::string name;
-    Spec spec = Spec::SpecA;
+    GameType gameType = GameType::LeagueOfLegends;
+    Spec spec = Spec::Top;
     Style style = Style::Balanced;
     int level = 1;
     int hp = 100;
     int maxHp = 100;
     int focus = 50;
     int maxFocus = 50;
+    int basePower = 5;
     std::vector<SkillProgress> skills;
 };
 
