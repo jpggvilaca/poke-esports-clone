@@ -80,12 +80,13 @@ func _render() -> void:
 
 func _render_profile() -> void:
 	var profile: Dictionary = bridge.get_profile_state()
-	profile_summary.text = "%s | %s %s | Lv %d (%d XP) | Rating %d | Money %d" % [
+	profile_summary.text = "%s | %s %s | Lv %d (%d / %d XP) | Rating %d | Money %d" % [
 		profile.player_name,
 		profile.game_type_name,
 		profile.spec_name,
 		profile.level,
 		profile.xp,
+		profile.xp_required,
 		profile.rating,
 		profile.money,
 	]

@@ -488,6 +488,7 @@ godot::Dictionary BattleBridge::ToDictionary(const PlayerProfileState& profile) 
     row["spec_name"] = ToGodotString(::ToString(profile.spec));
     row["level"] = profile.level;
     row["xp"] = profile.xp;
+    row["xp_required"] = profile.xpRequiredForNextLevel;
     row["rating"] = profile.rating;
     row["money"] = profile.money;
     row["learned_skills"] = ToSkillArray(profile.learnedSkillIds);

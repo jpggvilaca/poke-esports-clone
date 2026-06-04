@@ -14,7 +14,8 @@ namespace ProfileBalance
     inline constexpr int StartingMoney = 0;
     inline constexpr int StartingSkillCount = 4;
     inline constexpr int MaxActiveSkills = 4;
-    inline constexpr int PlayerXpPerLevel = 100;
+    inline constexpr int BaseXpForNextLevel = 100;
+    inline constexpr int XpGrowthPerLevel = 50;
 }
 
 class PlayerProfile
@@ -40,5 +41,8 @@ public:
     ProfileCommandResult AddTrophy(const std::string& trophyId);
 
 private:
+    static int GetXpRequiredForLevel(int level);
+    void RefreshXpRequirement();
+
     PlayerProfileState state_;
 };

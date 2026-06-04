@@ -38,6 +38,7 @@ PlayerProfile PlayerProfile::CreateNew(
     profile.state_.spec = spec;
     profile.state_.level = ProfileBalance::StartingLevel;
     profile.state_.xp = ProfileBalance::StartingXp;
+    profile.RefreshXpRequirement();
     profile.state_.rating = ProfileBalance::StartingRating;
     profile.state_.money = ProfileBalance::StartingMoney;
 
@@ -129,13 +130,14 @@ ProfileCommandResult PlayerProfile::AwardPlayerXp(int amount)
     result.oldLevel = state_.level;
 
     state_.xp += amount;
-    while (state_.xp >= ProfileBalance::PlayerXpPerLevel)
+    while (state_.xp >= GetXpRequiredForLevel(state_.level))
     {
-        state_.xp -= ProfileBalance::PlayerXpPerLevel;
+        state_.xp -= GetXpRequiredForLevel(state_.level);
         ++state_.level;
         result.leveledUp = true;
     }
 
+    RefreshXpRequirement();
     result.newValue = state_.xp;
     result.newLevel = state_.level;
     return result;
@@ -168,4 +170,16 @@ ProfileCommandResult PlayerProfile::AddTrophy(const std::string& trophyId)
 
     state_.trophyIds.push_back(trophyId);
     return Accept();
+}
+
+int PlayerProfile::GetXpRequiredForLevel(int level)
+{
+    const int safeLevel = std::max(1, level);
+    return ProfileBalance::BaseXpForNextLevel
+        + (safeLevel - 1) * ProfileBalance::XpGrowthPerLevel;
+}
+
+void PlayerProfile::RefreshXpRequirement()
+{
+    state_.xpRequiredForNextLevel = GetXpRequiredForLevel(state_.level);
 }

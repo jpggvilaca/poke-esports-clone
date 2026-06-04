@@ -289,6 +289,7 @@ struct PlayerProfileState
     Spec spec = Spec::Top;
     int level = 1;
     int xp = 0;
+    int xpRequiredForNextLevel = 100;
     int rating = 1000;
     int money = 0;
     std::vector<std::string> learnedSkillIds;
