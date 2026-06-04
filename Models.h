@@ -281,3 +281,28 @@ struct BattleActionResult
     bool battleFinished = false;
     BattleWinner winner = BattleWinner::None;
 };
+
+struct PlayerProfileState
+{
+    std::string playerName = "Player";
+    GameType gameType = GameType::LeagueOfLegends;
+    Spec spec = Spec::Top;
+    int level = 1;
+    int xp = 0;
+    int rating = 1000;
+    int money = 0;
+    std::vector<std::string> learnedSkillIds;
+    std::vector<std::string> activeSkillIds;
+    std::vector<std::string> trophyIds;
+};
+
+struct ProfileCommandResult
+{
+    bool accepted = false;
+    std::string error;
+    int oldValue = 0;
+    int newValue = 0;
+    int oldLevel = 1;
+    int newLevel = 1;
+    bool leveledUp = false;
+};

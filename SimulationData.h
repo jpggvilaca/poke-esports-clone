@@ -6,6 +6,15 @@
 #include <vector>
 
 // Edit these values first when rebalancing combat.
+//
+// C++ note:
+// - namespace groups related names so we can write Balance::StartingMaxHp
+//   and avoid colliding with other constants called StartingMaxHp later.
+// - constexpr means the value is known at compile time, so the compiler can
+//   treat it like a true constant.
+// - inline lets this header define the constant safely in every .cpp file that
+//   includes it. Without inline, headers with variable definitions can cause
+//   duplicate-definition linker errors.
 namespace Balance
 {
     inline constexpr int StartingMaxHp = 100;

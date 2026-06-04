@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BattleSession.h"
+#include "PlayerProfile.h"
 #include "SimulationData.h"
 
 #include <godot_cpp/classes/node.hpp>
@@ -25,6 +26,15 @@ public:
     godot::Array change_style(int style);
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;
+    godot::Dictionary create_profile(const godot::String& player_name, int spec);
+    godot::Dictionary get_profile_state() const;
+    godot::Dictionary profile_award_xp(int amount);
+    godot::Dictionary profile_award_rating(int amount);
+    godot::Dictionary profile_award_money(int amount);
+    godot::Dictionary profile_learn_skill(const godot::String& skill_id);
+    godot::Dictionary profile_equip_skill(const godot::String& skill_id);
+    godot::Dictionary profile_unequip_skill(const godot::String& skill_id);
+    godot::Dictionary profile_add_trophy(const godot::String& trophy_id);
 
 protected:
     static void _bind_methods();
@@ -44,7 +54,12 @@ private:
         int duration = 0) const;
     godot::Dictionary ToDictionary(const CompetitorView& competitor) const;
     godot::Dictionary ToDictionary(const SkillView& skill, int available_focus) const;
+    godot::Dictionary ToDictionary(const PlayerProfileState& profile) const;
+    godot::Dictionary ToDictionary(const ProfileCommandResult& result) const;
+    godot::Array ToSkillArray(const std::vector<std::string>& skillIds) const;
+    godot::Array ToStringArray(const std::vector<std::string>& values) const;
 
     SimulationData data_;
     BattleSession session_;
+    PlayerProfile profile_;
 };

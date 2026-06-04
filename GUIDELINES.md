@@ -1,5 +1,25 @@
 # Project Guidelines
 
+## Game Vision
+
+The game is a Pokemon Red/Blue-inspired 2D RPG about becoming the best esports player in the world.
+
+Current direction:
+
+- The player starts with a menu, picks a game genre, then picks a spec. For now, the only genre is League of Legends.
+- The first story beat is a tutorial battle against the player's older brother. The player should win, but not stomp.
+- The overworld is top-down 2D like classic Pokemon. Cities contain LAN cafes and major tournament buildings.
+- LAN cafes are the equivalent of grass/caves: walking near or into one can trigger a player-vs-player battle.
+- Battles are always esports player vs esports player, not monsters or teams.
+- Specs behave like Pokemon types/jobs: they define identity, skill access, and counter matchups.
+- Skills behave like Pokemon moves: the player may learn many, but can equip only four active skills.
+- Skills level up, the player levels up, and rating changes after battles.
+- Major tournaments replace gym badges. Each major requires a minimum rating and awards a trophy.
+- A nemesis/rival appears throughout the game, mocks the player, and uses the player's counter spec.
+- Buildings can later provide healing, shops, and other Pokemon Center/Poke Mart-like services.
+
+Do not add teams, sponsors, or item complexity until the core profile, battle, rating, encounter, and major loop exists.
+
 ## Architecture Boundary
 
 Godot is the presentation layer. C++ is the source of truth.

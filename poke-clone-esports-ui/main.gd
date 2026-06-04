@@ -9,6 +9,9 @@ extends Control
 @onready var opponent_spec: OptionButton = $Margin/Root/Setup/OpponentSpec
 @onready var opponent_style: OptionButton = $Margin/Root/Setup/OpponentStyle
 @onready var restart_button: Button = $Margin/Root/StartButtons/Restart
+@onready var profile_summary: Label = $Margin/Root/Profile/ProfileSummary
+@onready var profile_skills: Label = $Margin/Root/Profile/ProfileSkills
+@onready var profile_trophies: Label = $Margin/Root/Profile/ProfileTrophies
 @onready var style_buttons: HBoxContainer = $Margin/Root/StyleButtons
 @onready var skill_buttons: VBoxContainer = $Margin/Root/SkillButtons
 @onready var battle_log: RichTextLabel = $Margin/Root/BattleLog
@@ -19,6 +22,14 @@ var styles: Array[Dictionary] = []
 func _ready() -> void:
 	$Margin/Root/StartButtons/Start.pressed.connect(_start_battle)
 	restart_button.pressed.connect(_start_battle)
+	$Margin/Root/Profile/ProfileActions/NewProfile.pressed.connect(_create_profile_from_setup)
+	$Margin/Root/Profile/ProfileActions/AddXp.pressed.connect(_profile_command.bind("Award 125 XP", Callable(bridge, "profile_award_xp"), [125]))
+	$Margin/Root/Profile/ProfileActions/AddRating.pressed.connect(_profile_command.bind("Award 30 rating", Callable(bridge, "profile_award_rating"), [30]))
+	$Margin/Root/Profile/ProfileActions/AddMoney.pressed.connect(_profile_command.bind("Award 100 money", Callable(bridge, "profile_award_money"), [100]))
+	$Margin/Root/Profile/ProfileActions/AddTrophy.pressed.connect(_profile_command.bind("Add first major trophy", Callable(bridge, "profile_add_trophy"), ["first-major"]))
+	$Margin/Root/Profile/ProfileActions/LearnRecover.pressed.connect(_profile_command.bind("Learn recover", Callable(bridge, "profile_learn_skill"), ["top-recover"]))
+	$Margin/Root/Profile/ProfileActions/UnequipBasic.pressed.connect(_profile_command.bind("Unequip basic", Callable(bridge, "profile_unequip_skill"), ["top-basic"]))
+	$Margin/Root/Profile/ProfileActions/EquipRecover.pressed.connect(_profile_command.bind("Equip recover", Callable(bridge, "profile_equip_skill"), ["top-recover"]))
 
 	_populate_option(player_spec, bridge.get_specs())
 	_populate_option(opponent_spec, bridge.get_specs())
@@ -58,12 +69,74 @@ func _change_style(style_id: int) -> void:
 
 
 func _render() -> void:
+	_render_profile()
 	var state: Dictionary = bridge.get_battle_state()
 	_render_competitor($Margin/Root/Status/Player, state.player)
 	_render_competitor($Margin/Root/Status/Opponent, state.opponent)
 	restart_button.disabled = not state.started
 	_rebuild_style_buttons()
 	_rebuild_skill_buttons()
+
+
+func _render_profile() -> void:
+	var profile: Dictionary = bridge.get_profile_state()
+	profile_summary.text = "%s | %s %s | Lv %d (%d XP) | Rating %d | Money %d" % [
+		profile.player_name,
+		profile.game_type_name,
+		profile.spec_name,
+		profile.level,
+		profile.xp,
+		profile.rating,
+		profile.money,
+	]
+	profile_skills.text = "Active skills: " + _format_skill_names(profile.active_skills)
+	profile_trophies.text = "Trophies: " + _format_strings(profile.trophies)
+
+
+func _format_skill_names(skills: Array) -> String:
+	var names: Array[String] = []
+	for skill: Dictionary in skills:
+		names.append(skill.name)
+	return "none" if names.is_empty() else ", ".join(names)
+
+
+func _format_strings(values: Array) -> String:
+	var text_values: Array[String] = []
+	for value: Variant in values:
+		text_values.append(str(value))
+	return "none" if text_values.is_empty() else ", ".join(text_values)
+
+
+func _create_profile_from_setup() -> void:
+	var result: Dictionary = bridge.create_profile("Player", player_spec.get_selected_id())
+	_append_profile_result("Create profile", result)
+	_render()
+
+
+func _profile_command(label: String, callable: Callable, args: Array) -> void:
+	var result: Dictionary = callable.callv(args)
+	_append_profile_result(label, result)
+	_render()
+
+
+func _append_profile_result(label: String, result: Dictionary) -> void:
+	if result.accepted:
+		if result.leveled_up:
+			battle_log.append_text("[color=cyan]%s accepted. Level %d -> %d.[/color]\n" % [
+				label,
+				result.old_level,
+				result.new_level,
+			])
+		elif result.old_value != result.new_value:
+			battle_log.append_text("[color=cyan]%s accepted. %d -> %d.[/color]\n" % [
+				label,
+				result.old_value,
+				result.new_value,
+			])
+		else:
+			battle_log.append_text("[color=cyan]%s accepted.[/color]\n" % label)
+	else:
+		battle_log.append_text("[color=red]%s rejected: %s[/color]\n" % [label, result.error])
 
 
 func _render_competitor(panel: VBoxContainer, competitor: Dictionary) -> void:

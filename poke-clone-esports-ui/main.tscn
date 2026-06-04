@@ -78,6 +78,61 @@ layout_mode = 2
 disabled = true
 text = "Restart with current setup"
 
+[node name="ProfileHeading" type="Label" parent="Margin/Root"]
+layout_mode = 2
+text = "Profile sandbox"
+
+[node name="Profile" type="VBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ProfileSummary" type="Label" parent="Margin/Root/Profile"]
+layout_mode = 2
+text = "Profile: -"
+
+[node name="ProfileSkills" type="Label" parent="Margin/Root/Profile"]
+layout_mode = 2
+text = "Active skills: -"
+
+[node name="ProfileTrophies" type="Label" parent="Margin/Root/Profile"]
+layout_mode = 2
+text = "Trophies: -"
+
+[node name="ProfileActions" type="HBoxContainer" parent="Margin/Root/Profile"]
+layout_mode = 2
+
+[node name="NewProfile" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "New profile from spec"
+
+[node name="AddXp" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "+125 XP"
+
+[node name="AddRating" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "+30 rating"
+
+[node name="AddMoney" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "+100 money"
+
+[node name="AddTrophy" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "Add trophy"
+
+[node name="LearnRecover" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "Learn recover"
+
+[node name="UnequipBasic" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "Unequip basic"
+
+[node name="EquipRecover" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "Equip recover"
+
 [node name="Separator" type="HSeparator" parent="Margin/Root"]
 layout_mode = 2
 
