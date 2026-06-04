@@ -69,35 +69,25 @@ double BattleRules::GetSpecModifier(Spec attackerSpec, Spec defenderSpec) const
     return Balance::NeutralModifier;
 }
 
-int BattleRules::CalculateDamage(
-    BattleActor actor,
-    BattleActor target,
+DamageResult BattleRules::CalculateDamage(
     const Skill& definition,
     const SkillProgress& progress,
     const Competitor& attacker,
     BattleStatus& attackerStatus,
     const Competitor& defender,
-    BattleStatus& defenderStatus,
-    std::vector<BattleEvent>& events) const
+    BattleStatus& defenderStatus) const
 {
+    DamageResult result;
+    result.applied = true;
     const double specModifier = GetSpecModifier(attacker.spec, defender.spec);
+    result.specModifier = specModifier;
     if (specModifier > Balance::NeutralModifier)
     {
-        events.push_back({
-            BattleEventType::SuperEffective,
-            actor,
-            target,
-            definition.id
-        });
+        result.effectiveness = Effectiveness::SuperEffective;
     }
     else if (specModifier < Balance::NeutralModifier)
     {
-        events.push_back({
-            BattleEventType::NotVeryEffective,
-            actor,
-            target,
-            definition.id
-        });
+        result.effectiveness = Effectiveness::NotVeryEffective;
     }
 
     double damage = (attacker.basePower + GetPower(definition, progress)) * specModifier;
@@ -125,5 +115,6 @@ int BattleRules::CalculateDamage(
     // CORE COMBAT FORMULA:
     // Edit status percentages in SimulationData.cpp to tune buffs. A successful
     // damaging hit always deals at least one damage.
-    return std::max(1, static_cast<int>(std::round(damage)));
+    result.amount = std::max(1, static_cast<int>(std::round(damage)));
+    return result;
 }

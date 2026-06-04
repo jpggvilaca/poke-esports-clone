@@ -65,7 +65,7 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
 
     BattleActionResult result;
     result.accepted = true;
-    result.events.push_back({ BattleEventType::BattleStarted });
+    result.battleStarted = true;
     return result;
 }
 
@@ -100,21 +100,20 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
 
     BattleActionResult result;
     result.accepted = true;
-    skills_.UseSkill(
+    result.skillUses.push_back(skills_.UseSkill(
         BattleActor::Player,
         player_,
         playerStatus_,
         opponent_,
         opponentStatus_,
         *progress,
-        randomEngine_,
-        result.events);
-    FinishBattleIfNeeded(result.events);
+        randomEngine_));
+    FinishBattleIfNeeded(result);
 
     if (!finished_)
     {
-        ResolveOpponentTurn(result.events);
-        FinishBattleIfNeeded(result.events);
+        ResolveOpponentTurn(result);
+        FinishBattleIfNeeded(result);
     }
 
     return result;
@@ -146,18 +145,12 @@ BattleActionResult BattleSession::ChangePlayerStyle(Style style)
 
     BattleActionResult result;
     result.accepted = true;
-    result.events.push_back({
-        BattleEventType::StyleChanged,
-        BattleActor::Player,
-        BattleActor::Player,
-        "",
-        "",
-        static_cast<int>(style)
-    });
+    result.styleChanged = true;
+    result.newStyle = style;
 
     // Switching style is a tactical choice, not a free menu operation.
-    ResolveOpponentTurn(result.events);
-    FinishBattleIfNeeded(result.events);
+    ResolveOpponentTurn(result);
+    FinishBattleIfNeeded(result);
     return result;
 }
 
@@ -230,17 +223,10 @@ BattleActionResult BattleSession::RejectAction(const std::string& error) const
 {
     BattleActionResult result;
     result.error = error;
-    result.events.push_back({
-        BattleEventType::ActionRejected,
-        BattleActor::Player,
-        BattleActor::Player,
-        "",
-        error
-    });
     return result;
 }
 
-void BattleSession::ResolveOpponentTurn(std::vector<BattleEvent>& events)
+void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
 {
     SkillProgress* progress = opponentAI_.SelectSkill(
         opponent_,
@@ -253,15 +239,14 @@ void BattleSession::ResolveOpponentTurn(std::vector<BattleEvent>& events)
         return;
     }
 
-    skills_.UseSkill(
+    result.skillUses.push_back(skills_.UseSkill(
         BattleActor::Opponent,
         opponent_,
         opponentStatus_,
         player_,
         playerStatus_,
         *progress,
-        randomEngine_,
-        events);
+        randomEngine_));
 }
 
 CompetitorView BattleSession::CreateCompetitorView(
@@ -281,7 +266,7 @@ CompetitorView BattleSession::CreateCompetitorView(
     return view;
 }
 
-void BattleSession::FinishBattleIfNeeded(std::vector<BattleEvent>& events)
+void BattleSession::FinishBattleIfNeeded(BattleActionResult& result)
 {
     if (finished_ || (player_.hp > 0 && opponent_.hp > 0))
     {
@@ -290,8 +275,6 @@ void BattleSession::FinishBattleIfNeeded(std::vector<BattleEvent>& events)
 
     finished_ = true;
     winner_ = player_.hp > 0 ? BattleWinner::Player : BattleWinner::Opponent;
-    events.push_back({
-        BattleEventType::BattleFinished,
-        winner_ == BattleWinner::Player ? BattleActor::Player : BattleActor::Opponent
-    });
+    result.battleFinished = true;
+    result.winner = winner_;
 }

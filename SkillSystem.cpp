@@ -34,76 +34,59 @@ SkillView SkillSystem::CreateSkillView(const Skill& definition, const SkillProgr
     return view;
 }
 
-void SkillSystem::UseSkill(
+SkillUseResult SkillSystem::UseSkill(
     BattleActor actor,
     Competitor& attacker,
     BattleStatus& attackerStatus,
     Competitor& defender,
     BattleStatus& defenderStatus,
     SkillProgress& progress,
-    std::mt19937& randomEngine,
-    std::vector<BattleEvent>& events) const
+    std::mt19937& randomEngine) const
 {
+    SkillUseResult result;
+    result.actor = actor;
+    result.target = Opposite(actor);
+    result.skillId = progress.skillId;
+
     const Skill* definition = data_.FindSkill(progress.skillId);
     if (definition == nullptr)
     {
-        return;
+        return result;
     }
 
-    const BattleActor target = Opposite(actor);
+    result.used = true;
+    result.skillId = definition->id;
     attacker.focus -= rules_.GetFocusCost(*definition, progress);
-    events.push_back({
-        BattleEventType::SkillUsed,
-        actor,
-        target,
-        definition->id
-    });
 
     if (!Chance(rules_.GetAccuracy(*definition, progress), randomEngine))
     {
-        events.push_back({
-            BattleEventType::Missed,
-            actor,
-            target,
-            definition->id
-        });
-        progression_.AwardSkillXp(actor, *definition, progress, events);
-        return;
+        result.hit = false;
+        result.xp = progression_.AwardSkillXp(progress);
+        return result;
     }
 
     if (definition->power > 0)
     {
-        const int damage = rules_.CalculateDamage(
-            actor,
-            target,
+        result.damage = rules_.CalculateDamage(
             *definition,
             progress,
             attacker,
             attackerStatus,
             defender,
-            defenderStatus,
-            events);
-        defender.hp = std::max(0, defender.hp - damage);
-        events.push_back({
-            BattleEventType::DamageDealt,
-            actor,
-            target,
-            definition->id,
-            "",
-            damage
-        });
+            defenderStatus);
+        defender.hp = std::max(0, defender.hp - result.damage.amount);
     }
 
-    ApplySecondaryEffect(
+    result.effect = ApplySecondaryEffect(
         actor,
-        target,
+        result.target,
         *definition,
         progress,
         attacker,
         attackerStatus,
-        defenderStatus,
-        events);
-    progression_.AwardSkillXp(actor, *definition, progress, events);
+        defenderStatus);
+    result.xp = progression_.AwardSkillXp(progress);
+    return result;
 }
 
 BattleActor SkillSystem::Opposite(BattleActor actor) const
@@ -117,19 +100,19 @@ bool SkillSystem::Chance(double probability, std::mt19937& randomEngine) const
     return roll(randomEngine) < probability;
 }
 
-void SkillSystem::ApplySecondaryEffect(
+SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     BattleActor actor,
     BattleActor target,
     const Skill& definition,
     const SkillProgress& progress,
     Competitor& attacker,
     BattleStatus& attackerStatus,
-    BattleStatus& defenderStatus,
-    std::vector<BattleEvent>& events) const
+    BattleStatus& defenderStatus) const
 {
+    SecondaryEffectResult result;
     if (definition.effectType == SkillEffectType::None)
     {
-        return;
+        return result;
     }
 
     const int effectValue = rules_.GetEffectValue(definition, progress);
@@ -140,40 +123,30 @@ void SkillSystem::ApplySecondaryEffect(
         ? actor
         : target;
 
+    result.applied = true;
+    result.type = definition.effectType;
+    result.target = effectTarget;
+    result.value = effectValue;
+    result.duration = definition.effectUses;
+
     if (definition.effectType == SkillEffectType::Heal)
     {
         const int oldHp = attacker.hp;
         attacker.hp = std::min(attacker.maxHp, attacker.hp + effectValue);
-        events.push_back({
-            BattleEventType::Healed,
-            actor,
-            actor,
-            definition.id,
-            "",
-            attacker.hp - oldHp
-        });
-        return;
+        result.healingAmount = attacker.hp - oldHp;
+        return result;
     }
-
-    BattleEvent event;
-    event.actor = actor;
-    event.target = effectTarget;
-    event.skillId = definition.id;
-    event.value = effectValue;
-    event.duration = definition.effectUses;
 
     if (definition.effectType == SkillEffectType::AttackModifier)
     {
         targetStatus.attackModifierPercent = effectValue;
         targetStatus.attackModifierHits = definition.effectUses;
-        event.type = BattleEventType::AttackModified;
     }
     else
     {
         targetStatus.defenseModifierPercent = effectValue;
         targetStatus.defenseModifierHits = definition.effectUses;
-        event.type = BattleEventType::DefenseModified;
     }
 
-    events.push_back(event);
+    return result;
 }

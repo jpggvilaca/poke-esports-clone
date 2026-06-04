@@ -32,7 +32,16 @@ protected:
 private:
     godot::Array ToArray(const BattleActionResult& result) const;
     godot::Array Rejected(const godot::String& message) const;
-    godot::Dictionary ToDictionary(const BattleEvent& event) const;
+    void AppendSkillUse(godot::Array& events, const SkillUseResult& skillUse) const;
+    void AppendSkillXp(godot::Array& events, const SkillUseResult& skillUse) const;
+    godot::Dictionary CreateEvent(
+        const char* type,
+        BattleActor actor,
+        BattleActor target,
+        const std::string& skillId = "",
+        const godot::String& message = "",
+        int value = 0,
+        int duration = 0) const;
     godot::Dictionary ToDictionary(const CompetitorView& competitor) const;
     godot::Dictionary ToDictionary(const SkillView& skill, int available_focus) const;
 

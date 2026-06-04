@@ -50,28 +50,6 @@ namespace
         return "none";
     }
 
-    godot::String ToString(BattleEventType type)
-    {
-        switch (type)
-        {
-        case BattleEventType::BattleStarted: return "battle_started";
-        case BattleEventType::SkillUsed: return "skill_used";
-        case BattleEventType::Missed: return "missed";
-        case BattleEventType::DamageDealt: return "damage_dealt";
-        case BattleEventType::Healed: return "healed";
-        case BattleEventType::SuperEffective: return "super_effective";
-        case BattleEventType::NotVeryEffective: return "not_very_effective";
-        case BattleEventType::AttackModified: return "attack_modified";
-        case BattleEventType::DefenseModified: return "defense_modified";
-        case BattleEventType::StyleChanged: return "style_changed";
-        case BattleEventType::SkillLeveledUp: return "skill_leveled_up";
-        case BattleEventType::BattleFinished: return "battle_finished";
-        case BattleEventType::ActionRejected: return "action_rejected";
-        }
-
-        return "unknown";
-    }
-
     godot::String ToString(SkillEffectType type)
     {
         switch (type)
@@ -218,10 +196,39 @@ void BattleBridge::_bind_methods()
 
 godot::Array BattleBridge::ToArray(const BattleActionResult& result) const
 {
-    godot::Array events;
-    for (const BattleEvent& event : result.events)
+    if (!result.accepted)
     {
-        events.push_back(ToDictionary(event));
+        return Rejected(ToGodotString(result.error));
+    }
+
+    godot::Array events;
+    if (result.battleStarted)
+    {
+        events.push_back(CreateEvent("battle_started", BattleActor::None, BattleActor::None));
+    }
+
+    if (result.styleChanged)
+    {
+        events.push_back(CreateEvent(
+            "style_changed",
+            BattleActor::Player,
+            BattleActor::Player,
+            "",
+            "",
+            static_cast<int>(result.newStyle)));
+    }
+
+    for (const SkillUseResult& skillUse : result.skillUses)
+    {
+        AppendSkillUse(events, skillUse);
+    }
+
+    if (result.battleFinished)
+    {
+        const BattleActor winner = result.winner == BattleWinner::Player
+            ? BattleActor::Player
+            : BattleActor::Opponent;
+        events.push_back(CreateEvent("battle_finished", winner, BattleActor::None));
     }
 
     return events;
@@ -240,18 +247,123 @@ godot::Array BattleBridge::Rejected(const godot::String& message) const
     return events;
 }
 
-godot::Dictionary BattleBridge::ToDictionary(const BattleEvent& event) const
+void BattleBridge::AppendSkillUse(godot::Array& events, const SkillUseResult& skillUse) const
+{
+    if (!skillUse.used)
+    {
+        return;
+    }
+
+    events.push_back(CreateEvent(
+        "skill_used",
+        skillUse.actor,
+        skillUse.target,
+        skillUse.skillId));
+
+    if (!skillUse.hit)
+    {
+        events.push_back(CreateEvent(
+            "missed",
+            skillUse.actor,
+            skillUse.target,
+            skillUse.skillId));
+        AppendSkillXp(events, skillUse);
+        return;
+    }
+
+    if (skillUse.damage.applied)
+    {
+        if (skillUse.damage.effectiveness == Effectiveness::SuperEffective)
+        {
+            events.push_back(CreateEvent(
+                "super_effective",
+                skillUse.actor,
+                skillUse.target,
+                skillUse.skillId));
+        }
+        else if (skillUse.damage.effectiveness == Effectiveness::NotVeryEffective)
+        {
+            events.push_back(CreateEvent(
+                "not_very_effective",
+                skillUse.actor,
+                skillUse.target,
+                skillUse.skillId));
+        }
+
+        events.push_back(CreateEvent(
+            "damage_dealt",
+            skillUse.actor,
+            skillUse.target,
+            skillUse.skillId,
+            "",
+            skillUse.damage.amount));
+    }
+
+    if (skillUse.effect.applied)
+    {
+        if (skillUse.effect.type == SkillEffectType::Heal)
+        {
+            events.push_back(CreateEvent(
+                "healed",
+                skillUse.actor,
+                skillUse.effect.target,
+                skillUse.skillId,
+                "",
+                skillUse.effect.healingAmount));
+        }
+        else
+        {
+            events.push_back(CreateEvent(
+                skillUse.effect.type == SkillEffectType::AttackModifier
+                    ? "attack_modified"
+                    : "defense_modified",
+                skillUse.actor,
+                skillUse.effect.target,
+                skillUse.skillId,
+                "",
+                skillUse.effect.value,
+                skillUse.effect.duration));
+        }
+    }
+
+    AppendSkillXp(events, skillUse);
+}
+
+void BattleBridge::AppendSkillXp(godot::Array& events, const SkillUseResult& skillUse) const
+{
+    if (!skillUse.xp.leveledUp)
+    {
+        return;
+    }
+
+    events.push_back(CreateEvent(
+        "skill_leveled_up",
+        skillUse.actor,
+        skillUse.actor,
+        skillUse.skillId,
+        "",
+        skillUse.xp.newLevel));
+}
+
+godot::Dictionary BattleBridge::CreateEvent(
+    const char* type,
+    BattleActor actor,
+    BattleActor target,
+    const std::string& skillId,
+    const godot::String& message,
+    int value,
+    int duration) const
 {
     godot::Dictionary row;
-    row["type"] = ToString(event.type);
-    row["actor"] = ToString(event.actor);
-    row["target"] = ToString(event.target);
-    row["skill_id"] = ToGodotString(event.skillId);
-    const Skill* skill = data_.FindSkill(event.skillId);
+    row["type"] = type;
+    row["actor"] = ToString(actor);
+    row["target"] = ToString(target);
+    row["skill_id"] = ToGodotString(skillId);
+    const Skill* skill = data_.FindSkill(skillId);
     row["skill_name"] = skill == nullptr ? "" : ToGodotString(skill->name);
-    row["message"] = ToGodotString(event.message);
-    row["value"] = event.value;
-    row["duration"] = event.duration;
+    row["message"] = message;
+    row["value"] = value;
+    row["duration"] = duration;
     return row;
 }
 

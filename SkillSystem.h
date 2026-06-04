@@ -5,7 +5,6 @@
 #include "ProgressionSystem.h"
 
 #include <random>
-#include <vector>
 
 class SimulationData;
 
@@ -19,28 +18,26 @@ public:
 
     bool IsAvailableForStyle(const Skill& definition, Style style) const;
     SkillView CreateSkillView(const Skill& definition, const SkillProgress& progress) const;
-    void UseSkill(
+    SkillUseResult UseSkill(
         BattleActor actor,
         Competitor& attacker,
         BattleStatus& attackerStatus,
         Competitor& defender,
         BattleStatus& defenderStatus,
         SkillProgress& progress,
-        std::mt19937& randomEngine,
-        std::vector<BattleEvent>& events) const;
+        std::mt19937& randomEngine) const;
 
 private:
     BattleActor Opposite(BattleActor actor) const;
     bool Chance(double probability, std::mt19937& randomEngine) const;
-    void ApplySecondaryEffect(
+    SecondaryEffectResult ApplySecondaryEffect(
         BattleActor actor,
         BattleActor target,
         const Skill& definition,
         const SkillProgress& progress,
         Competitor& attacker,
         BattleStatus& attackerStatus,
-        BattleStatus& defenderStatus,
-        std::vector<BattleEvent>& events) const;
+        BattleStatus& defenderStatus) const;
 
     const SimulationData& data_;
     const BattleRules& rules_;

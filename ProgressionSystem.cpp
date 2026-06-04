@@ -2,24 +2,22 @@
 
 #include "SimulationData.h"
 
-void ProgressionSystem::AwardSkillXp(
-    BattleActor actor,
-    const Skill& definition,
-    SkillProgress& progress,
-    std::vector<BattleEvent>& events) const
+SkillXpResult ProgressionSystem::AwardSkillXp(SkillProgress& progress) const
 {
+    SkillXpResult result;
+    result.xpGained = Balance::SkillXpPerUse;
+    result.oldXp = progress.xp;
+    result.oldLevel = progress.level;
+
     progress.xp += Balance::SkillXpPerUse;
     while (progress.xp >= Balance::SkillXpPerLevel)
     {
         progress.xp -= Balance::SkillXpPerLevel;
         ++progress.level;
-        events.push_back({
-            BattleEventType::SkillLeveledUp,
-            actor,
-            actor,
-            definition.id,
-            "",
-            progress.level
-        });
+        result.leveledUp = true;
     }
+
+    result.newXp = progress.xp;
+    result.newLevel = progress.level;
+    return result;
 }

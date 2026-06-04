@@ -2,8 +2,6 @@
 
 #include "Models.h"
 
-#include <vector>
-
 class SimulationData;
 
 class BattleRules
@@ -16,16 +14,13 @@ public:
     double GetAccuracy(const Skill& definition, const SkillProgress& progress) const;
     int GetEffectValue(const Skill& definition, const SkillProgress& progress) const;
     double GetSpecModifier(Spec attackerSpec, Spec defenderSpec) const;
-    int CalculateDamage(
-        BattleActor actor,
-        BattleActor target,
+    DamageResult CalculateDamage(
         const Skill& definition,
         const SkillProgress& progress,
         const Competitor& attacker,
         BattleStatus& attackerStatus,
         const Competitor& defender,
-        BattleStatus& defenderStatus,
-        std::vector<BattleEvent>& events) const;
+        BattleStatus& defenderStatus) const;
 
 private:
     const SimulationData& data_;

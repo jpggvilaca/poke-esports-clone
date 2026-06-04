@@ -29,9 +29,9 @@ public:
 private:
     Competitor CreateCompetitor(const std::string& name, GameType gameType, Spec spec, Style style) const;
     BattleActionResult RejectAction(const std::string& error) const;
-    void ResolveOpponentTurn(std::vector<BattleEvent>& events);
+    void ResolveOpponentTurn(BattleActionResult& result);
     CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;
-    void FinishBattleIfNeeded(std::vector<BattleEvent>& events);
+    void FinishBattleIfNeeded(BattleActionResult& result);
 
     const SimulationData& data_;
     std::mt19937 randomEngine_;

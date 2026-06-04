@@ -56,23 +56,11 @@ enum class BattleWinner
     Opponent
 };
 
-// Events describe what happened without deciding how it should look. Godot can
-// turn these into labels now and animations later without changing combat math.
-enum class BattleEventType
+enum class Effectiveness
 {
-    BattleStarted,
-    SkillUsed,
-    Missed,
-    DamageDealt,
-    Healed,
+    Neutral,
     SuperEffective,
-    NotVeryEffective,
-    AttackModified,
-    DefenseModified,
-    StyleChanged,
-    SkillLeveledUp,
-    BattleFinished,
-    ActionRejected
+    NotVeryEffective
 };
 
 inline std::string ToString(GameType gameType)
@@ -242,20 +230,54 @@ struct SkillView
     int effectUses = 0;
 };
 
-struct BattleEvent
+struct SkillXpResult
 {
-    BattleEventType type = BattleEventType::BattleStarted;
+    int xpGained = 0;
+    int oldXp = 0;
+    int newXp = 0;
+    int oldLevel = 1;
+    int newLevel = 1;
+    bool leveledUp = false;
+};
+
+struct DamageResult
+{
+    bool applied = false;
+    int amount = 0;
+    double specModifier = 1.0;
+    Effectiveness effectiveness = Effectiveness::Neutral;
+};
+
+struct SecondaryEffectResult
+{
+    bool applied = false;
+    SkillEffectType type = SkillEffectType::None;
+    BattleActor target = BattleActor::None;
+    int value = 0;
+    int duration = 0;
+    int healingAmount = 0;
+};
+
+struct SkillUseResult
+{
+    bool used = false;
     BattleActor actor = BattleActor::None;
     BattleActor target = BattleActor::None;
     std::string skillId;
-    std::string message;
-    int value = 0;
-    int duration = 0;
+    bool hit = true;
+    DamageResult damage;
+    SecondaryEffectResult effect;
+    SkillXpResult xp;
 };
 
 struct BattleActionResult
 {
     bool accepted = false;
     std::string error;
-    std::vector<BattleEvent> events;
+    bool battleStarted = false;
+    bool styleChanged = false;
+    Style newStyle = Style::Balanced;
+    std::vector<SkillUseResult> skillUses;
+    bool battleFinished = false;
+    BattleWinner winner = BattleWinner::None;
 };
