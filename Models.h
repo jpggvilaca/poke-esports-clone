@@ -42,6 +42,16 @@ enum class SkillEffectTarget
     Opponent
 };
 
+enum class SkillTone
+{
+    Basic,
+    Aggressive,
+    Defensive,
+    Balanced,
+    Risky,
+    Utility
+};
+
 enum class BattleActor
 {
     None,
@@ -116,6 +126,21 @@ inline std::string ToString(Style style)
     return "Unknown";
 }
 
+inline std::string ToString(SkillTone tone)
+{
+    switch (tone)
+    {
+    case SkillTone::Basic: return "Basic";
+    case SkillTone::Aggressive: return "Aggressive";
+    case SkillTone::Defensive: return "Defensive";
+    case SkillTone::Balanced: return "Balanced";
+    case SkillTone::Risky: return "Risky";
+    case SkillTone::Utility: return "Utility";
+    }
+
+    return "Unknown";
+}
+
 inline std::string ToString(CareerRank rank)
 {
     switch (rank)
@@ -136,6 +161,8 @@ struct Skill
 {
     std::string id;
     std::string name;
+    std::string description;
+    SkillTone tone = SkillTone::Basic;
     std::optional<Style> requiredStyle;
     int focusCost;
     int power;
@@ -260,6 +287,8 @@ struct SkillView
 {
     std::string id;
     std::string name;
+    std::string description;
+    SkillTone tone = SkillTone::Basic;
     int power = 0;
     int focusCost = 0;
     double accuracy = 0.0;

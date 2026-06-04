@@ -22,6 +22,8 @@ SkillView SkillSystem::CreateSkillView(const Skill& definition, const SkillProgr
     SkillView view;
     view.id = definition.id;
     view.name = definition.name;
+    view.description = definition.description;
+    view.tone = definition.tone;
     view.power = rules_.GetPower(definition, progress);
     view.focusCost = rules_.GetFocusCost(definition, progress);
     view.accuracy = rules_.GetAccuracy(definition, progress);

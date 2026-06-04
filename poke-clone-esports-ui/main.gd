@@ -225,7 +225,8 @@ func _rebuild_skill_buttons() -> void:
 
 
 func _format_skill(skill: Dictionary) -> String:
-	var text := "%s | Power %d | Focus %d | Accuracy %d%% | Lv %d (%d XP)" % [
+	var text := "[%s] %s | Power %d | Focus %d | Accuracy %d%% | Lv %d (%d XP)" % [
+		skill.tone.capitalize(),
 		skill.name,
 		skill.power,
 		skill.focus_cost,
@@ -242,6 +243,7 @@ func _format_skill(skill: Dictionary) -> String:
 			skill.effect_value,
 			skill.effect_uses,
 		]
+	text += "\n  %s" % skill.description
 	return text
 
 

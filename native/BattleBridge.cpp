@@ -68,6 +68,21 @@ namespace
         return target == SkillEffectTarget::Self ? "self" : "opponent";
     }
 
+    godot::String ToString(SkillTone tone)
+    {
+        switch (tone)
+        {
+        case SkillTone::Basic: return "basic";
+        case SkillTone::Aggressive: return "aggressive";
+        case SkillTone::Defensive: return "defensive";
+        case SkillTone::Balanced: return "balanced";
+        case SkillTone::Risky: return "risky";
+        case SkillTone::Utility: return "utility";
+        }
+
+        return "basic";
+    }
+
     godot::String ToString(MatchContext context)
     {
         switch (context)
@@ -511,6 +526,8 @@ godot::Dictionary BattleBridge::ToDictionary(const SkillView& skill, int availab
     godot::Dictionary row;
     row["id"] = ToGodotString(skill.id);
     row["name"] = ToGodotString(skill.name);
+    row["description"] = ToGodotString(skill.description);
+    row["tone"] = ToGodotString(::ToString(skill.tone));
     row["power"] = skill.power;
     row["focus_cost"] = skill.focusCost;
     row["accuracy"] = skill.accuracy;
