@@ -6,8 +6,12 @@ env = SConscript("godot-cpp/SConstruct")
 env.Append(CPPPATH=[".", "native"])
 
 sources = [
+    "BattleRules.cpp",
     "BattleSession.cpp",
+    "OpponentAI.cpp",
+    "ProgressionSystem.cpp",
     "SimulationData.cpp",
+    "SkillSystem.cpp",
 ]
 sources += Glob("native/*.cpp")
 

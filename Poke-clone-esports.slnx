@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Poke-clone-esports.vcxproj" Id="c628863c-a45a-4cb0-9d7e-d4c4581dab26" />
+</Solution>
