@@ -19,6 +19,7 @@
     <ClCompile Include="BattleSession.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="OpponentAI.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="PlayerProfile.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="RatingSystem.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="ProgressionSystem.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="SimulationData.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="SkillSystem.cpp"><Filter>Source Files</Filter></ClCompile>
@@ -28,6 +29,7 @@
     <ClInclude Include="BattleSession.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="OpponentAI.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="PlayerProfile.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="RatingSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="ProgressionSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="SimulationData.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="SkillSystem.h"><Filter>Header Files</Filter></ClInclude>

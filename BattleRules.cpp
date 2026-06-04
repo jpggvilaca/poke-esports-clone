@@ -91,6 +91,10 @@ DamageResult BattleRules::CalculateDamage(
     }
 
     double damage = (attacker.basePower + GetPower(definition, progress)) * specModifier;
+    if (specModifier > Balance::NeutralModifier && attacker.counterDamageBonusPercent > 0)
+    {
+        damage *= (100.0 + attacker.counterDamageBonusPercent) / 100.0;
+    }
 
     if (attackerStatus.attackModifierHits > 0)
     {

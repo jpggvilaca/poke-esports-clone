@@ -2,6 +2,7 @@
 
 #include "BattleSession.h"
 #include "PlayerProfile.h"
+#include "RatingSystem.h"
 #include "SimulationData.h"
 
 #include <godot_cpp/classes/node.hpp>
@@ -35,6 +36,7 @@ public:
     godot::Dictionary profile_equip_skill(const godot::String& skill_id);
     godot::Dictionary profile_unequip_skill(const godot::String& skill_id);
     godot::Dictionary profile_add_trophy(const godot::String& trophy_id);
+    godot::Dictionary profile_apply_match_result(int opponent_level, int context, bool won);
 
 protected:
     static void _bind_methods();
@@ -56,10 +58,13 @@ private:
     godot::Dictionary ToDictionary(const SkillView& skill, int available_focus) const;
     godot::Dictionary ToDictionary(const PlayerProfileState& profile) const;
     godot::Dictionary ToDictionary(const ProfileCommandResult& result) const;
+    godot::Dictionary ToDictionary(const RatingResult& result) const;
     godot::Array ToSkillArray(const std::vector<std::string>& skillIds) const;
     godot::Array ToStringArray(const std::vector<std::string>& values) const;
+    bool IsValidMatchContext(int value) const;
 
     SimulationData data_;
     BattleSession session_;
     PlayerProfile profile_;
+    RatingSystem rating_;
 };

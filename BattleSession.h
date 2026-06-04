@@ -27,7 +27,12 @@ public:
     std::vector<SkillView> GetAvailablePlayerSkills() const;
 
 private:
-    Competitor CreateCompetitor(const std::string& name, GameType gameType, Spec spec, Style style) const;
+    Competitor CreateCompetitor(
+        const std::string& name,
+        GameType gameType,
+        Spec spec,
+        Style style,
+        const PassiveBonuses& bonuses) const;
     BattleActionResult RejectAction(const std::string& error) const;
     void ResolveOpponentTurn(BattleActionResult& result);
     CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;

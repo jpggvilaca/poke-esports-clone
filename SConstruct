@@ -10,6 +10,7 @@ sources = [
     "BattleSession.cpp",
     "OpponentAI.cpp",
     "PlayerProfile.cpp",
+    "RatingSystem.cpp",
     "ProgressionSystem.cpp",
     "SimulationData.cpp",
     "SkillSystem.cpp",

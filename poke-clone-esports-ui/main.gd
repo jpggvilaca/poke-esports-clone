@@ -30,6 +30,10 @@ func _ready() -> void:
 	$Margin/Root/Profile/ProfileActions/LearnRecover.pressed.connect(_profile_command.bind("Learn recover", Callable(bridge, "profile_learn_skill"), ["top-recover"]))
 	$Margin/Root/Profile/ProfileActions/UnequipBasic.pressed.connect(_profile_command.bind("Unequip basic", Callable(bridge, "profile_unequip_skill"), ["top-basic"]))
 	$Margin/Root/Profile/ProfileActions/EquipRecover.pressed.connect(_profile_command.bind("Equip recover", Callable(bridge, "profile_equip_skill"), ["top-recover"]))
+	$Margin/Root/Profile/RatingActions/NormalWin.pressed.connect(_rating_command.bind("Normal win vs same level", 0, 1, true))
+	$Margin/Root/Profile/RatingActions/LowLevelWin.pressed.connect(_rating_command.bind("Normal win vs low level", -1, 1, true))
+	$Margin/Root/Profile/RatingActions/NemesisWin.pressed.connect(_rating_command.bind("Nemesis win vs +2 levels", 3, 2, true))
+	$Margin/Root/Profile/RatingActions/MajorWin.pressed.connect(_rating_command.bind("Major win vs +3 levels", 4, 3, true))
 
 	_populate_option(player_spec, bridge.get_specs())
 	_populate_option(opponent_spec, bridge.get_specs())
@@ -80,15 +84,18 @@ func _render() -> void:
 
 func _render_profile() -> void:
 	var profile: Dictionary = bridge.get_profile_state()
-	profile_summary.text = "%s | %s %s | Lv %d (%d / %d XP) | Rating %d | Money %d" % [
+	profile_summary.text = "%s | %s %s | %s | Lv %d (%d / %d XP) | Rating %d | Money %d | Bonus HP %+d | Counter dmg +%d%%" % [
 		profile.player_name,
 		profile.game_type_name,
 		profile.spec_name,
+		profile.rank_name,
 		profile.level,
 		profile.xp,
 		profile.xp_required,
 		profile.rating,
 		profile.money,
+		profile.bonus_max_hp,
+		profile.bonus_counter_damage_percent,
 	]
 	profile_skills.text = "Active skills: " + _format_skill_names(profile.active_skills)
 	profile_trophies.text = "Trophies: " + _format_strings(profile.trophies)
@@ -120,6 +127,14 @@ func _profile_command(label: String, callable: Callable, args: Array) -> void:
 	_render()
 
 
+func _rating_command(label: String, opponent_level_offset: int, context: int, won: bool) -> void:
+	var profile: Dictionary = bridge.get_profile_state()
+	var opponent_level: int = max(1, profile.level + opponent_level_offset)
+	var result: Dictionary = bridge.profile_apply_match_result(opponent_level, context, won)
+	_append_rating_result(label, result)
+	_render()
+
+
 func _append_profile_result(label: String, result: Dictionary) -> void:
 	if result.accepted:
 		if result.leveled_up:
@@ -140,6 +155,19 @@ func _append_profile_result(label: String, result: Dictionary) -> void:
 		battle_log.append_text("[color=red]%s rejected: %s[/color]\n" % [label, result.error])
 
 
+func _append_rating_result(label: String, result: Dictionary) -> void:
+	if result.accepted:
+		battle_log.append_text("[color=yellow]%s (%s): rating %+d, %d -> %d.[/color]\n" % [
+			label,
+			result.context_name,
+			result.rating_change,
+			result.old_rating,
+			result.new_rating,
+		])
+	else:
+		battle_log.append_text("[color=red]%s rejected: %s[/color]\n" % [label, result.error])
+
+
 func _render_competitor(panel: VBoxContainer, competitor: Dictionary) -> void:
 	panel.get_node("SpecStyle").text = "Spec: %s | Style: %s" % [
 		competitor.spec_name,
@@ -147,7 +175,10 @@ func _render_competitor(panel: VBoxContainer, competitor: Dictionary) -> void:
 	]
 	panel.get_node("Hp").text = "HP: %d / %d" % [competitor.hp, competitor.max_hp]
 	panel.get_node("Focus").text = "Focus: %d / %d" % [competitor.focus, competitor.max_focus]
-	panel.get_node("Effects").text = "Effects: " + _format_status(competitor.status)
+	panel.get_node("Effects").text = "Effects: %s | Counter dmg bonus: +%d%%" % [
+		_format_status(competitor.status),
+		competitor.counter_damage_bonus_percent,
+	]
 
 
 func _format_status(status: Dictionary) -> String:

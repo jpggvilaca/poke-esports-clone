@@ -55,8 +55,18 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         return RejectAction("Unknown style.");
     }
 
-    player_ = CreateCompetitor("Player", setup.gameType, setup.playerSpec, setup.playerStyle);
-    opponent_ = CreateCompetitor("Opponent", setup.gameType, setup.opponentSpec, setup.opponentStyle);
+    player_ = CreateCompetitor(
+        "Player",
+        setup.gameType,
+        setup.playerSpec,
+        setup.playerStyle,
+        setup.playerPassiveBonuses);
+    opponent_ = CreateCompetitor(
+        "Opponent",
+        setup.gameType,
+        setup.opponentSpec,
+        setup.opponentStyle,
+        {});
     playerStatus_ = {};
     opponentStatus_ = {};
     started_ = true;
@@ -189,18 +199,20 @@ Competitor BattleSession::CreateCompetitor(
     const std::string& name,
     GameType gameType,
     Spec spec,
-    Style style) const
+    Style style,
+    const PassiveBonuses& bonuses) const
 {
     Competitor competitor;
     competitor.name = name;
     competitor.gameType = gameType;
     competitor.spec = spec;
     competitor.style = style;
-    competitor.hp = Balance::StartingMaxHp;
-    competitor.maxHp = Balance::StartingMaxHp;
+    competitor.hp = Balance::StartingMaxHp + bonuses.maxHpBonus;
+    competitor.maxHp = Balance::StartingMaxHp + bonuses.maxHpBonus;
     competitor.focus = Balance::StartingMaxFocus;
     competitor.maxFocus = Balance::StartingMaxFocus;
-    competitor.basePower = Balance::StartingBasePower;
+    competitor.basePower = Balance::StartingBasePower + bonuses.basePowerBonus;
+    competitor.counterDamageBonusPercent = bonuses.counterDamageBonusPercent;
 
     const SpecData* specData = data_.FindSpec(spec);
     if (specData == nullptr)
@@ -262,6 +274,7 @@ CompetitorView BattleSession::CreateCompetitorView(
     view.focus = competitor.focus;
     view.maxFocus = competitor.maxFocus;
     view.basePower = competitor.basePower;
+    view.counterDamageBonusPercent = competitor.counterDamageBonusPercent;
     view.status = status;
     return view;
 }

@@ -67,6 +67,19 @@ namespace
     {
         return target == SkillEffectTarget::Self ? "self" : "opponent";
     }
+
+    godot::String ToString(MatchContext context)
+    {
+        switch (context)
+        {
+        case MatchContext::Tutorial: return "tutorial";
+        case MatchContext::Normal: return "normal";
+        case MatchContext::Nemesis: return "nemesis";
+        case MatchContext::Major: return "major";
+        }
+
+        return "normal";
+    }
 }
 
 BattleBridge::BattleBridge()
@@ -122,6 +135,10 @@ godot::Array BattleBridge::start_battle(
     BattleSetup setup;
     setup.playerSpec = static_cast<Spec>(player_spec);
     setup.playerStyle = static_cast<Style>(player_style);
+    if (profile_.GetState().spec == setup.playerSpec)
+    {
+        setup.playerPassiveBonuses = profile_.GetPassiveBonuses();
+    }
     setup.opponentSpec = static_cast<Spec>(opponent_spec);
     setup.opponentStyle = static_cast<Style>(opponent_style);
     return ToArray(session_.StartBattle(setup));
@@ -242,6 +259,31 @@ godot::Dictionary BattleBridge::profile_add_trophy(const godot::String& trophy_i
     return ToDictionary(profile_.AddTrophy(ToStandardString(trophy_id)));
 }
 
+godot::Dictionary BattleBridge::profile_apply_match_result(int opponent_level, int context, bool won)
+{
+    if (!IsValidMatchContext(context))
+    {
+        RatingResult result;
+        result.error = "Unknown match context.";
+        return ToDictionary(result);
+    }
+
+    const PlayerProfileState& profile = profile_.GetState();
+    RatingResult result = rating_.CalculateChange(
+        profile.rating,
+        profile.level,
+        opponent_level,
+        static_cast<MatchContext>(context),
+        won);
+    if (!result.accepted)
+    {
+        return ToDictionary(result);
+    }
+
+    profile_.AwardRating(result.ratingChange);
+    return ToDictionary(result);
+}
+
 void BattleBridge::_bind_methods()
 {
     godot::ClassDB::bind_method(godot::D_METHOD("get_specs"), &BattleBridge::get_specs);
@@ -262,6 +304,9 @@ void BattleBridge::_bind_methods()
     godot::ClassDB::bind_method(godot::D_METHOD("profile_equip_skill", "skill_id"), &BattleBridge::profile_equip_skill);
     godot::ClassDB::bind_method(godot::D_METHOD("profile_unequip_skill", "skill_id"), &BattleBridge::profile_unequip_skill);
     godot::ClassDB::bind_method(godot::D_METHOD("profile_add_trophy", "trophy_id"), &BattleBridge::profile_add_trophy);
+    godot::ClassDB::bind_method(
+        godot::D_METHOD("profile_apply_match_result", "opponent_level", "context", "won"),
+        &BattleBridge::profile_apply_match_result);
 }
 
 godot::Array BattleBridge::ToArray(const BattleActionResult& result) const
@@ -456,6 +501,7 @@ godot::Dictionary BattleBridge::ToDictionary(const CompetitorView& competitor) c
     row["focus"] = competitor.focus;
     row["max_focus"] = competitor.maxFocus;
     row["base_power"] = competitor.basePower;
+    row["counter_damage_bonus_percent"] = competitor.counterDamageBonusPercent;
     row["status"] = status;
     return row;
 }
@@ -486,11 +532,16 @@ godot::Dictionary BattleBridge::ToDictionary(const PlayerProfileState& profile) 
     row["game_type_name"] = ToGodotString(::ToString(profile.gameType));
     row["spec"] = static_cast<int>(profile.spec);
     row["spec_name"] = ToGodotString(::ToString(profile.spec));
+    row["rank"] = static_cast<int>(profile.rank);
+    row["rank_name"] = ToGodotString(::ToString(profile.rank));
     row["level"] = profile.level;
     row["xp"] = profile.xp;
     row["xp_required"] = profile.xpRequiredForNextLevel;
     row["rating"] = profile.rating;
     row["money"] = profile.money;
+    row["bonus_max_hp"] = profile.passiveBonuses.maxHpBonus;
+    row["bonus_base_power"] = profile.passiveBonuses.basePowerBonus;
+    row["bonus_counter_damage_percent"] = profile.passiveBonuses.counterDamageBonusPercent;
     row["learned_skills"] = ToSkillArray(profile.learnedSkillIds);
     row["active_skills"] = ToSkillArray(profile.activeSkillIds);
     row["trophies"] = ToStringArray(profile.trophyIds);
@@ -510,6 +561,22 @@ godot::Dictionary BattleBridge::ToDictionary(const ProfileCommandResult& result)
     return row;
 }
 
+godot::Dictionary BattleBridge::ToDictionary(const RatingResult& result) const
+{
+    godot::Dictionary row;
+    row["accepted"] = result.accepted;
+    row["error"] = ToGodotString(result.error);
+    row["won"] = result.won;
+    row["context"] = static_cast<int>(result.context);
+    row["context_name"] = ToString(result.context);
+    row["player_level"] = result.playerLevel;
+    row["opponent_level"] = result.opponentLevel;
+    row["old_rating"] = result.oldRating;
+    row["rating_change"] = result.ratingChange;
+    row["new_rating"] = result.newRating;
+    return row;
+}
+
 godot::Array BattleBridge::ToSkillArray(const std::vector<std::string>& skillIds) const
 {
     godot::Array rows;
@@ -523,6 +590,12 @@ godot::Array BattleBridge::ToSkillArray(const std::vector<std::string>& skillIds
     }
 
     return rows;
+}
+
+bool BattleBridge::IsValidMatchContext(int value) const
+{
+    return value >= static_cast<int>(MatchContext::Tutorial)
+        && value <= static_cast<int>(MatchContext::Major);
 }
 
 godot::Array BattleBridge::ToStringArray(const std::vector<std::string>& values) const

@@ -39,6 +39,7 @@ PlayerProfile PlayerProfile::CreateNew(
     profile.state_.level = ProfileBalance::StartingLevel;
     profile.state_.xp = ProfileBalance::StartingXp;
     profile.RefreshXpRequirement();
+    profile.RefreshRank();
     profile.state_.rating = ProfileBalance::StartingRating;
     profile.state_.money = ProfileBalance::StartingMoney;
 
@@ -62,6 +63,11 @@ PlayerProfile PlayerProfile::CreateNew(
 const PlayerProfileState& PlayerProfile::GetState() const
 {
     return state_;
+}
+
+PassiveBonuses PlayerProfile::GetPassiveBonuses() const
+{
+    return state_.passiveBonuses;
 }
 
 bool PlayerProfile::HasLearnedSkill(const std::string& skillId) const
@@ -138,6 +144,7 @@ ProfileCommandResult PlayerProfile::AwardPlayerXp(int amount)
     }
 
     RefreshXpRequirement();
+    RefreshRank();
     result.newValue = state_.xp;
     result.newLevel = state_.level;
     return result;
@@ -179,7 +186,65 @@ int PlayerProfile::GetXpRequiredForLevel(int level)
         + (safeLevel - 1) * ProfileBalance::XpGrowthPerLevel;
 }
 
+CareerRank PlayerProfile::GetRankForLevel(int level)
+{
+    if (level >= ProfileBalance::WorldClassRankLevel)
+    {
+        return CareerRank::WorldClass;
+    }
+
+    if (level >= ProfileBalance::EliteRankLevel)
+    {
+        return CareerRank::Elite;
+    }
+
+    if (level >= ProfileBalance::ProRankLevel)
+    {
+        return CareerRank::Pro;
+    }
+
+    if (level >= ProfileBalance::LadderRankLevel)
+    {
+        return CareerRank::Ladder;
+    }
+
+    return CareerRank::Rookie;
+}
+
+PassiveBonuses PlayerProfile::GetPassiveBonusesForRank(CareerRank rank)
+{
+    PassiveBonuses bonuses;
+    switch (rank)
+    {
+    case CareerRank::Rookie:
+        return bonuses;
+    case CareerRank::Ladder:
+        bonuses.maxHpBonus = 10;
+        return bonuses;
+    case CareerRank::Pro:
+        bonuses.maxHpBonus = 10;
+        bonuses.counterDamageBonusPercent = 5;
+        return bonuses;
+    case CareerRank::Elite:
+        bonuses.maxHpBonus = 20;
+        bonuses.counterDamageBonusPercent = 10;
+        return bonuses;
+    case CareerRank::WorldClass:
+        bonuses.maxHpBonus = 30;
+        bonuses.counterDamageBonusPercent = 15;
+        return bonuses;
+    }
+
+    return bonuses;
+}
+
 void PlayerProfile::RefreshXpRequirement()
 {
     state_.xpRequiredForNextLevel = GetXpRequiredForLevel(state_.level);
+}
+
+void PlayerProfile::RefreshRank()
+{
+    state_.rank = GetRankForLevel(state_.level);
+    state_.passiveBonuses = GetPassiveBonusesForRank(state_.rank);
 }

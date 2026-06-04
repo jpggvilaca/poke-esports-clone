@@ -133,6 +133,25 @@ text = "Unequip basic"
 layout_mode = 2
 text = "Equip recover"
 
+[node name="RatingActions" type="HBoxContainer" parent="Margin/Root/Profile"]
+layout_mode = 2
+
+[node name="NormalWin" type="Button" parent="Margin/Root/Profile/RatingActions"]
+layout_mode = 2
+text = "Normal win"
+
+[node name="LowLevelWin" type="Button" parent="Margin/Root/Profile/RatingActions"]
+layout_mode = 2
+text = "Low-level win"
+
+[node name="NemesisWin" type="Button" parent="Margin/Root/Profile/RatingActions"]
+layout_mode = 2
+text = "Nemesis win"
+
+[node name="MajorWin" type="Button" parent="Margin/Root/Profile/RatingActions"]
+layout_mode = 2
+text = "Major win"
+
 [node name="Separator" type="HSeparator" parent="Margin/Root"]
 layout_mode = 2
 

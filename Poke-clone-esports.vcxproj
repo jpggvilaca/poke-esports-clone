@@ -148,6 +148,7 @@
     <ClCompile Include="BattleSession.cpp" />
     <ClCompile Include="OpponentAI.cpp" />
     <ClCompile Include="PlayerProfile.cpp" />
+    <ClCompile Include="RatingSystem.cpp" />
     <ClCompile Include="ProgressionSystem.cpp" />
     <ClCompile Include="SimulationData.cpp" />
     <ClCompile Include="SkillSystem.cpp" />
@@ -157,6 +158,7 @@
     <ClInclude Include="BattleSession.h" />
     <ClInclude Include="OpponentAI.h" />
     <ClInclude Include="PlayerProfile.h" />
+    <ClInclude Include="RatingSystem.h" />
     <ClInclude Include="ProgressionSystem.h" />
     <ClInclude Include="SimulationData.h" />
     <ClInclude Include="SkillSystem.h" />

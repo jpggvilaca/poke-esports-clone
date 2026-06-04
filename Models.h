@@ -63,6 +63,23 @@ enum class Effectiveness
     NotVeryEffective
 };
 
+enum class MatchContext
+{
+    Tutorial,
+    Normal,
+    Nemesis,
+    Major
+};
+
+enum class CareerRank
+{
+    Rookie,
+    Ladder,
+    Pro,
+    Elite,
+    WorldClass
+};
+
 inline std::string ToString(GameType gameType)
 {
     switch (gameType)
@@ -94,6 +111,20 @@ inline std::string ToString(Style style)
     case Style::Aggressive: return "Aggressive";
     case Style::Defensive: return "Defensive";
     case Style::Balanced: return "Balanced";
+    }
+
+    return "Unknown";
+}
+
+inline std::string ToString(CareerRank rank)
+{
+    switch (rank)
+    {
+    case CareerRank::Rookie: return "Rookie";
+    case CareerRank::Ladder: return "Ladder";
+    case CareerRank::Pro: return "Pro";
+    case CareerRank::Elite: return "Elite";
+    case CareerRank::WorldClass: return "World-Class";
     }
 
     return "Unknown";
@@ -140,6 +171,13 @@ struct BattleStatus
     int defenseModifierHits = 0;
 };
 
+struct PassiveBonuses
+{
+    int maxHpBonus = 0;
+    int basePowerBonus = 0;
+    int counterDamageBonusPercent = 0;
+};
+
 // Both sides follow the same combat rules, so one type replaces the earlier
 // duplicated Player and Opponent structs.
 struct Competitor
@@ -153,6 +191,7 @@ struct Competitor
     int focus = 50;
     int maxFocus = 50;
     int basePower = 5;
+    int counterDamageBonusPercent = 0;
     std::vector<SkillProgress> skills;
 
     SkillProgress* FindSkill(const std::string& skillId)
@@ -187,6 +226,7 @@ struct BattleSetup
     GameType gameType = GameType::LeagueOfLegends;
     Spec playerSpec = Spec::Top;
     Style playerStyle = Style::Balanced;
+    PassiveBonuses playerPassiveBonuses;
     Spec opponentSpec = Spec::Jungle;
     Style opponentStyle = Style::Balanced;
 };
@@ -203,6 +243,7 @@ struct CompetitorView
     int focus = 0;
     int maxFocus = 0;
     int basePower = 0;
+    int counterDamageBonusPercent = 0;
     BattleStatus status;
 };
 
@@ -287,6 +328,8 @@ struct PlayerProfileState
     std::string playerName = "Player";
     GameType gameType = GameType::LeagueOfLegends;
     Spec spec = Spec::Top;
+    CareerRank rank = CareerRank::Rookie;
+    PassiveBonuses passiveBonuses;
     int level = 1;
     int xp = 0;
     int xpRequiredForNextLevel = 100;
@@ -306,4 +349,17 @@ struct ProfileCommandResult
     int oldLevel = 1;
     int newLevel = 1;
     bool leveledUp = false;
+};
+
+struct RatingResult
+{
+    bool accepted = false;
+    std::string error;
+    bool won = true;
+    MatchContext context = MatchContext::Normal;
+    int playerLevel = 1;
+    int opponentLevel = 1;
+    int oldRating = 0;
+    int ratingChange = 0;
+    int newRating = 0;
 };
