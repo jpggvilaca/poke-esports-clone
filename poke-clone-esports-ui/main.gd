@@ -10,6 +10,7 @@ extends Control
 @onready var opponent_style: OptionButton = $Margin/Root/Setup/OpponentStyle
 @onready var restart_button: Button = $Margin/Root/StartButtons/Restart
 @onready var profile_summary: Label = $Margin/Root/Profile/ProfileSummary
+@onready var profile_roster: Label = $Margin/Root/Profile/ProfileRoster
 @onready var profile_skills: Label = $Margin/Root/Profile/ProfileSkills
 @onready var profile_trophies: Label = $Margin/Root/Profile/ProfileTrophies
 @onready var style_buttons: HBoxContainer = $Margin/Root/StyleButtons
@@ -22,14 +23,14 @@ var styles: Array[Dictionary] = []
 func _ready() -> void:
 	$Margin/Root/StartButtons/Start.pressed.connect(_start_battle)
 	restart_button.pressed.connect(_start_battle)
-	$Margin/Root/Profile/ProfileActions/NewProfile.pressed.connect(_create_profile_from_setup)
-	$Margin/Root/Profile/ProfileActions/AddXp.pressed.connect(_profile_command.bind("Award 125 XP", Callable(bridge, "profile_award_xp"), [125]))
-	$Margin/Root/Profile/ProfileActions/AddRating.pressed.connect(_profile_command.bind("Award 30 rating", Callable(bridge, "profile_award_rating"), [30]))
-	$Margin/Root/Profile/ProfileActions/AddMoney.pressed.connect(_profile_command.bind("Award 100 money", Callable(bridge, "profile_award_money"), [100]))
-	$Margin/Root/Profile/ProfileActions/AddTrophy.pressed.connect(_profile_command.bind("Add first major trophy", Callable(bridge, "profile_add_trophy"), ["first-major"]))
-	$Margin/Root/Profile/ProfileActions/LearnRecover.pressed.connect(_profile_command.bind("Learn recover", Callable(bridge, "profile_learn_skill"), ["top-recover"]))
-	$Margin/Root/Profile/ProfileActions/UnequipBasic.pressed.connect(_profile_command.bind("Unequip basic", Callable(bridge, "profile_unequip_skill"), ["top-basic"]))
-	$Margin/Root/Profile/ProfileActions/EquipRecover.pressed.connect(_profile_command.bind("Equip recover", Callable(bridge, "profile_equip_skill"), ["top-recover"]))
+	$Margin/Root/Profile/ProfileActions/NewTrainer.pressed.connect(_create_trainer_from_setup)
+	$Margin/Root/Profile/ProfileActions/AddXp.pressed.connect(_profile_command.bind("Award 125 XP", Callable(bridge, "active_player_award_xp"), [125]))
+	$Margin/Root/Profile/ProfileActions/AddRating.pressed.connect(_profile_command.bind("Award 30 rating", Callable(bridge, "trainer_award_rating"), [30]))
+	$Margin/Root/Profile/ProfileActions/AddMoney.pressed.connect(_profile_command.bind("Award 100 money", Callable(bridge, "trainer_award_money"), [100]))
+	$Margin/Root/Profile/ProfileActions/AddTrophy.pressed.connect(_profile_command.bind("Add first major trophy", Callable(bridge, "trainer_add_trophy"), ["first-major"]))
+	$Margin/Root/Profile/ProfileActions/LearnRecover.pressed.connect(_profile_command.bind("Learn recover", Callable(bridge, "active_player_learn_skill"), ["top-recover"]))
+	$Margin/Root/Profile/ProfileActions/UnequipBasic.pressed.connect(_profile_command.bind("Unequip basic", Callable(bridge, "active_player_unequip_skill"), ["top-basic"]))
+	$Margin/Root/Profile/ProfileActions/EquipRecover.pressed.connect(_profile_command.bind("Equip recover", Callable(bridge, "active_player_equip_skill"), ["top-recover"]))
 	$Margin/Root/Profile/RatingActions/NormalWin.pressed.connect(_rating_command.bind("Normal win vs same level", 0, 1, true))
 	$Margin/Root/Profile/RatingActions/LowLevelWin.pressed.connect(_rating_command.bind("Normal win vs low level", -1, 1, true))
 	$Margin/Root/Profile/RatingActions/NemesisWin.pressed.connect(_rating_command.bind("Nemesis win vs +2 levels", 3, 2, true))
@@ -55,7 +56,6 @@ func _populate_option(button: OptionButton, rows: Array) -> void:
 func _start_battle() -> void:
 	battle_log.clear()
 	_append_events(bridge.start_battle(
-		player_spec.get_selected_id(),
 		player_style.get_selected_id(),
 		opponent_spec.get_selected_id(),
 		opponent_style.get_selected_id()))
@@ -83,21 +83,26 @@ func _render() -> void:
 
 
 func _render_profile() -> void:
-	var profile: Dictionary = bridge.get_profile_state()
-	profile_summary.text = "%s | %s %s | %s | Lv %d (%d / %d XP) | Rating %d | Money %d | Bonus HP %+d | Counter dmg +%d%%" % [
-		profile.player_name,
+	var profile: Dictionary = bridge.get_trainer_state()
+	var active: Dictionary = profile.active_player_profile
+	profile_summary.text = "Trainer %s | %s | Rating %d | Money %d" % [
+		profile.trainer_name,
 		profile.game_type_name,
-		profile.spec_name,
-		profile.rank_name,
-		profile.level,
-		profile.xp,
-		profile.xp_required,
 		profile.rating,
 		profile.money,
-		profile.bonus_max_hp,
-		profile.bonus_counter_damage_percent,
 	]
-	profile_skills.text = "Active skills: " + _format_skill_names(profile.active_skills)
+	profile_roster.text = "Active player profile: %s | %s %s | Lv %d (%d / %d XP) | Bonus HP %+d | Counter dmg +%d%% | Roster %d / 6" % [
+		active.name,
+		active.rank_name,
+		active.spec_name,
+		active.level,
+		active.xp,
+		active.xp_required,
+		active.bonus_max_hp,
+		active.bonus_counter_damage_percent,
+		profile.roster.size(),
+	]
+	profile_skills.text = "Active skills: " + _format_skill_names(active.active_skills)
 	profile_trophies.text = "Trophies: " + _format_strings(profile.trophies)
 
 
@@ -115,9 +120,9 @@ func _format_strings(values: Array) -> String:
 	return "none" if text_values.is_empty() else ", ".join(text_values)
 
 
-func _create_profile_from_setup() -> void:
-	var result: Dictionary = bridge.create_profile("Player", player_spec.get_selected_id())
-	_append_profile_result("Create profile", result)
+func _create_trainer_from_setup() -> void:
+	var result: Dictionary = bridge.create_trainer("Trainer", player_spec.get_selected_id())
+	_append_profile_result("Create trainer", result)
 	_render()
 
 
@@ -128,9 +133,10 @@ func _profile_command(label: String, callable: Callable, args: Array) -> void:
 
 
 func _rating_command(label: String, opponent_level_offset: int, context: int, won: bool) -> void:
-	var profile: Dictionary = bridge.get_profile_state()
-	var opponent_level: int = max(1, profile.level + opponent_level_offset)
-	var result: Dictionary = bridge.profile_apply_match_result(opponent_level, context, won)
+	var profile: Dictionary = bridge.get_trainer_state()
+	var active: Dictionary = profile.active_player_profile
+	var opponent_level: int = max(1, active.level + opponent_level_offset)
+	var result: Dictionary = bridge.trainer_apply_match_result(opponent_level, context, won)
 	_append_rating_result(label, result)
 	_render()
 

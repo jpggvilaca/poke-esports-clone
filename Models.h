@@ -251,9 +251,11 @@ struct Competitor
 struct BattleSetup
 {
     GameType gameType = GameType::LeagueOfLegends;
+    std::string playerName = "Player";
     Spec playerSpec = Spec::Top;
     Style playerStyle = Style::Balanced;
     PassiveBonuses playerPassiveBonuses;
+    std::vector<SkillProgress> playerSkills;
     Spec opponentSpec = Spec::Jungle;
     Style opponentStyle = Style::Balanced;
 };
@@ -352,20 +354,29 @@ struct BattleActionResult
     BattleWinner winner = BattleWinner::None;
 };
 
+// Trainer state is the human/user layer: rating, money, trophies, and roster
+// ownership. PlayerProfileState below is the battler layer that actually grows.
 struct PlayerProfileState
 {
-    std::string playerName = "Player";
-    GameType gameType = GameType::LeagueOfLegends;
+    std::string name = "Player";
     Spec spec = Spec::Top;
     CareerRank rank = CareerRank::Rookie;
     PassiveBonuses passiveBonuses;
     int level = 1;
     int xp = 0;
     int xpRequiredForNextLevel = 100;
-    int rating = 1000;
-    int money = 0;
     std::vector<std::string> learnedSkillIds;
     std::vector<std::string> activeSkillIds;
+};
+
+struct TrainerProfileState
+{
+    std::string trainerName = "Trainer";
+    GameType gameType = GameType::LeagueOfLegends;
+    int rating = 1000;
+    int money = 0;
+    int activePlayerIndex = 0;
+    std::vector<PlayerProfileState> roster;
     std::vector<std::string> trophyIds;
 };
 

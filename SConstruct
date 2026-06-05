@@ -9,11 +9,12 @@ sources = [
     "BattleRules.cpp",
     "BattleSession.cpp",
     "OpponentAI.cpp",
-    "PlayerProfile.cpp",
+    "PlayerProfileSystem.cpp",
     "RatingSystem.cpp",
     "ProgressionSystem.cpp",
     "SimulationData.cpp",
     "SkillSystem.cpp",
+    "TrainerProfile.cpp",
 ]
 sources += Glob("native/*.cpp")
 

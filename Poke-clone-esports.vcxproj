@@ -147,21 +147,23 @@
     <ClCompile Include="BattleRules.cpp" />
     <ClCompile Include="BattleSession.cpp" />
     <ClCompile Include="OpponentAI.cpp" />
-    <ClCompile Include="PlayerProfile.cpp" />
+    <ClCompile Include="PlayerProfileSystem.cpp" />
     <ClCompile Include="RatingSystem.cpp" />
     <ClCompile Include="ProgressionSystem.cpp" />
     <ClCompile Include="SimulationData.cpp" />
     <ClCompile Include="SkillSystem.cpp" />
+    <ClCompile Include="TrainerProfile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BattleRules.h" />
     <ClInclude Include="BattleSession.h" />
     <ClInclude Include="OpponentAI.h" />
-    <ClInclude Include="PlayerProfile.h" />
+    <ClInclude Include="PlayerProfileSystem.h" />
     <ClInclude Include="RatingSystem.h" />
     <ClInclude Include="ProgressionSystem.h" />
     <ClInclude Include="SimulationData.h" />
     <ClInclude Include="SkillSystem.h" />
+    <ClInclude Include="TrainerProfile.h" />
     <ClInclude Include="Models.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -2,23 +2,26 @@
 
 ## Game Vision
 
-The game is a Pokemon Red/Blue-inspired 2D RPG about becoming the best esports player in the world.
+The game is a classic monster-taming RPG-inspired 2D RPG about becoming the best esports trainer in the world.
 
 Current direction:
 
-- The player starts with a menu, picks a game genre, then picks a spec. For now, the only genre is League of Legends.
-- The first story beat is a tutorial battle against the player's older brother. The player should win, but not stomp.
-- The overworld is top-down 2D like classic Pokemon. Cities contain LAN cafes and major tournament buildings.
-- LAN cafes are the equivalent of grass/caves: walking near or into one can trigger a player-vs-player battle.
-- Battles are always esports player vs esports player, not monsters or teams.
-- Specs behave like Pokemon types/jobs: they define identity, skill access, and counter matchups.
-- Skills behave like Pokemon moves: the player may learn many, but can equip only four active skills.
-- Skills level up, the player levels up, and rating changes after battles.
+- The user is the trainer/competitor profile. The trainer owns rating, money, trophies, story progress, and a roster.
+- Player profiles are the battle units controlled by the trainer. They are the esports equivalent of classic collectible battlers.
+- The trainer starts with a menu, picks a game genre, then picks the starter player profile's spec. For now, the only genre is League of Legends.
+- The first story beat is a tutorial battle against the trainer's older brother. The trainer should win, but not stomp.
+- The overworld is top-down 2D like classic handheld RPGs. Cities contain LAN cafes and major tournament buildings.
+- LAN cafes are the equivalent of encounter zones: walking near or into one can trigger a battle.
+- Battles are esports player profile vs esports player profile. Full roster/team switching comes later.
+- Specs define player-profile identity, skill access, and counter matchups.
+- Skills behave like battle moves: a player profile may learn many, but can equip only four active skills.
+- Skills level up, player profiles level up, and trainer rating changes after battles.
 - Major tournaments replace gym badges. Each major requires a minimum rating and awards a trophy.
-- A nemesis/rival appears throughout the game, mocks the player, and uses the player's counter spec.
-- Buildings can later provide healing, shops, and other Pokemon Center/Poke Mart-like services.
+- A nemesis/rival appears throughout the game, mocks the trainer, and uses player profiles that counter the trainer's roster.
+- Buildings can later provide healing, shops, and other familiar RPG services.
+- Styles are temporary sandbox mechanics. Rework them later into personality, archetype, stance, or remove them if they do not fit the player-profile model.
 
-Do not add teams, sponsors, or item complexity until the core profile, battle, rating, encounter, and major loop exists.
+Do not add sponsors, item complexity, storage boxes, recruitment, or full team switching until the core trainer, roster, battle, rating, encounter, and major loop exists.
 
 ## Architecture Boundary
 
@@ -45,6 +48,7 @@ Godot UI/Audio/Animation
 - Do not emit Godot signals or use Godot types inside pure backend systems.
 - Do not make backend systems reactive/event-driven. They may mutate owned game state, then return facts about what changed.
 - Keep systems small and composable: battle flow, skill use, progression, counter logic, items, economy, and match flow should be separate systems.
+- `TrainerProfile` owns trainer-level save state and the roster. `PlayerProfileSystem` owns player-profile growth rules: XP, rank/evolution, passives, learned skills, and active skills.
 
 ## Godot Bridge Rules
 

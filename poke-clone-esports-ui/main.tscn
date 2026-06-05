@@ -40,7 +40,7 @@ columns = 4
 
 [node name="PlayerSpecLabel" type="Label" parent="Margin/Root/Setup"]
 layout_mode = 2
-text = "Player spec"
+text = "Starter player spec"
 
 [node name="PlayerStyleLabel" type="Label" parent="Margin/Root/Setup"]
 layout_mode = 2
@@ -90,6 +90,10 @@ theme_override_constants/separation = 4
 layout_mode = 2
 text = "Profile: -"
 
+[node name="ProfileRoster" type="Label" parent="Margin/Root/Profile"]
+layout_mode = 2
+text = "Roster: -"
+
 [node name="ProfileSkills" type="Label" parent="Margin/Root/Profile"]
 layout_mode = 2
 text = "Active skills: -"
@@ -101,9 +105,9 @@ text = "Trophies: -"
 [node name="ProfileActions" type="HBoxContainer" parent="Margin/Root/Profile"]
 layout_mode = 2
 
-[node name="NewProfile" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+[node name="NewTrainer" type="Button" parent="Margin/Root/Profile/ProfileActions"]
 layout_mode = 2
-text = "New profile from spec"
+text = "New trainer from spec"
 
 [node name="AddXp" type="Button" parent="Margin/Root/Profile/ProfileActions"]
 layout_mode = 2

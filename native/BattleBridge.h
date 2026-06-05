@@ -1,9 +1,10 @@
 #pragma once
 
 #include "BattleSession.h"
-#include "PlayerProfile.h"
+#include "PlayerProfileSystem.h"
 #include "RatingSystem.h"
 #include "SimulationData.h"
+#include "TrainerProfile.h"
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -22,21 +23,21 @@ public:
 
     godot::Array get_specs() const;
     godot::Array get_styles() const;
-    godot::Array start_battle(int player_spec, int player_style, int opponent_spec, int opponent_style);
+    godot::Array start_battle(int player_style, int opponent_spec, int opponent_style);
     godot::Array use_skill(const godot::String& skill_id);
     godot::Array change_style(int style);
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;
-    godot::Dictionary create_profile(const godot::String& player_name, int spec);
-    godot::Dictionary get_profile_state() const;
-    godot::Dictionary profile_award_xp(int amount);
-    godot::Dictionary profile_award_rating(int amount);
-    godot::Dictionary profile_award_money(int amount);
-    godot::Dictionary profile_learn_skill(const godot::String& skill_id);
-    godot::Dictionary profile_equip_skill(const godot::String& skill_id);
-    godot::Dictionary profile_unequip_skill(const godot::String& skill_id);
-    godot::Dictionary profile_add_trophy(const godot::String& trophy_id);
-    godot::Dictionary profile_apply_match_result(int opponent_level, int context, bool won);
+    godot::Dictionary create_trainer(const godot::String& trainer_name, int starter_spec);
+    godot::Dictionary get_trainer_state() const;
+    godot::Dictionary active_player_award_xp(int amount);
+    godot::Dictionary active_player_learn_skill(const godot::String& skill_id);
+    godot::Dictionary active_player_equip_skill(const godot::String& skill_id);
+    godot::Dictionary active_player_unequip_skill(const godot::String& skill_id);
+    godot::Dictionary trainer_award_rating(int amount);
+    godot::Dictionary trainer_award_money(int amount);
+    godot::Dictionary trainer_add_trophy(const godot::String& trophy_id);
+    godot::Dictionary trainer_apply_match_result(int opponent_level, int context, bool won);
 
 protected:
     static void _bind_methods();
@@ -56,7 +57,8 @@ private:
         int duration = 0) const;
     godot::Dictionary ToDictionary(const CompetitorView& competitor) const;
     godot::Dictionary ToDictionary(const SkillView& skill, int available_focus) const;
-    godot::Dictionary ToDictionary(const PlayerProfileState& profile) const;
+    godot::Dictionary ToDictionary(const PlayerProfileState& playerProfile) const;
+    godot::Dictionary ToDictionary(const TrainerProfileState& profile) const;
     godot::Dictionary ToDictionary(const ProfileCommandResult& result) const;
     godot::Dictionary ToDictionary(const RatingResult& result) const;
     godot::Array ToSkillArray(const std::vector<std::string>& skillIds) const;
@@ -64,7 +66,8 @@ private:
     bool IsValidMatchContext(int value) const;
 
     SimulationData data_;
+    PlayerProfileSystem playerProfiles_;
     BattleSession session_;
-    PlayerProfile profile_;
+    TrainerProfile profile_;
     RatingSystem rating_;
 };

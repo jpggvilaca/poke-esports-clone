@@ -56,11 +56,15 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
     }
 
     player_ = CreateCompetitor(
-        "Player",
+        setup.playerName,
         setup.gameType,
         setup.playerSpec,
         setup.playerStyle,
         setup.playerPassiveBonuses);
+    if (!setup.playerSkills.empty())
+    {
+        player_.skills = setup.playerSkills;
+    }
     opponent_ = CreateCompetitor(
         "Opponent",
         setup.gameType,
