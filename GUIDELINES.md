@@ -20,7 +20,7 @@ Current direction:
 - Major tournaments replace gym badges. Each major requires a minimum rating and awards a trophy.
 - A nemesis/rival appears throughout the game, mocks the trainer, and uses player profiles that counter the trainer's roster.
 - Buildings can later provide healing, shops, and other familiar RPG services.
-- Styles are temporary sandbox mechanics. Rework them later into personality, archetype, stance, or remove them if they do not fit the player-profile model.
+- Styles are temporary prototype mechanics. Rework them later into personality, archetype, stance, or remove them if they do not fit the player-profile model.
 
 Do not add sponsors, item complexity, storage boxes, recruitment, or full team switching until the core trainer, roster, battle, rating, encounter, and major loop exists.
 
