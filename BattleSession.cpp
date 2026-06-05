@@ -29,8 +29,13 @@ namespace
 }
 
 BattleSession::BattleSession(const SimulationData& data)
+    : BattleSession(data, std::random_device{}())
+{
+}
+
+BattleSession::BattleSession(const SimulationData& data, std::uint32_t seed)
     : data_(data),
-      randomEngine_(std::random_device{}()),
+      randomEngine_(seed),
       rules_(data),
       skills_(data, rules_, progression_),
       opponentAI_(data, rules_, skills_)
@@ -41,41 +46,41 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
 {
     if (!IsKnown(setup.gameType))
     {
-        return RejectAction("Unknown game type.");
+        return RejectAction(SimulationError::UnknownGameType, "Unknown game type.");
     }
 
     if (setup.playerTeam.empty())
     {
-        return RejectAction("A battle needs at least one player profile.");
+        return RejectAction(SimulationError::BattleNeedsPlayerProfile, "A battle needs at least one player profile.");
     }
 
     if (!IsKnown(setup.opponentSpec) || data_.FindSpec(setup.opponentSpec) == nullptr)
     {
-        return RejectAction("Unknown spec.");
+        return RejectAction(SimulationError::UnknownSpec, "Unknown spec.");
     }
 
     for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
     {
         if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
         {
-            return RejectAction("Unknown player profile spec.");
+            return RejectAction(SimulationError::UnknownPlayerProfileSpec, "Unknown player profile spec.");
         }
 
         if (!IsKnown(slot.style))
         {
-            return RejectAction("Unknown player profile style.");
+            return RejectAction(SimulationError::UnknownPlayerProfileStyle, "Unknown player profile style.");
         }
     }
 
     if (!IsKnown(setup.opponentStyle))
     {
-        return RejectAction("Unknown style.");
+        return RejectAction(SimulationError::UnknownStyle, "Unknown style.");
     }
 
     if (setup.activePlayerIndex < 0
         || setup.activePlayerIndex >= static_cast<int>(setup.playerTeam.size()))
     {
-        return RejectAction("Unknown active player profile.");
+        return RejectAction(SimulationError::UnknownActivePlayerProfile, "Unknown active player profile.");
     }
 
     playerTeam_.clear();
@@ -105,6 +110,12 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
     BattleActionResult result;
     result.accepted = true;
     result.battleStarted = true;
+    BattleEvent event;
+    event.type = BattleEventType::BattleStarted;
+    event.newPlayerIndex = activePlayerIndex_;
+    event.playerName = ActivePlayer().name;
+    result.events.push_back(event);
+    result.finalState = GetState();
     return result;
 }
 
@@ -112,12 +123,12 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
 {
     if (!started_)
     {
-        return RejectAction("Start a battle first.");
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
     }
 
     if (finished_)
     {
-        return RejectAction("The battle is already finished.");
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
     }
 
     Competitor& player = ActivePlayer();
@@ -126,29 +137,31 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
     const Skill* definition = data_.FindSkill(skillId);
     if (progress == nullptr || definition == nullptr)
     {
-        return RejectAction("Unknown skill.");
+        return RejectAction(SimulationError::UnknownSkill, "Unknown skill.");
     }
 
     if (!skills_.IsAvailableForStyle(*definition, player.style))
     {
-        return RejectAction("That skill is not available for the active style.");
+        return RejectAction(SimulationError::SkillUnavailableForStyle, "That skill is not available for the active style.");
     }
 
     if (rules_.GetFocusCost(*definition, *progress) > player.focus)
     {
-        return RejectAction("Not enough focus.");
+        return RejectAction(SimulationError::InsufficientFocus, "Not enough focus.");
     }
 
     BattleActionResult result;
     result.accepted = true;
-    result.skillUses.push_back(skills_.UseSkill(
+    SkillUseResult skillUse = skills_.UseSkill(
         BattleActor::Player,
         player,
         playerStatus,
         opponent_,
         opponentStatus_,
         *progress,
-        randomEngine_));
+        randomEngine_);
+    AppendEvents(result, skillUse.events);
+    result.skillUses.push_back(skillUse);
     FinishBattleIfNeeded(result);
 
     if (!finished_)
@@ -157,6 +170,7 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
         FinishBattleIfNeeded(result);
     }
 
+    result.finalState = GetState();
     return result;
 }
 
@@ -164,22 +178,22 @@ BattleActionResult BattleSession::ChangePlayerStyle(Style style)
 {
     if (!started_)
     {
-        return RejectAction("Start a battle first.");
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
     }
 
     if (finished_)
     {
-        return RejectAction("The battle is already finished.");
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
     }
 
     if (!IsKnown(style))
     {
-        return RejectAction("Unknown style.");
+        return RejectAction(SimulationError::UnknownStyle, "Unknown style.");
     }
 
     if (style == ActivePlayer().style)
     {
-        return RejectAction("That style is already active.");
+        return RejectAction(SimulationError::StyleAlreadyActive, "That style is already active.");
     }
 
     ActivePlayer().style = style;
@@ -188,10 +202,16 @@ BattleActionResult BattleSession::ChangePlayerStyle(Style style)
     result.accepted = true;
     result.styleChanged = true;
     result.newStyle = style;
+    BattleEvent event;
+    event.type = BattleEventType::StyleChanged;
+    event.actor = BattleActor::Player;
+    event.style = style;
+    result.events.push_back(event);
 
     // Switching style is a tactical choice, not a free menu operation.
     ResolveOpponentTurn(result);
     FinishBattleIfNeeded(result);
+    result.finalState = GetState();
     return result;
 }
 
@@ -199,27 +219,27 @@ BattleActionResult BattleSession::SwitchPlayer(int playerIndex)
 {
     if (!started_)
     {
-        return RejectAction("Start a battle first.");
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
     }
 
     if (finished_)
     {
-        return RejectAction("The battle is already finished.");
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
     }
 
     if (!IsKnownPlayerIndex(playerIndex))
     {
-        return RejectAction("Unknown player profile.");
+        return RejectAction(SimulationError::UnknownPlayerProfile, "Unknown player profile.");
     }
 
     if (playerIndex == activePlayerIndex_)
     {
-        return RejectAction("That player profile is already active.");
+        return RejectAction(SimulationError::PlayerProfileAlreadyActive, "That player profile is already active.");
     }
 
     if (playerTeam_[playerIndex].hp <= 0)
     {
-        return RejectAction("That player profile cannot play.");
+        return RejectAction(SimulationError::PlayerProfileCannotPlay, "That player profile cannot play.");
     }
 
     BattleActionResult result;
@@ -231,10 +251,18 @@ BattleActionResult BattleSession::SwitchPlayer(int playerIndex)
 
     activePlayerIndex_ = playerIndex;
     MarkParticipant(activePlayerIndex_);
+    BattleEvent event;
+    event.type = BattleEventType::PlayerSwitched;
+    event.actor = BattleActor::Player;
+    event.oldPlayerIndex = result.oldPlayerIndex;
+    event.newPlayerIndex = result.newPlayerIndex;
+    event.playerName = result.newPlayerName;
+    result.events.push_back(event);
 
     // Switching player profiles spends the turn, matching classic party-battle pacing.
     ResolveOpponentTurn(result);
     FinishBattleIfNeeded(result);
+    result.finalState = GetState();
     return result;
 }
 
@@ -334,11 +362,21 @@ Competitor BattleSession::CreateCompetitor(
     return competitor;
 }
 
-BattleActionResult BattleSession::RejectAction(const std::string& error) const
+BattleActionResult BattleSession::RejectAction(SimulationError errorCode, const std::string& error) const
 {
     BattleActionResult result;
+    result.errorCode = errorCode;
     result.error = error;
+    result.finalState = GetState();
     return result;
+}
+
+void BattleSession::AppendEvents(BattleActionResult& result, const std::vector<BattleEvent>& events) const
+{
+    for (const BattleEvent& event : events)
+    {
+        result.events.push_back(event);
+    }
 }
 
 Competitor& BattleSession::ActivePlayer()
@@ -392,14 +430,16 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
         return;
     }
 
-    result.skillUses.push_back(skills_.UseSkill(
+    SkillUseResult skillUse = skills_.UseSkill(
         BattleActor::Opponent,
         opponent_,
         opponentStatus_,
         ActivePlayer(),
         ActivePlayerStatus(),
         *progress,
-        randomEngine_));
+        randomEngine_);
+    AppendEvents(result, skillUse.events);
+    result.skillUses.push_back(skillUse);
 }
 
 CompetitorView BattleSession::CreateCompetitorView(
@@ -432,6 +472,10 @@ void BattleSession::FinishBattleIfNeeded(BattleActionResult& result)
     winner_ = ActivePlayer().hp > 0 ? BattleWinner::Player : BattleWinner::Opponent;
     result.battleFinished = true;
     result.winner = winner_;
+    BattleEvent event;
+    event.type = BattleEventType::BattleFinished;
+    event.winner = winner_;
+    result.events.push_back(event);
     AttachRewardIfNeeded(result);
 }
 
@@ -451,4 +495,9 @@ void BattleSession::AttachRewardIfNeeded(BattleActionResult& result) const
     {
         result.reward.participantPlayerIndices.push_back(playerTeam_[playerIndex].profileIndex);
     }
+
+    BattleEvent event;
+    event.type = BattleEventType::RewardGranted;
+    event.reward = result.reward;
+    result.events.push_back(event);
 }

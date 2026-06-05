@@ -18,9 +18,10 @@ namespace
         return result;
     }
 
-    ProfileCommandResult Reject(const std::string& error)
+    ProfileCommandResult Reject(SimulationError errorCode, const std::string& error)
     {
         ProfileCommandResult result;
+        result.errorCode = errorCode;
         result.error = error;
         return result;
     }
@@ -108,7 +109,7 @@ ProfileCommandResult TrainerProfile::AddTrophy(const std::string& trophyId)
 {
     if (Contains(state_.trophyIds, trophyId))
     {
-        return Reject("Trophy already earned.");
+        return Reject(SimulationError::TrophyAlreadyEarned, "Trophy already earned.");
     }
 
     state_.trophyIds.push_back(trophyId);
@@ -119,7 +120,7 @@ ProfileCommandResult TrainerProfile::AddPlayerProfile(const PlayerProfileState& 
 {
     if (static_cast<int>(state_.roster.size()) >= TrainerBalance::MaxPlayerProfiles)
     {
-        return Reject("Roster is full.");
+        return Reject(SimulationError::RosterFull, "Roster is full.");
     }
 
     state_.roster.push_back(playerProfile);

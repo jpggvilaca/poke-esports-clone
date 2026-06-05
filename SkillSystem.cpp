@@ -49,6 +49,12 @@ SkillUseResult SkillSystem::UseSkill(
     result.actor = actor;
     result.target = Opposite(actor);
     result.skillId = progress.skillId;
+    result.oldFocus = attacker.focus;
+    result.newFocus = attacker.focus;
+    result.oldActorHp = attacker.hp;
+    result.newActorHp = attacker.hp;
+    result.oldTargetHp = defender.hp;
+    result.newTargetHp = defender.hp;
 
     const Skill* definition = data_.FindSkill(progress.skillId);
     if (definition == nullptr)
@@ -59,11 +65,62 @@ SkillUseResult SkillSystem::UseSkill(
     result.used = true;
     result.skillId = definition->id;
     attacker.focus -= rules_.GetFocusCost(*definition, progress);
+    result.newFocus = attacker.focus;
+
+    BattleEvent skillStarted;
+    skillStarted.type = BattleEventType::SkillStarted;
+    skillStarted.actor = actor;
+    skillStarted.target = result.target;
+    skillStarted.skillId = definition->id;
+    result.events.push_back(skillStarted);
+
+    if (result.oldFocus != result.newFocus)
+    {
+        BattleEvent focusChanged;
+        focusChanged.type = BattleEventType::FocusChanged;
+        focusChanged.actor = actor;
+        focusChanged.skillId = definition->id;
+        focusChanged.oldValue = result.oldFocus;
+        focusChanged.newValue = result.newFocus;
+        focusChanged.amount = result.oldFocus - result.newFocus;
+        result.events.push_back(focusChanged);
+    }
 
     if (!Chance(rules_.GetAccuracy(*definition, progress), randomEngine))
     {
         result.hit = false;
+        BattleEvent missed;
+        missed.type = BattleEventType::AttackMissed;
+        missed.actor = actor;
+        missed.target = result.target;
+        missed.skillId = definition->id;
+        result.events.push_back(missed);
+
         result.xp = progression_.AwardSkillXp(progress);
+        if (result.xp.xpGained > 0)
+        {
+            BattleEvent xpGained;
+            xpGained.type = BattleEventType::SkillXpGained;
+            xpGained.actor = actor;
+            xpGained.skillId = definition->id;
+            xpGained.oldValue = result.xp.oldXp;
+            xpGained.newValue = result.xp.newXp;
+            xpGained.amount = result.xp.xpGained;
+            xpGained.xp = result.xp;
+            result.events.push_back(xpGained);
+        }
+
+        if (result.xp.leveledUp)
+        {
+            BattleEvent leveledUp;
+            leveledUp.type = BattleEventType::SkillLeveledUp;
+            leveledUp.actor = actor;
+            leveledUp.skillId = definition->id;
+            leveledUp.oldLevel = result.xp.oldLevel;
+            leveledUp.newLevel = result.xp.newLevel;
+            leveledUp.xp = result.xp;
+            result.events.push_back(leveledUp);
+        }
         return result;
     }
 
@@ -77,6 +134,18 @@ SkillUseResult SkillSystem::UseSkill(
             defender,
             defenderStatus);
         defender.hp = std::max(0, defender.hp - result.damage.amount);
+        result.newTargetHp = defender.hp;
+
+        BattleEvent damageApplied;
+        damageApplied.type = BattleEventType::DamageApplied;
+        damageApplied.actor = actor;
+        damageApplied.target = result.target;
+        damageApplied.skillId = definition->id;
+        damageApplied.oldValue = result.oldTargetHp;
+        damageApplied.newValue = result.newTargetHp;
+        damageApplied.amount = result.damage.amount;
+        damageApplied.damage = result.damage;
+        result.events.push_back(damageApplied);
     }
 
     result.effect = ApplySecondaryEffect(
@@ -87,7 +156,57 @@ SkillUseResult SkillSystem::UseSkill(
         attacker,
         attackerStatus,
         defenderStatus);
+    result.newActorHp = attacker.hp;
+    result.newTargetHp = defender.hp;
+    if (result.effect.applied)
+    {
+        BattleEvent effectApplied;
+        effectApplied.actor = actor;
+        effectApplied.target = result.effect.target;
+        effectApplied.skillId = definition->id;
+        effectApplied.effect = result.effect;
+
+        if (result.effect.type == SkillEffectType::Heal)
+        {
+            effectApplied.type = BattleEventType::HealingApplied;
+            effectApplied.oldValue = result.oldActorHp;
+            effectApplied.newValue = result.newActorHp;
+            effectApplied.amount = result.effect.healingAmount;
+        }
+        else
+        {
+            effectApplied.type = BattleEventType::StatusApplied;
+            effectApplied.amount = result.effect.value;
+        }
+
+        result.events.push_back(effectApplied);
+    }
+
     result.xp = progression_.AwardSkillXp(progress);
+    if (result.xp.xpGained > 0)
+    {
+        BattleEvent xpGained;
+        xpGained.type = BattleEventType::SkillXpGained;
+        xpGained.actor = actor;
+        xpGained.skillId = definition->id;
+        xpGained.oldValue = result.xp.oldXp;
+        xpGained.newValue = result.xp.newXp;
+        xpGained.amount = result.xp.xpGained;
+        xpGained.xp = result.xp;
+        result.events.push_back(xpGained);
+    }
+
+    if (result.xp.leveledUp)
+    {
+        BattleEvent leveledUp;
+        leveledUp.type = BattleEventType::SkillLeveledUp;
+        leveledUp.actor = actor;
+        leveledUp.skillId = definition->id;
+        leveledUp.oldLevel = result.xp.oldLevel;
+        leveledUp.newLevel = result.xp.newLevel;
+        leveledUp.xp = result.xp;
+        result.events.push_back(leveledUp);
+    }
     return result;
 }
 

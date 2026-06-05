@@ -6,6 +6,7 @@
 #include "ProgressionSystem.h"
 #include "SkillSystem.h"
 
+#include <cstdint>
 #include <random>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@ class BattleSession
 {
 public:
     explicit BattleSession(const SimulationData& data);
+    BattleSession(const SimulationData& data, std::uint32_t seed);
 
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId);
@@ -36,7 +38,8 @@ private:
         Style style,
         const PassiveBonuses& bonuses) const;
     Competitor CreateCompetitor(const BattleSetup::PlayerSlot& slot, GameType gameType) const;
-    BattleActionResult RejectAction(const std::string& error) const;
+    BattleActionResult RejectAction(SimulationError errorCode, const std::string& error) const;
+    void AppendEvents(BattleActionResult& result, const std::vector<BattleEvent>& events) const;
     Competitor& ActivePlayer();
     const Competitor& ActivePlayer() const;
     BattleStatus& ActivePlayerStatus();

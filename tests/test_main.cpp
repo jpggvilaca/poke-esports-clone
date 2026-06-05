@@ -42,6 +42,64 @@ namespace
         return ToString(value);
     }
 
+    std::string ToText(SimulationError value)
+    {
+        switch (value)
+        {
+        case SimulationError::None: return "None";
+        case SimulationError::UnknownGameType: return "UnknownGameType";
+        case SimulationError::BattleNeedsPlayerProfile: return "BattleNeedsPlayerProfile";
+        case SimulationError::UnknownSpec: return "UnknownSpec";
+        case SimulationError::UnknownPlayerProfileSpec: return "UnknownPlayerProfileSpec";
+        case SimulationError::UnknownStyle: return "UnknownStyle";
+        case SimulationError::UnknownPlayerProfileStyle: return "UnknownPlayerProfileStyle";
+        case SimulationError::UnknownActivePlayerProfile: return "UnknownActivePlayerProfile";
+        case SimulationError::BattleNotStarted: return "BattleNotStarted";
+        case SimulationError::BattleAlreadyFinished: return "BattleAlreadyFinished";
+        case SimulationError::UnknownSkill: return "UnknownSkill";
+        case SimulationError::SkillUnavailableForStyle: return "SkillUnavailableForStyle";
+        case SimulationError::InsufficientFocus: return "InsufficientFocus";
+        case SimulationError::StyleAlreadyActive: return "StyleAlreadyActive";
+        case SimulationError::UnknownPlayerProfile: return "UnknownPlayerProfile";
+        case SimulationError::PlayerProfileAlreadyActive: return "PlayerProfileAlreadyActive";
+        case SimulationError::PlayerProfileCannotPlay: return "PlayerProfileCannotPlay";
+        case SimulationError::LevelsMustBePositive: return "LevelsMustBePositive";
+        case SimulationError::SkillAlreadyLearned: return "SkillAlreadyLearned";
+        case SimulationError::SkillNotLearned: return "SkillNotLearned";
+        case SimulationError::SkillAlreadyActive: return "SkillAlreadyActive";
+        case SimulationError::ActiveSkillSlotsFull: return "ActiveSkillSlotsFull";
+        case SimulationError::SkillNotActive: return "SkillNotActive";
+        case SimulationError::NegativeXpAward: return "NegativeXpAward";
+        case SimulationError::TrophyAlreadyEarned: return "TrophyAlreadyEarned";
+        case SimulationError::RosterFull: return "RosterFull";
+        }
+
+        return "Unknown";
+    }
+
+    std::string ToText(BattleEventType value)
+    {
+        switch (value)
+        {
+        case BattleEventType::None: return "None";
+        case BattleEventType::BattleStarted: return "BattleStarted";
+        case BattleEventType::StyleChanged: return "StyleChanged";
+        case BattleEventType::PlayerSwitched: return "PlayerSwitched";
+        case BattleEventType::SkillStarted: return "SkillStarted";
+        case BattleEventType::FocusChanged: return "FocusChanged";
+        case BattleEventType::AttackMissed: return "AttackMissed";
+        case BattleEventType::DamageApplied: return "DamageApplied";
+        case BattleEventType::HealingApplied: return "HealingApplied";
+        case BattleEventType::StatusApplied: return "StatusApplied";
+        case BattleEventType::SkillXpGained: return "SkillXpGained";
+        case BattleEventType::SkillLeveledUp: return "SkillLeveledUp";
+        case BattleEventType::BattleFinished: return "BattleFinished";
+        case BattleEventType::RewardGranted: return "RewardGranted";
+        }
+
+        return "Unknown";
+    }
+
     std::string ToText(BattleWinner value)
     {
         switch (value)
@@ -51,6 +109,21 @@ namespace
         case BattleWinner::Player:
             return "Player";
         case BattleWinner::Opponent:
+            return "Opponent";
+        }
+
+        return "Unknown";
+    }
+
+    std::string ToText(BattleActor value)
+    {
+        switch (value)
+        {
+        case BattleActor::None:
+            return "None";
+        case BattleActor::Player:
+            return "Player";
+        case BattleActor::Opponent:
             return "Opponent";
         }
 
@@ -107,6 +180,19 @@ namespace
         return false;
     }
 
+    bool ContainsEventType(const std::vector<BattleEvent>& events, BattleEventType expected)
+    {
+        for (const BattleEvent& event : events)
+        {
+            if (event.type == expected)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     BattleSetup::PlayerSlot MakeBattleSlot(
         int profileIndex,
         const std::string& name,
@@ -142,6 +228,7 @@ namespace
 
         ProfileCommandResult equipUnknown = profiles.EquipSkill(player, "support-basic");
         test.Expect(!equipUnknown.accepted, "cannot equip a skill before learning it");
+        test.ExpectEqual(equipUnknown.errorCode, SimulationError::SkillNotLearned, "equip reject has a stable error code");
 
         ProfileCommandResult learnRecover = profiles.LearnSkill(player, "top-recover");
         test.Expect(learnRecover.accepted, "can learn a new skill");
@@ -163,6 +250,7 @@ namespace
 
         ProfileCommandResult negativeXp = profiles.AwardXp(player, -1);
         test.Expect(!negativeXp.accepted, "negative XP awards are rejected");
+        test.ExpectEqual(negativeXp.errorCode, SimulationError::NegativeXpAward, "negative XP reject has a stable error code");
 
         ProfileCommandResult rankUp = profiles.AwardXp(player, 700);
         test.Expect(rankUp.accepted, "positive XP awards are accepted");
@@ -210,6 +298,7 @@ namespace
         test.Expect(firstTrophy.accepted, "first trophy insert is accepted");
         ProfileCommandResult duplicateTrophy = trainer.AddTrophy("first-win");
         test.Expect(!duplicateTrophy.accepted, "duplicate trophy insert is rejected");
+        test.ExpectEqual(duplicateTrophy.errorCode, SimulationError::TrophyAlreadyEarned, "duplicate trophy reject has a stable error code");
 
         for (int index = 1; index < TrainerBalance::MaxPlayerProfiles; ++index)
         {
@@ -221,6 +310,7 @@ namespace
         PlayerProfileState overflow = profiles.CreateStarter("Overflow", Spec::Top);
         ProfileCommandResult rejected = trainer.AddPlayerProfile(overflow);
         test.Expect(!rejected.accepted, "cannot add player profile past the roster limit");
+        test.ExpectEqual(rejected.errorCode, SimulationError::RosterFull, "roster overflow reject has a stable error code");
         test.ExpectEqual(
             trainer.GetState().roster.size(),
             static_cast<std::size_t>(TrainerBalance::MaxPlayerProfiles),
@@ -251,13 +341,14 @@ namespace
 
         RatingResult invalidLevels = ratings.CalculateChange(1000, 0, 1, MatchContext::Normal, true);
         test.Expect(!invalidLevels.accepted, "zero player level is rejected");
+        test.ExpectEqual(invalidLevels.errorCode, SimulationError::LevelsMustBePositive, "invalid rating inputs have a stable error code");
         test.ExpectEqual(invalidLevels.error, std::string("Levels must be positive."), "invalid level error explains the problem");
     }
 
     void TestBattleSessionSwitchingAndXpShare(TestContext& test)
     {
         SimulationData data;
-        BattleSession session(data);
+        BattleSession session(data, 1234);
 
         BattleSetup setup;
         setup.gameType = GameType::LeagueOfLegends;
@@ -270,14 +361,20 @@ namespace
         BattleActionResult start = session.StartBattle(setup);
         test.Expect(start.accepted, "battle starts with a two-player team");
         test.Expect(start.battleStarted, "start result reports battleStarted");
+        test.ExpectEqual(start.events.size(), static_cast<std::size_t>(1), "start result has one timeline event");
+        test.ExpectEqual(start.events[0].type, BattleEventType::BattleStarted, "start timeline begins with BattleStarted");
+        test.Expect(start.finalState.started, "start result carries the final state snapshot");
         test.ExpectEqual(session.GetState().activePlayerIndex, 0, "first player starts active");
 
         BattleActionResult sameSwitch = session.SwitchPlayer(0);
         test.Expect(!sameSwitch.accepted, "cannot switch to the already-active player");
+        test.ExpectEqual(sameSwitch.errorCode, SimulationError::PlayerProfileAlreadyActive, "same-player switch reject has a stable error code");
 
         BattleActionResult switchResult = session.SwitchPlayer(1);
         test.Expect(switchResult.accepted, "can switch to another available player");
         test.Expect(switchResult.playerSwitched, "switch result reports playerSwitched");
+        test.ExpectEqual(switchResult.events[0].type, BattleEventType::PlayerSwitched, "switch timeline starts with PlayerSwitched");
+        test.Expect(ContainsEventType(switchResult.events, BattleEventType::SkillStarted), "switch timeline includes opponent response skill");
         test.ExpectEqual(switchResult.oldPlayerIndex, 0, "switch result tracks old active index");
         test.ExpectEqual(switchResult.newPlayerIndex, 1, "switch result tracks new active index");
         test.ExpectEqual(switchResult.newPlayerName, std::string("Closer"), "switch result tracks new player name");
@@ -297,12 +394,48 @@ namespace
         BattleState finalState = session.GetState();
         test.Expect(finalState.finished, "battle finishes after the boosted switched player attacks");
         test.ExpectEqual(finalState.winner, BattleWinner::Player, "player team wins the battle");
+        test.ExpectEqual(finalAction.events[0].type, BattleEventType::SkillStarted, "skill timeline starts with the selected skill");
+        test.ExpectEqual(finalAction.events[0].actor, BattleActor::Player, "first skill event belongs to the player");
+        test.Expect(ContainsEventType(finalAction.events, BattleEventType::DamageApplied), "winning timeline includes damage");
+        test.Expect(ContainsEventType(finalAction.events, BattleEventType::SkillXpGained), "winning timeline includes skill XP");
+        test.Expect(ContainsEventType(finalAction.events, BattleEventType::BattleFinished), "winning timeline includes battle finish");
+        test.Expect(ContainsEventType(finalAction.events, BattleEventType::RewardGranted), "winning timeline includes reward grant");
+        test.Expect(finalAction.finalState.finished, "winning result carries the final state snapshot");
         test.Expect(finalAction.reward.awarded, "winning action attaches an XP reward");
         test.ExpectEqual(finalAction.reward.totalXp, 120, "battle win grants the configured total XP");
         test.ExpectEqual(finalAction.reward.xpPerParticipant, 60, "XP is split across both participants");
         test.ExpectEqual(finalAction.reward.participantPlayerIndices.size(), static_cast<std::size_t>(2), "two participants receive XP");
         test.Expect(ContainsInt(finalAction.reward.participantPlayerIndices, 101), "starting player receives shared XP");
         test.Expect(ContainsInt(finalAction.reward.participantPlayerIndices, 202), "switched-in player receives shared XP");
+    }
+
+    void TestBattleSessionSeededReplay(TestContext& test)
+    {
+        SimulationData data;
+        BattleSession first(data, 777);
+        BattleSession second(data, 777);
+
+        BattleSetup setup;
+        setup.gameType = GameType::LeagueOfLegends;
+        setup.playerTeam.push_back(MakeBattleSlot(101, "Starter", Spec::Top, "top-basic"));
+        setup.activePlayerIndex = 0;
+        setup.opponentSpec = Spec::Mid;
+        setup.opponentStyle = Style::Balanced;
+
+        first.StartBattle(setup);
+        second.StartBattle(setup);
+
+        BattleActionResult firstAction = first.UsePlayerSkill("top-basic");
+        BattleActionResult secondAction = second.UsePlayerSkill("top-basic");
+        test.Expect(firstAction.accepted && secondAction.accepted, "seeded replay actions are accepted");
+        test.ExpectEqual(firstAction.skillUses.size(), secondAction.skillUses.size(), "seeded replay produces the same number of skill uses");
+        test.ExpectEqual(firstAction.events.size(), secondAction.events.size(), "seeded replay produces the same number of events");
+
+        for (std::size_t index = 0; index < firstAction.skillUses.size(); ++index)
+        {
+            test.ExpectEqual(firstAction.skillUses[index].hit, secondAction.skillUses[index].hit, "seeded replay hit results match");
+            test.ExpectEqual(firstAction.skillUses[index].damage.amount, secondAction.skillUses[index].damage.amount, "seeded replay damage matches");
+        }
     }
 
     struct TestCase
@@ -319,6 +452,7 @@ int main()
         { "TrainerProfile", TestTrainerProfile },
         { "RatingSystem", TestRatingSystem },
         { "BattleSession switching and XP sharing", TestBattleSessionSwitchingAndXpShare },
+        { "BattleSession seeded replay", TestBattleSessionSeededReplay },
     };
 
     int totalFailures = 0;

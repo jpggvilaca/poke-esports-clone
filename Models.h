@@ -90,6 +90,54 @@ enum class CareerRank
     WorldClass
 };
 
+enum class SimulationError
+{
+    None,
+    UnknownGameType,
+    BattleNeedsPlayerProfile,
+    UnknownSpec,
+    UnknownPlayerProfileSpec,
+    UnknownStyle,
+    UnknownPlayerProfileStyle,
+    UnknownActivePlayerProfile,
+    BattleNotStarted,
+    BattleAlreadyFinished,
+    UnknownSkill,
+    SkillUnavailableForStyle,
+    InsufficientFocus,
+    StyleAlreadyActive,
+    UnknownPlayerProfile,
+    PlayerProfileAlreadyActive,
+    PlayerProfileCannotPlay,
+    LevelsMustBePositive,
+    SkillAlreadyLearned,
+    SkillNotLearned,
+    SkillAlreadyActive,
+    ActiveSkillSlotsFull,
+    SkillNotActive,
+    NegativeXpAward,
+    TrophyAlreadyEarned,
+    RosterFull
+};
+
+enum class BattleEventType
+{
+    None,
+    BattleStarted,
+    StyleChanged,
+    PlayerSwitched,
+    SkillStarted,
+    FocusChanged,
+    AttackMissed,
+    DamageApplied,
+    HealingApplied,
+    StatusApplied,
+    SkillXpGained,
+    SkillLeveledUp,
+    BattleFinished,
+    RewardGranted
+};
+
 inline std::string ToString(GameType gameType)
 {
     switch (gameType)
@@ -349,6 +397,28 @@ struct SecondaryEffectResult
     int healingAmount = 0;
 };
 
+struct BattleEvent
+{
+    BattleEventType type = BattleEventType::None;
+    BattleActor actor = BattleActor::None;
+    BattleActor target = BattleActor::None;
+    std::string skillId;
+    Style style = Style::Balanced;
+    int oldPlayerIndex = 0;
+    int newPlayerIndex = 0;
+    std::string playerName;
+    int oldValue = 0;
+    int newValue = 0;
+    int amount = 0;
+    int oldLevel = 1;
+    int newLevel = 1;
+    DamageResult damage;
+    SecondaryEffectResult effect;
+    SkillXpResult xp;
+    BattleWinner winner = BattleWinner::None;
+    BattleRewardResult reward;
+};
+
 struct SkillUseResult
 {
     bool used = false;
@@ -356,14 +426,22 @@ struct SkillUseResult
     BattleActor target = BattleActor::None;
     std::string skillId;
     bool hit = true;
+    int oldFocus = 0;
+    int newFocus = 0;
+    int oldActorHp = 0;
+    int newActorHp = 0;
+    int oldTargetHp = 0;
+    int newTargetHp = 0;
     DamageResult damage;
     SecondaryEffectResult effect;
     SkillXpResult xp;
+    std::vector<BattleEvent> events;
 };
 
 struct BattleActionResult
 {
     bool accepted = false;
+    SimulationError errorCode = SimulationError::None;
     std::string error;
     bool battleStarted = false;
     bool styleChanged = false;
@@ -373,9 +451,11 @@ struct BattleActionResult
     int newPlayerIndex = 0;
     std::string newPlayerName;
     std::vector<SkillUseResult> skillUses;
+    std::vector<BattleEvent> events;
     bool battleFinished = false;
     BattleWinner winner = BattleWinner::None;
     BattleRewardResult reward;
+    BattleState finalState;
 };
 
 // Trainer state is the human/user layer: rating, money, trophies, and roster
@@ -407,6 +487,7 @@ struct TrainerProfileState
 struct ProfileCommandResult
 {
     bool accepted = false;
+    SimulationError errorCode = SimulationError::None;
     std::string error;
     int oldValue = 0;
     int newValue = 0;
@@ -418,6 +499,7 @@ struct ProfileCommandResult
 struct RatingResult
 {
     bool accepted = false;
+    SimulationError errorCode = SimulationError::None;
     std::string error;
     bool won = true;
     MatchContext context = MatchContext::Normal;

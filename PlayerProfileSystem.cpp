@@ -18,9 +18,10 @@ namespace
         return result;
     }
 
-    ProfileCommandResult Reject(const std::string& error)
+    ProfileCommandResult Reject(SimulationError errorCode, const std::string& error)
     {
         ProfileCommandResult result;
+        result.errorCode = errorCode;
         result.error = error;
         return result;
     }
@@ -80,7 +81,7 @@ ProfileCommandResult PlayerProfileSystem::LearnSkill(
 {
     if (HasLearnedSkill(playerProfile, skillId))
     {
-        return Reject("Skill already learned.");
+        return Reject(SimulationError::SkillAlreadyLearned, "Skill already learned.");
     }
 
     playerProfile.learnedSkillIds.push_back(skillId);
@@ -93,17 +94,17 @@ ProfileCommandResult PlayerProfileSystem::EquipSkill(
 {
     if (!HasLearnedSkill(playerProfile, skillId))
     {
-        return Reject("Skill is not learned.");
+        return Reject(SimulationError::SkillNotLearned, "Skill is not learned.");
     }
 
     if (HasActiveSkill(playerProfile, skillId))
     {
-        return Reject("Skill is already active.");
+        return Reject(SimulationError::SkillAlreadyActive, "Skill is already active.");
     }
 
     if (static_cast<int>(playerProfile.activeSkillIds.size()) >= PlayerProfileBalance::MaxActiveSkills)
     {
-        return Reject("Active skill slots are full.");
+        return Reject(SimulationError::ActiveSkillSlotsFull, "Active skill slots are full.");
     }
 
     playerProfile.activeSkillIds.push_back(skillId);
@@ -117,7 +118,7 @@ ProfileCommandResult PlayerProfileSystem::UnequipSkill(
     const auto found = std::find(playerProfile.activeSkillIds.begin(), playerProfile.activeSkillIds.end(), skillId);
     if (found == playerProfile.activeSkillIds.end())
     {
-        return Reject("Skill is not active.");
+        return Reject(SimulationError::SkillNotActive, "Skill is not active.");
     }
 
     playerProfile.activeSkillIds.erase(found);
@@ -130,7 +131,7 @@ ProfileCommandResult PlayerProfileSystem::AwardXp(
 {
     if (amount < 0)
     {
-        return Reject("XP award cannot be negative.");
+        return Reject(SimulationError::NegativeXpAward, "XP award cannot be negative.");
     }
 
     ProfileCommandResult result = Accept();

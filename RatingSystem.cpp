@@ -12,6 +12,7 @@ RatingResult RatingSystem::CalculateChange(
     RatingResult result;
     if (playerLevel < 1 || opponentLevel < 1)
     {
+        result.errorCode = SimulationError::LevelsMustBePositive;
         result.error = "Levels must be positive.";
         return result;
     }
