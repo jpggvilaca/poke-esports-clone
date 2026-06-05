@@ -209,6 +209,7 @@ struct PassiveBonuses
 // duplicated Player and Opponent structs.
 struct Competitor
 {
+    int profileIndex = 0;
     std::string name;
     GameType gameType = GameType::LeagueOfLegends;
     Spec spec = Spec::Top;
@@ -250,20 +251,36 @@ struct Competitor
 
 struct BattleSetup
 {
+    struct PlayerSlot
+    {
+        int profileIndex = 0;
+        std::string name = "Player";
+        Spec spec = Spec::Top;
+        Style style = Style::Balanced;
+        PassiveBonuses passiveBonuses;
+        std::vector<SkillProgress> skills;
+    };
+
     GameType gameType = GameType::LeagueOfLegends;
-    std::string playerName = "Player";
-    Spec playerSpec = Spec::Top;
-    Style playerStyle = Style::Balanced;
-    PassiveBonuses playerPassiveBonuses;
-    std::vector<SkillProgress> playerSkills;
+    std::vector<PlayerSlot> playerTeam;
+    int activePlayerIndex = 0;
     Spec opponentSpec = Spec::Jungle;
     Style opponentStyle = Style::Balanced;
+};
+
+struct BattleRewardResult
+{
+    bool awarded = false;
+    int totalXp = 0;
+    int xpPerParticipant = 0;
+    std::vector<int> participantPlayerIndices;
 };
 
 // Views are read-only snapshots. A UI receives copies instead of pointers, so
 // it cannot accidentally mutate simulation state behind BattleSession's back.
 struct CompetitorView
 {
+    int profileIndex = 0;
     std::string name;
     Spec spec = Spec::Top;
     Style style = Style::Balanced;
@@ -281,7 +298,9 @@ struct BattleState
     bool started = false;
     bool finished = false;
     BattleWinner winner = BattleWinner::None;
+    int activePlayerIndex = 0;
     CompetitorView player;
+    std::vector<CompetitorView> playerTeam;
     CompetitorView opponent;
 };
 
@@ -349,9 +368,14 @@ struct BattleActionResult
     bool battleStarted = false;
     bool styleChanged = false;
     Style newStyle = Style::Balanced;
+    bool playerSwitched = false;
+    int oldPlayerIndex = 0;
+    int newPlayerIndex = 0;
+    std::string newPlayerName;
     std::vector<SkillUseResult> skillUses;
     bool battleFinished = false;
     BattleWinner winner = BattleWinner::None;
+    BattleRewardResult reward;
 };
 
 // Trainer state is the human/user layer: rating, money, trophies, and roster

@@ -13,6 +13,7 @@ extends Control
 @onready var profile_roster: Label = $Margin/Root/Profile/ProfileRoster
 @onready var profile_skills: Label = $Margin/Root/Profile/ProfileSkills
 @onready var profile_trophies: Label = $Margin/Root/Profile/ProfileTrophies
+@onready var switch_buttons: HBoxContainer = $Margin/Root/SwitchButtons
 @onready var style_buttons: HBoxContainer = $Margin/Root/StyleButtons
 @onready var skill_buttons: VBoxContainer = $Margin/Root/SkillButtons
 @onready var battle_log: RichTextLabel = $Margin/Root/BattleLog
@@ -24,6 +25,7 @@ func _ready() -> void:
 	$Margin/Root/StartButtons/Start.pressed.connect(_start_battle)
 	restart_button.pressed.connect(_start_battle)
 	$Margin/Root/Profile/ProfileActions/NewTrainer.pressed.connect(_create_trainer_from_setup)
+	$Margin/Root/Profile/ProfileActions/AddPlayer.pressed.connect(_add_player_from_setup)
 	$Margin/Root/Profile/ProfileActions/AddXp.pressed.connect(_profile_command.bind("Award 125 XP", Callable(bridge, "active_player_award_xp"), [125]))
 	$Margin/Root/Profile/ProfileActions/AddRating.pressed.connect(_profile_command.bind("Award 30 rating", Callable(bridge, "trainer_award_rating"), [30]))
 	$Margin/Root/Profile/ProfileActions/AddMoney.pressed.connect(_profile_command.bind("Award 100 money", Callable(bridge, "trainer_award_money"), [100]))
@@ -72,6 +74,11 @@ func _change_style(style_id: int) -> void:
 	_render()
 
 
+func _switch_player(player_index: int) -> void:
+	_append_events(bridge.switch_player(player_index))
+	_render()
+
+
 func _render() -> void:
 	_render_profile()
 	var state: Dictionary = bridge.get_battle_state()
@@ -79,6 +86,7 @@ func _render() -> void:
 	_render_competitor($Margin/Root/Status/Opponent, state.opponent)
 	restart_button.disabled = not state.started
 	_rebuild_style_buttons()
+	_rebuild_switch_buttons()
 	_rebuild_skill_buttons()
 
 
@@ -123,6 +131,14 @@ func _format_strings(values: Array) -> String:
 func _create_trainer_from_setup() -> void:
 	var result: Dictionary = bridge.create_trainer("Trainer", player_spec.get_selected_id())
 	_append_profile_result("Create trainer", result)
+	_render()
+
+
+func _add_player_from_setup() -> void:
+	var profile: Dictionary = bridge.get_trainer_state()
+	var next_number: int = profile.roster.size() + 1
+	var result: Dictionary = bridge.trainer_add_player("Player %d" % next_number, player_spec.get_selected_id())
+	_append_profile_result("Add player", result)
 	_render()
 
 
@@ -213,6 +229,28 @@ func _rebuild_style_buttons() -> void:
 		style_buttons.add_child(button)
 
 
+func _rebuild_switch_buttons() -> void:
+	_free_children(switch_buttons)
+	var state: Dictionary = bridge.get_battle_state()
+	if not state.started:
+		var hint := Label.new()
+		hint.text = "Start a battle to switch players."
+		switch_buttons.add_child(hint)
+		return
+
+	for player: Dictionary in state.player_team:
+		var button := Button.new()
+		button.text = "%s (%s HP %d/%d)" % [
+			player.name,
+			player.spec_name,
+			player.hp,
+			player.max_hp,
+		]
+		button.disabled = state.finished or state.active_player_index == player.profile_index or player.hp <= 0
+		button.pressed.connect(_switch_player.bind(player.profile_index))
+		switch_buttons.add_child(button)
+
+
 func _rebuild_skill_buttons() -> void:
 	_free_children(skill_buttons)
 	var state: Dictionary = bridge.get_battle_state()
@@ -288,8 +326,23 @@ func _format_event(event: Dictionary) -> String:
 			]
 		"style_changed":
 			return "Player switches to %s and spends the turn." % _style_name(event.value)
+		"player_switched":
+			return "Trainer sends in %s and spends the turn." % event.message
 		"skill_leveled_up":
 			return "%s reaches skill level %d!" % [event.skill_name, event.value]
+		"battle_xp_awarded":
+			return "[color=cyan]Battle reward: %d total XP, %d XP each participant.[/color]" % [
+				event.value,
+				event.duration,
+			]
+		"player_xp_gained":
+			return "%s gains %d XP." % [event.message, event.value]
+		"player_leveled_up":
+			return "%s gains %d XP and reaches level %d!" % [
+				event.message,
+				event.value,
+				event.new_level,
+			]
 		"battle_finished":
 			return "[b]%s wins.[/b]" % _actor(event.actor)
 		"action_rejected":

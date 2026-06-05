@@ -61,13 +61,17 @@ const PlayerProfileState* TrainerProfile::GetActivePlayerProfile() const
 
 PlayerProfileState* TrainerProfile::GetMutableActivePlayerProfile()
 {
-    if (state_.activePlayerIndex < 0
-        || state_.activePlayerIndex >= static_cast<int>(state_.roster.size()))
+    return GetMutablePlayerProfile(state_.activePlayerIndex);
+}
+
+PlayerProfileState* TrainerProfile::GetMutablePlayerProfile(int playerIndex)
+{
+    if (playerIndex < 0 || playerIndex >= static_cast<int>(state_.roster.size()))
     {
         return nullptr;
     }
 
-    return &state_.roster[state_.activePlayerIndex];
+    return &state_.roster[playerIndex];
 }
 
 PassiveBonuses TrainerProfile::GetActivePlayerPassiveBonuses() const
@@ -108,5 +112,16 @@ ProfileCommandResult TrainerProfile::AddTrophy(const std::string& trophyId)
     }
 
     state_.trophyIds.push_back(trophyId);
+    return Accept();
+}
+
+ProfileCommandResult TrainerProfile::AddPlayerProfile(const PlayerProfileState& playerProfile)
+{
+    if (static_cast<int>(state_.roster.size()) >= TrainerBalance::MaxPlayerProfiles)
+    {
+        return Reject("Roster is full.");
+    }
+
+    state_.roster.push_back(playerProfile);
     return Accept();
 }

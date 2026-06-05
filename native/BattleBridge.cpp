@@ -147,24 +147,32 @@ godot::Array BattleBridge::start_battle(
         return Rejected("Unknown style.");
     }
 
-    const PlayerProfileState* activePlayer = profile_.GetActivePlayerProfile();
-    if (activePlayer == nullptr)
+    const TrainerProfileState& trainer = profile_.GetState();
+    if (trainer.roster.empty())
     {
         return Rejected("No active player profile.");
     }
 
     BattleSetup setup;
-    setup.playerName = activePlayer->name;
-    setup.playerSpec = activePlayer->spec;
-    setup.playerStyle = static_cast<Style>(player_style);
-    setup.playerPassiveBonuses = profile_.GetActivePlayerPassiveBonuses();
-    for (const std::string& skillId : activePlayer->activeSkillIds)
+    setup.activePlayerIndex = trainer.activePlayerIndex;
+    for (int index = 0; index < static_cast<int>(trainer.roster.size()); ++index)
     {
-        setup.playerSkills.push_back({ skillId });
+        const PlayerProfileState& playerProfile = trainer.roster[index];
+        BattleSetup::PlayerSlot slot;
+        slot.profileIndex = index;
+        slot.name = playerProfile.name;
+        slot.spec = playerProfile.spec;
+        slot.style = static_cast<Style>(player_style);
+        slot.passiveBonuses = playerProfile.passiveBonuses;
+        for (const std::string& skillId : playerProfile.activeSkillIds)
+        {
+            slot.skills.push_back({ skillId });
+        }
+        setup.playerTeam.push_back(slot);
     }
     setup.opponentSpec = static_cast<Spec>(opponent_spec);
     setup.opponentStyle = static_cast<Style>(opponent_style);
-    return ToArray(session_.StartBattle(setup));
+    return ToArrayAndApplyRewards(session_.StartBattle(setup));
 }
 
 godot::Array BattleBridge::use_skill(const godot::String& skill_id)
@@ -185,7 +193,12 @@ godot::Array BattleBridge::use_skill(const godot::String& skill_id)
         return Rejected("Unknown or unavailable skill.");
     }
 
-    return ToArray(session_.UsePlayerSkill(id));
+    return ToArrayAndApplyRewards(session_.UsePlayerSkill(id));
+}
+
+godot::Array BattleBridge::switch_player(int player_index)
+{
+    return ToArrayAndApplyRewards(session_.SwitchPlayer(player_index));
 }
 
 godot::Array BattleBridge::change_style(int style)
@@ -195,7 +208,7 @@ godot::Array BattleBridge::change_style(int style)
         return Rejected("Unknown style.");
     }
 
-    return ToArray(session_.ChangePlayerStyle(static_cast<Style>(style)));
+    return ToArrayAndApplyRewards(session_.ChangePlayerStyle(static_cast<Style>(style)));
 }
 
 godot::Dictionary BattleBridge::get_battle_state() const
@@ -205,7 +218,14 @@ godot::Dictionary BattleBridge::get_battle_state() const
     row["started"] = state.started;
     row["finished"] = state.finished;
     row["winner"] = ToString(state.winner);
+    row["active_player_index"] = state.activePlayerIndex;
     row["player"] = ToDictionary(state.player);
+    godot::Array playerTeam;
+    for (const CompetitorView& player : state.playerTeam)
+    {
+        playerTeam.push_back(ToDictionary(player));
+    }
+    row["player_team"] = playerTeam;
     row["opponent"] = ToDictionary(state.opponent);
     return row;
 }
@@ -314,6 +334,21 @@ godot::Dictionary BattleBridge::trainer_add_trophy(const godot::String& trophy_i
     return ToDictionary(profile_.AddTrophy(ToStandardString(trophy_id)));
 }
 
+godot::Dictionary BattleBridge::trainer_add_player(const godot::String& player_name, int spec)
+{
+    if (!IsValidSpec(spec))
+    {
+        ProfileCommandResult result;
+        result.error = "Unknown spec.";
+        return ToDictionary(result);
+    }
+
+    PlayerProfileState playerProfile = playerProfiles_.CreateStarter(
+        ToStandardString(player_name),
+        static_cast<Spec>(spec));
+    return ToDictionary(profile_.AddPlayerProfile(playerProfile));
+}
+
 godot::Dictionary BattleBridge::trainer_apply_match_result(int opponent_level, int context, bool won)
 {
     if (!IsValidMatchContext(context))
@@ -347,6 +382,7 @@ void BattleBridge::_bind_methods()
         godot::D_METHOD("start_battle", "player_style", "opponent_spec", "opponent_style"),
         &BattleBridge::start_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
+    godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
     godot::ClassDB::bind_method(godot::D_METHOD("change_style", "style"), &BattleBridge::change_style);
     godot::ClassDB::bind_method(godot::D_METHOD("get_battle_state"), &BattleBridge::get_battle_state);
     godot::ClassDB::bind_method(godot::D_METHOD("get_available_skills"), &BattleBridge::get_available_skills);
@@ -359,6 +395,7 @@ void BattleBridge::_bind_methods()
     godot::ClassDB::bind_method(godot::D_METHOD("trainer_award_rating", "amount"), &BattleBridge::trainer_award_rating);
     godot::ClassDB::bind_method(godot::D_METHOD("trainer_award_money", "amount"), &BattleBridge::trainer_award_money);
     godot::ClassDB::bind_method(godot::D_METHOD("trainer_add_trophy", "trophy_id"), &BattleBridge::trainer_add_trophy);
+    godot::ClassDB::bind_method(godot::D_METHOD("trainer_add_player", "player_name", "spec"), &BattleBridge::trainer_add_player);
     godot::ClassDB::bind_method(
         godot::D_METHOD("trainer_apply_match_result", "opponent_level", "context", "won"),
         &BattleBridge::trainer_apply_match_result);
@@ -388,6 +425,17 @@ godot::Array BattleBridge::ToArray(const BattleActionResult& result) const
             static_cast<int>(result.newStyle)));
     }
 
+    if (result.playerSwitched)
+    {
+        events.push_back(CreateEvent(
+            "player_switched",
+            BattleActor::Player,
+            BattleActor::Player,
+            "",
+            ToGodotString(result.newPlayerName),
+            result.newPlayerIndex));
+    }
+
     for (const SkillUseResult& skillUse : result.skillUses)
     {
         AppendSkillUse(events, skillUse);
@@ -399,6 +447,17 @@ godot::Array BattleBridge::ToArray(const BattleActionResult& result) const
             ? BattleActor::Player
             : BattleActor::Opponent;
         events.push_back(CreateEvent("battle_finished", winner, BattleActor::None));
+    }
+
+    return events;
+}
+
+godot::Array BattleBridge::ToArrayAndApplyRewards(const BattleActionResult& result)
+{
+    godot::Array events = ToArray(result);
+    if (result.accepted && result.reward.awarded)
+    {
+        AppendBattleReward(events, result.reward);
     }
 
     return events;
@@ -515,6 +574,42 @@ void BattleBridge::AppendSkillXp(godot::Array& events, const SkillUseResult& ski
         skillUse.xp.newLevel));
 }
 
+void BattleBridge::AppendBattleReward(godot::Array& events, const BattleRewardResult& reward)
+{
+    events.push_back(CreateEvent(
+        "battle_xp_awarded",
+        BattleActor::Player,
+        BattleActor::Player,
+        "",
+        "",
+        reward.totalXp,
+        reward.xpPerParticipant));
+
+    for (int playerIndex : reward.participantPlayerIndices)
+    {
+        PlayerProfileState* playerProfile = profile_.GetMutablePlayerProfile(playerIndex);
+        if (playerProfile == nullptr)
+        {
+            continue;
+        }
+
+        ProfileCommandResult xp = playerProfiles_.AwardXp(*playerProfile, reward.xpPerParticipant);
+        godot::Dictionary event = CreateEvent(
+            xp.leveledUp ? "player_leveled_up" : "player_xp_gained",
+            BattleActor::Player,
+            BattleActor::Player,
+            "",
+            ToGodotString(playerProfile->name),
+            reward.xpPerParticipant,
+            playerIndex);
+        event["old_level"] = xp.oldLevel;
+        event["new_level"] = xp.newLevel;
+        event["old_xp"] = xp.oldValue;
+        event["new_xp"] = xp.newValue;
+        events.push_back(event);
+    }
+}
+
 godot::Dictionary BattleBridge::CreateEvent(
     const char* type,
     BattleActor actor,
@@ -546,6 +641,7 @@ godot::Dictionary BattleBridge::ToDictionary(const CompetitorView& competitor) c
     status["defense_modifier_hits"] = competitor.status.defenseModifierHits;
 
     godot::Dictionary row;
+    row["profile_index"] = competitor.profileIndex;
     row["name"] = ToGodotString(competitor.name);
     row["spec"] = static_cast<int>(competitor.spec);
     row["spec_name"] = ToGodotString(::ToString(competitor.spec));
@@ -651,6 +747,22 @@ godot::Dictionary BattleBridge::ToDictionary(const RatingResult& result) const
     row["old_rating"] = result.oldRating;
     row["rating_change"] = result.ratingChange;
     row["new_rating"] = result.newRating;
+    return row;
+}
+
+godot::Dictionary BattleBridge::ToDictionary(const BattleRewardResult& result) const
+{
+    godot::Dictionary row;
+    row["awarded"] = result.awarded;
+    row["total_xp"] = result.totalXp;
+    row["xp_per_participant"] = result.xpPerParticipant;
+
+    godot::Array participants;
+    for (int playerIndex : result.participantPlayerIndices)
+    {
+        participants.push_back(playerIndex);
+    }
+    row["participant_player_indices"] = participants;
     return row;
 }
 

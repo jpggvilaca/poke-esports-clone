@@ -109,6 +109,10 @@ layout_mode = 2
 layout_mode = 2
 text = "New trainer from spec"
 
+[node name="AddPlayer" type="Button" parent="Margin/Root/Profile/ProfileActions"]
+layout_mode = 2
+text = "Add player from spec"
+
 [node name="AddXp" type="Button" parent="Margin/Root/Profile/ProfileActions"]
 layout_mode = 2
 text = "+125 XP"
@@ -210,6 +214,13 @@ text = "Focus: -"
 [node name="Effects" type="Label" parent="Margin/Root/Status/Opponent"]
 layout_mode = 2
 text = "Effects: none"
+
+[node name="SwitchHeading" type="Label" parent="Margin/Root"]
+layout_mode = 2
+text = "Switch player profile (uses your turn)"
+
+[node name="SwitchButtons" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
 
 [node name="StyleHeading" type="Label" parent="Margin/Root"]
 layout_mode = 2

@@ -22,21 +22,31 @@ public:
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId);
     BattleActionResult ChangePlayerStyle(Style style);
+    BattleActionResult SwitchPlayer(int playerIndex);
 
     BattleState GetState() const;
     std::vector<SkillView> GetAvailablePlayerSkills() const;
 
 private:
     Competitor CreateCompetitor(
+        int profileIndex,
         const std::string& name,
         GameType gameType,
         Spec spec,
         Style style,
         const PassiveBonuses& bonuses) const;
+    Competitor CreateCompetitor(const BattleSetup::PlayerSlot& slot, GameType gameType) const;
     BattleActionResult RejectAction(const std::string& error) const;
+    Competitor& ActivePlayer();
+    const Competitor& ActivePlayer() const;
+    BattleStatus& ActivePlayerStatus();
+    const BattleStatus& ActivePlayerStatus() const;
+    void MarkParticipant(int playerIndex);
+    bool IsKnownPlayerIndex(int playerIndex) const;
     void ResolveOpponentTurn(BattleActionResult& result);
     CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;
     void FinishBattleIfNeeded(BattleActionResult& result);
+    void AttachRewardIfNeeded(BattleActionResult& result) const;
 
     const SimulationData& data_;
     std::mt19937 randomEngine_;
@@ -47,8 +57,10 @@ private:
     bool started_ = false;
     bool finished_ = false;
     BattleWinner winner_ = BattleWinner::None;
-    Competitor player_;
+    int activePlayerIndex_ = 0;
+    std::vector<Competitor> playerTeam_;
+    std::vector<BattleStatus> playerStatuses_;
+    std::vector<int> participatingPlayerIndices_;
     Competitor opponent_;
-    BattleStatus playerStatus_;
     BattleStatus opponentStatus_;
 };

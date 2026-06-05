@@ -4,6 +4,8 @@
 
 namespace
 {
+    inline constexpr int PlayerWinXpReward = 120;
+
     bool IsKnown(GameType gameType)
     {
         return gameType == GameType::LeagueOfLegends;
@@ -42,36 +44,59 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         return RejectAction("Unknown game type.");
     }
 
-    if (!IsKnown(setup.playerSpec)
-        || !IsKnown(setup.opponentSpec)
-        || data_.FindSpec(setup.playerSpec) == nullptr
-        || data_.FindSpec(setup.opponentSpec) == nullptr)
+    if (setup.playerTeam.empty())
+    {
+        return RejectAction("A battle needs at least one player profile.");
+    }
+
+    if (!IsKnown(setup.opponentSpec) || data_.FindSpec(setup.opponentSpec) == nullptr)
     {
         return RejectAction("Unknown spec.");
     }
 
-    if (!IsKnown(setup.playerStyle) || !IsKnown(setup.opponentStyle))
+    for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
+    {
+        if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
+        {
+            return RejectAction("Unknown player profile spec.");
+        }
+
+        if (!IsKnown(slot.style))
+        {
+            return RejectAction("Unknown player profile style.");
+        }
+    }
+
+    if (!IsKnown(setup.opponentStyle))
     {
         return RejectAction("Unknown style.");
     }
 
-    player_ = CreateCompetitor(
-        setup.playerName,
-        setup.gameType,
-        setup.playerSpec,
-        setup.playerStyle,
-        setup.playerPassiveBonuses);
-    if (!setup.playerSkills.empty())
+    if (setup.activePlayerIndex < 0
+        || setup.activePlayerIndex >= static_cast<int>(setup.playerTeam.size()))
     {
-        player_.skills = setup.playerSkills;
+        return RejectAction("Unknown active player profile.");
     }
+
+    playerTeam_.clear();
+    playerStatuses_.clear();
+    participatingPlayerIndices_.clear();
+    for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
+    {
+        playerTeam_.push_back(CreateCompetitor(slot, setup.gameType));
+        playerStatuses_.push_back({});
+    }
+
+    activePlayerIndex_ = setup.activePlayerIndex;
+    MarkParticipant(activePlayerIndex_);
+
     opponent_ = CreateCompetitor(
+        0,
         "Opponent",
         setup.gameType,
         setup.opponentSpec,
         setup.opponentStyle,
         {});
-    playerStatus_ = {};
     opponentStatus_ = {};
     started_ = true;
     finished_ = false;
@@ -95,19 +120,21 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
         return RejectAction("The battle is already finished.");
     }
 
-    SkillProgress* progress = player_.FindSkill(skillId);
+    Competitor& player = ActivePlayer();
+    BattleStatus& playerStatus = ActivePlayerStatus();
+    SkillProgress* progress = player.FindSkill(skillId);
     const Skill* definition = data_.FindSkill(skillId);
     if (progress == nullptr || definition == nullptr)
     {
         return RejectAction("Unknown skill.");
     }
 
-    if (!skills_.IsAvailableForStyle(*definition, player_.style))
+    if (!skills_.IsAvailableForStyle(*definition, player.style))
     {
         return RejectAction("That skill is not available for the active style.");
     }
 
-    if (rules_.GetFocusCost(*definition, *progress) > player_.focus)
+    if (rules_.GetFocusCost(*definition, *progress) > player.focus)
     {
         return RejectAction("Not enough focus.");
     }
@@ -116,8 +143,8 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
     result.accepted = true;
     result.skillUses.push_back(skills_.UseSkill(
         BattleActor::Player,
-        player_,
-        playerStatus_,
+        player,
+        playerStatus,
         opponent_,
         opponentStatus_,
         *progress,
@@ -150,12 +177,12 @@ BattleActionResult BattleSession::ChangePlayerStyle(Style style)
         return RejectAction("Unknown style.");
     }
 
-    if (style == player_.style)
+    if (style == ActivePlayer().style)
     {
         return RejectAction("That style is already active.");
     }
 
-    player_.style = style;
+    ActivePlayer().style = style;
 
     BattleActionResult result;
     result.accepted = true;
@@ -168,13 +195,64 @@ BattleActionResult BattleSession::ChangePlayerStyle(Style style)
     return result;
 }
 
+BattleActionResult BattleSession::SwitchPlayer(int playerIndex)
+{
+    if (!started_)
+    {
+        return RejectAction("Start a battle first.");
+    }
+
+    if (finished_)
+    {
+        return RejectAction("The battle is already finished.");
+    }
+
+    if (!IsKnownPlayerIndex(playerIndex))
+    {
+        return RejectAction("Unknown player profile.");
+    }
+
+    if (playerIndex == activePlayerIndex_)
+    {
+        return RejectAction("That player profile is already active.");
+    }
+
+    if (playerTeam_[playerIndex].hp <= 0)
+    {
+        return RejectAction("That player profile cannot play.");
+    }
+
+    BattleActionResult result;
+    result.accepted = true;
+    result.playerSwitched = true;
+    result.oldPlayerIndex = activePlayerIndex_;
+    result.newPlayerIndex = playerIndex;
+    result.newPlayerName = playerTeam_[playerIndex].name;
+
+    activePlayerIndex_ = playerIndex;
+    MarkParticipant(activePlayerIndex_);
+
+    // Switching player profiles spends the turn, matching classic party-battle pacing.
+    ResolveOpponentTurn(result);
+    FinishBattleIfNeeded(result);
+    return result;
+}
+
 BattleState BattleSession::GetState() const
 {
     BattleState state;
     state.started = started_;
     state.finished = finished_;
     state.winner = winner_;
-    state.player = CreateCompetitorView(player_, playerStatus_);
+    state.activePlayerIndex = activePlayerIndex_;
+    if (!playerTeam_.empty() && IsKnownPlayerIndex(activePlayerIndex_))
+    {
+        state.player = CreateCompetitorView(ActivePlayer(), ActivePlayerStatus());
+    }
+    for (int index = 0; index < static_cast<int>(playerTeam_.size()); ++index)
+    {
+        state.playerTeam.push_back(CreateCompetitorView(playerTeam_[index], playerStatuses_[index]));
+    }
     state.opponent = CreateCompetitorView(opponent_, opponentStatus_);
     return state;
 }
@@ -187,10 +265,10 @@ std::vector<SkillView> BattleSession::GetAvailablePlayerSkills() const
         return skills;
     }
 
-    for (const SkillProgress& progress : player_.skills)
+    for (const SkillProgress& progress : ActivePlayer().skills)
     {
         const Skill* definition = data_.FindSkill(progress.skillId);
-        if (definition != nullptr && skills_.IsAvailableForStyle(*definition, player_.style))
+        if (definition != nullptr && skills_.IsAvailableForStyle(*definition, ActivePlayer().style))
         {
             skills.push_back(skills_.CreateSkillView(*definition, progress));
         }
@@ -200,6 +278,7 @@ std::vector<SkillView> BattleSession::GetAvailablePlayerSkills() const
 }
 
 Competitor BattleSession::CreateCompetitor(
+    int profileIndex,
     const std::string& name,
     GameType gameType,
     Spec spec,
@@ -207,6 +286,7 @@ Competitor BattleSession::CreateCompetitor(
     const PassiveBonuses& bonuses) const
 {
     Competitor competitor;
+    competitor.profileIndex = profileIndex;
     competitor.name = name;
     competitor.gameType = gameType;
     competitor.spec = spec;
@@ -235,6 +315,25 @@ Competitor BattleSession::CreateCompetitor(
     return competitor;
 }
 
+Competitor BattleSession::CreateCompetitor(
+    const BattleSetup::PlayerSlot& slot,
+    GameType gameType) const
+{
+    Competitor competitor = CreateCompetitor(
+        slot.profileIndex,
+        slot.name,
+        gameType,
+        slot.spec,
+        slot.style,
+        slot.passiveBonuses);
+    if (!slot.skills.empty())
+    {
+        competitor.skills = slot.skills;
+    }
+
+    return competitor;
+}
+
 BattleActionResult BattleSession::RejectAction(const std::string& error) const
 {
     BattleActionResult result;
@@ -242,13 +341,51 @@ BattleActionResult BattleSession::RejectAction(const std::string& error) const
     return result;
 }
 
+Competitor& BattleSession::ActivePlayer()
+{
+    return playerTeam_[activePlayerIndex_];
+}
+
+const Competitor& BattleSession::ActivePlayer() const
+{
+    return playerTeam_[activePlayerIndex_];
+}
+
+BattleStatus& BattleSession::ActivePlayerStatus()
+{
+    return playerStatuses_[activePlayerIndex_];
+}
+
+const BattleStatus& BattleSession::ActivePlayerStatus() const
+{
+    return playerStatuses_[activePlayerIndex_];
+}
+
+void BattleSession::MarkParticipant(int playerIndex)
+{
+    for (int participant : participatingPlayerIndices_)
+    {
+        if (participant == playerIndex)
+        {
+            return;
+        }
+    }
+
+    participatingPlayerIndices_.push_back(playerIndex);
+}
+
+bool BattleSession::IsKnownPlayerIndex(int playerIndex) const
+{
+    return playerIndex >= 0 && playerIndex < static_cast<int>(playerTeam_.size());
+}
+
 void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
 {
     SkillProgress* progress = opponentAI_.SelectSkill(
         opponent_,
         opponentStatus_,
-        player_,
-        playerStatus_,
+        ActivePlayer(),
+        ActivePlayerStatus(),
         randomEngine_);
     if (progress == nullptr)
     {
@@ -259,8 +396,8 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
         BattleActor::Opponent,
         opponent_,
         opponentStatus_,
-        player_,
-        playerStatus_,
+        ActivePlayer(),
+        ActivePlayerStatus(),
         *progress,
         randomEngine_));
 }
@@ -270,6 +407,7 @@ CompetitorView BattleSession::CreateCompetitorView(
     const BattleStatus& status) const
 {
     CompetitorView view;
+    view.profileIndex = competitor.profileIndex;
     view.name = competitor.name;
     view.spec = competitor.spec;
     view.style = competitor.style;
@@ -285,13 +423,32 @@ CompetitorView BattleSession::CreateCompetitorView(
 
 void BattleSession::FinishBattleIfNeeded(BattleActionResult& result)
 {
-    if (finished_ || (player_.hp > 0 && opponent_.hp > 0))
+    if (finished_ || (ActivePlayer().hp > 0 && opponent_.hp > 0))
     {
         return;
     }
 
     finished_ = true;
-    winner_ = player_.hp > 0 ? BattleWinner::Player : BattleWinner::Opponent;
+    winner_ = ActivePlayer().hp > 0 ? BattleWinner::Player : BattleWinner::Opponent;
     result.battleFinished = true;
     result.winner = winner_;
+    AttachRewardIfNeeded(result);
+}
+
+void BattleSession::AttachRewardIfNeeded(BattleActionResult& result) const
+{
+    if (winner_ != BattleWinner::Player || participatingPlayerIndices_.empty())
+    {
+        return;
+    }
+
+    result.reward.awarded = true;
+    result.reward.totalXp = PlayerWinXpReward;
+    result.reward.xpPerParticipant = PlayerWinXpReward
+        / static_cast<int>(participatingPlayerIndices_.size());
+
+    for (int playerIndex : participatingPlayerIndices_)
+    {
+        result.reward.participantPlayerIndices.push_back(playerTeam_[playerIndex].profileIndex);
+    }
 }

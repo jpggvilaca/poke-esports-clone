@@ -27,12 +27,14 @@ public:
     const TrainerProfileState& GetState() const;
     const PlayerProfileState* GetActivePlayerProfile() const;
     PlayerProfileState* GetMutableActivePlayerProfile();
+    PlayerProfileState* GetMutablePlayerProfile(int playerIndex);
     PassiveBonuses GetActivePlayerPassiveBonuses() const;
     int GetActivePlayerLevel() const;
 
     ProfileCommandResult AwardRating(int amount);
     ProfileCommandResult AwardMoney(int amount);
     ProfileCommandResult AddTrophy(const std::string& trophyId);
+    ProfileCommandResult AddPlayerProfile(const PlayerProfileState& playerProfile);
 
 private:
     TrainerProfileState state_;

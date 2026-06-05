@@ -25,6 +25,7 @@ public:
     godot::Array get_styles() const;
     godot::Array start_battle(int player_style, int opponent_spec, int opponent_style);
     godot::Array use_skill(const godot::String& skill_id);
+    godot::Array switch_player(int player_index);
     godot::Array change_style(int style);
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;
@@ -37,6 +38,7 @@ public:
     godot::Dictionary trainer_award_rating(int amount);
     godot::Dictionary trainer_award_money(int amount);
     godot::Dictionary trainer_add_trophy(const godot::String& trophy_id);
+    godot::Dictionary trainer_add_player(const godot::String& player_name, int spec);
     godot::Dictionary trainer_apply_match_result(int opponent_level, int context, bool won);
 
 protected:
@@ -44,9 +46,11 @@ protected:
 
 private:
     godot::Array ToArray(const BattleActionResult& result) const;
+    godot::Array ToArrayAndApplyRewards(const BattleActionResult& result);
     godot::Array Rejected(const godot::String& message) const;
     void AppendSkillUse(godot::Array& events, const SkillUseResult& skillUse) const;
     void AppendSkillXp(godot::Array& events, const SkillUseResult& skillUse) const;
+    void AppendBattleReward(godot::Array& events, const BattleRewardResult& reward);
     godot::Dictionary CreateEvent(
         const char* type,
         BattleActor actor,
@@ -61,6 +65,7 @@ private:
     godot::Dictionary ToDictionary(const TrainerProfileState& profile) const;
     godot::Dictionary ToDictionary(const ProfileCommandResult& result) const;
     godot::Dictionary ToDictionary(const RatingResult& result) const;
+    godot::Dictionary ToDictionary(const BattleRewardResult& result) const;
     godot::Array ToSkillArray(const std::vector<std::string>& skillIds) const;
     godot::Array ToStringArray(const std::vector<std::string>& values) const;
     bool IsValidMatchContext(int value) const;

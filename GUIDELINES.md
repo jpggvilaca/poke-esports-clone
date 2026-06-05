@@ -16,6 +16,7 @@ Current direction:
 - Specs define player-profile identity, skill access, and counter matchups.
 - Skills behave like battle moves: a player profile may learn many, but can equip only four active skills.
 - Skills level up, player profiles level up, and trainer rating changes after battles.
+- If multiple player profiles participate in a winning battle, they split the battle's total player-profile XP evenly.
 - Major tournaments replace gym badges. Each major requires a minimum rating and awards a trophy.
 - A nemesis/rival appears throughout the game, mocks the trainer, and uses player profiles that counter the trainer's roster.
 - Buildings can later provide healing, shops, and other familiar RPG services.
@@ -49,6 +50,7 @@ Godot UI/Audio/Animation
 - Do not make backend systems reactive/event-driven. They may mutate owned game state, then return facts about what changed.
 - Keep systems small and composable: battle flow, skill use, progression, counter logic, items, economy, and match flow should be separate systems.
 - `TrainerProfile` owns trainer-level save state and the roster. `PlayerProfileSystem` owns player-profile growth rules: XP, rank/evolution, passives, learned skills, and active skills.
+- `BattleSession` may track battle participation and return reward facts, but profile XP is applied outside battle through `PlayerProfileSystem`.
 
 ## Godot Bridge Rules
 
