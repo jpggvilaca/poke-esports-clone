@@ -1,8 +1,6 @@
 extends Node
 
 const LOSS_RATING := -10
-const BASE_XP_FOR_NEXT_LEVEL := 100
-const XP_GROWTH_PER_LEVEL := 50
 
 const NPC_BATTLES := {
 	"Rival": {
@@ -86,6 +84,7 @@ var last_battle_summary := {
 	"winner": "none",
 	"npc_id": "",
 }
+var profile_bridge: BattleBridge
 
 
 func _ready() -> void:
@@ -277,42 +276,21 @@ func _ensure_started() -> void:
 
 
 func _create_player(player_name: String, spec: String) -> Dictionary:
-	var active_skills := _starter_active_skill_ids(spec)
+	var player: Dictionary = _ensure_profile_bridge().create_player_profile(player_name, spec)
+	player["style"] = String(player.get("style", "Balanced"))
+	player["current_hp"] = int(player.get("max_hp", 100))
+	player["current_focus"] = int(player.get("max_focus", 50))
+
 	var progress := {}
-	for skill_id in active_skills:
+	for skill_id in player.get("active_skill_ids", []):
 		progress[skill_id] = {
 			"skill_id": skill_id,
 			"level": 1,
 			"xp": 0,
 		}
+	player["skill_progress"] = progress
 
-	return {
-		"name": player_name,
-		"spec": spec,
-		"style": "Balanced",
-		"rank": "Rookie",
-		"level": 1,
-		"xp": 0,
-		"xp_required_for_next_level": BASE_XP_FOR_NEXT_LEVEL,
-		"passive_bonuses": _passive_bonuses_for_rank("Rookie"),
-		"max_hp": 100,
-		"current_hp": 100,
-		"max_focus": 50,
-		"current_focus": 50,
-		"learned_skill_ids": active_skills.duplicate(),
-		"active_skill_ids": active_skills,
-		"skill_progress": progress,
-	}
-
-
-func _starter_active_skill_ids(spec: String) -> Array[String]:
-	var prefix := spec.to_lower()
-	return [
-		"%s-basic" % prefix,
-		"%s-consistent" % prefix,
-		"%s-disrupt" % prefix,
-		"%s-setup" % prefix,
-	]
+	return player
 
 
 func _first_playable_player_index() -> int:
@@ -388,24 +366,45 @@ func _award_player_xp(profile_index: int, amount: int) -> Array[String]:
 		return []
 
 	var player: Dictionary = roster[profile_index]
-	var old_level := int(player.get("level", 1))
-	player["xp"] = int(player.get("xp", 0)) + amount
-	while int(player["xp"]) >= _xp_required_for_level(int(player.get("level", 1))):
-		player["xp"] = int(player["xp"]) - _xp_required_for_level(int(player.get("level", 1)))
-		player["level"] = int(player.get("level", 1)) + 1
+	var result: Dictionary = _ensure_profile_bridge().award_player_profile_xp(player, amount)
+	if not result.get("accepted", false):
+		return []
 
-	player["xp_required_for_next_level"] = _xp_required_for_level(int(player.get("level", 1)))
-	player["rank"] = _rank_for_level(int(player.get("level", 1)))
-	player["passive_bonuses"] = _passive_bonuses_for_rank(String(player["rank"]))
-	var bonuses: Dictionary = player["passive_bonuses"]
-	player["max_hp"] = 100 + int(bonuses.get("max_hp_bonus", 0))
-	player["current_hp"] = min(int(player.get("current_hp", player["max_hp"])), int(player["max_hp"]))
-	player["max_focus"] = int(player.get("max_focus", 50))
-	player["current_focus"] = min(int(player.get("current_focus", player["max_focus"])), int(player["max_focus"]))
+	player = _merge_profile_snapshot(player, result.get("player_profile", {}))
 	roster[profile_index] = player
-	if int(player.get("level", 1)) > old_level:
+	if bool(result.get("leveled_up", false)):
 		return ["LEVEL UP: %s reached Lv%s." % [player.get("name", "Player"), player.get("level", 1)]]
 	return []
+
+
+func _ensure_profile_bridge() -> BattleBridge:
+	if not is_instance_valid(profile_bridge):
+		profile_bridge = BattleBridge.new()
+		profile_bridge.name = "ProfileBridge"
+		add_child(profile_bridge)
+	return profile_bridge
+
+
+func _merge_profile_snapshot(player: Dictionary, snapshot: Dictionary) -> Dictionary:
+	for key in [
+		"name",
+		"spec",
+		"rank",
+		"level",
+		"xp",
+		"xp_required_for_next_level",
+		"passive_bonuses",
+		"max_hp",
+		"max_focus",
+		"learned_skill_ids",
+		"active_skill_ids",
+	]:
+		if snapshot.has(key):
+			player[key] = snapshot[key]
+
+	player["current_hp"] = min(int(player.get("current_hp", player.get("max_hp", 100))), int(player.get("max_hp", 100)))
+	player["current_focus"] = min(int(player.get("current_focus", player.get("max_focus", 50))), int(player.get("max_focus", 50)))
+	return player
 
 
 func _roll_rating_reward(config: Dictionary) -> int:
@@ -414,36 +413,6 @@ func _roll_rating_reward(config: Dictionary) -> int:
 	if max_value < min_value:
 		max_value = min_value
 	return randi_range(min_value, max_value)
-
-
-func _xp_required_for_level(level: int) -> int:
-	return BASE_XP_FOR_NEXT_LEVEL + (max(1, level) - 1) * XP_GROWTH_PER_LEVEL
-
-
-func _rank_for_level(level: int) -> String:
-	if level >= 20:
-		return "World-Class"
-	if level >= 15:
-		return "Elite"
-	if level >= 10:
-		return "Pro"
-	if level >= 5:
-		return "Ladder"
-	return "Rookie"
-
-
-func _passive_bonuses_for_rank(rank: String) -> Dictionary:
-	match rank:
-		"Ladder":
-			return {"max_hp_bonus": 10, "base_power_bonus": 0, "counter_damage_bonus_percent": 0}
-		"Pro":
-			return {"max_hp_bonus": 10, "base_power_bonus": 0, "counter_damage_bonus_percent": 5}
-		"Elite":
-			return {"max_hp_bonus": 20, "base_power_bonus": 0, "counter_damage_bonus_percent": 10}
-		"World-Class":
-			return {"max_hp_bonus": 30, "base_power_bonus": 0, "counter_damage_bonus_percent": 15}
-		_:
-			return {"max_hp_bonus": 0, "base_power_bonus": 0, "counter_damage_bonus_percent": 0}
 
 
 func _join_strings(values: Array[String], separator: String) -> String:

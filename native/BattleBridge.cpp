@@ -1,5 +1,7 @@
 #include "BattleBridge.h"
 
+#include "PlayerProfileSystem.h"
+
 #include <godot_cpp/core/class_db.hpp>
 
 #include <algorithm>
@@ -16,6 +18,8 @@ void BattleBridge::_bind_methods()
     godot::ClassDB::bind_method(godot::D_METHOD("start_demo_battle"), &BattleBridge::start_demo_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
     godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
+    godot::ClassDB::bind_method(godot::D_METHOD("create_player_profile", "player_name", "spec"), &BattleBridge::create_player_profile);
+    godot::ClassDB::bind_method(godot::D_METHOD("award_player_profile_xp", "player_profile", "amount"), &BattleBridge::award_player_profile_xp);
     godot::ClassDB::bind_method(godot::D_METHOD("get_battle_state"), &BattleBridge::get_battle_state);
     godot::ClassDB::bind_method(godot::D_METHOD("get_available_skills"), &BattleBridge::get_available_skills);
     godot::ClassDB::bind_method(godot::D_METHOD("get_last_result"), &BattleBridge::get_last_result);
@@ -73,6 +77,23 @@ Dictionary BattleBridge::switch_player(int player_index)
 
     last_result_ = session_->SwitchPlayer(player_index);
     return result_to_dictionary(last_result_);
+}
+
+Dictionary BattleBridge::create_player_profile(const String& player_name, const String& spec) const
+{
+    PlayerProfileSystem profiles(data_);
+    const PlayerProfileState player_profile = profiles.CreateStarter(
+        std::string(player_name.utf8().get_data()),
+        spec_from_string(spec));
+    return player_profile_to_dictionary(player_profile);
+}
+
+Dictionary BattleBridge::award_player_profile_xp(const Dictionary& player_profile_dictionary, int amount) const
+{
+    PlayerProfileSystem profiles(data_);
+    PlayerProfileState player_profile = player_profile_from_dictionary(player_profile_dictionary);
+    const ProfileCommandResult result = profiles.AwardXp(player_profile, amount);
+    return profile_result_to_dictionary(result, player_profile);
 }
 
 Dictionary BattleBridge::get_battle_state() const
@@ -222,6 +243,104 @@ Dictionary BattleBridge::reward_to_dictionary(const BattleRewardResult& reward) 
     }
     dictionary["participant_player_indices"] = participants;
     return dictionary;
+}
+
+Dictionary BattleBridge::passive_bonuses_to_dictionary(const PassiveBonuses& bonuses) const
+{
+    Dictionary dictionary;
+    dictionary["max_hp_bonus"] = bonuses.maxHpBonus;
+    dictionary["base_power_bonus"] = bonuses.basePowerBonus;
+    dictionary["counter_damage_bonus_percent"] = bonuses.counterDamageBonusPercent;
+    return dictionary;
+}
+
+Dictionary BattleBridge::player_profile_to_dictionary(const PlayerProfileState& player_profile) const
+{
+    Dictionary dictionary;
+    dictionary["name"] = String(player_profile.name.c_str());
+    dictionary["spec"] = String(ToString(player_profile.spec).c_str());
+    dictionary["rank"] = String(ToString(player_profile.rank).c_str());
+    dictionary["level"] = player_profile.level;
+    dictionary["xp"] = player_profile.xp;
+    dictionary["xp_required_for_next_level"] = player_profile.xpRequiredForNextLevel;
+    dictionary["passive_bonuses"] = passive_bonuses_to_dictionary(player_profile.passiveBonuses);
+    dictionary["max_hp"] = Balance::StartingMaxHp + player_profile.passiveBonuses.maxHpBonus;
+    dictionary["max_focus"] = Balance::StartingMaxFocus;
+
+    Array learned_skills;
+    for (const std::string& skill_id : player_profile.learnedSkillIds)
+    {
+        learned_skills.push_back(String(skill_id.c_str()));
+    }
+    dictionary["learned_skill_ids"] = learned_skills;
+
+    Array active_skills;
+    for (const std::string& skill_id : player_profile.activeSkillIds)
+    {
+        active_skills.push_back(String(skill_id.c_str()));
+    }
+    dictionary["active_skill_ids"] = active_skills;
+    return dictionary;
+}
+
+Dictionary BattleBridge::profile_result_to_dictionary(
+    const ProfileCommandResult& result,
+    const PlayerProfileState& player_profile) const
+{
+    Dictionary dictionary;
+    dictionary["accepted"] = result.accepted;
+    dictionary["error_code"] = error_to_string(result.errorCode);
+    dictionary["error"] = String(result.error.c_str());
+    dictionary["old_value"] = result.oldValue;
+    dictionary["new_value"] = result.newValue;
+    dictionary["old_level"] = result.oldLevel;
+    dictionary["new_level"] = result.newLevel;
+    dictionary["leveled_up"] = result.leveledUp;
+    dictionary["player_profile"] = player_profile_to_dictionary(player_profile);
+    return dictionary;
+}
+
+PlayerProfileState BattleBridge::player_profile_from_dictionary(const Dictionary& player_profile_dictionary) const
+{
+    PlayerProfileState player_profile;
+    player_profile.name = player_profile_dictionary.has("name")
+        ? std::string(String(player_profile_dictionary["name"]).utf8().get_data())
+        : "Player";
+    player_profile.spec = player_profile_dictionary.has("spec")
+        ? spec_from_string(String(player_profile_dictionary["spec"]))
+        : Spec::Top;
+    player_profile.level = player_profile_dictionary.has("level")
+        ? std::max(1, static_cast<int>(player_profile_dictionary["level"]))
+        : 1;
+    player_profile.xp = player_profile_dictionary.has("xp")
+        ? std::max(0, static_cast<int>(player_profile_dictionary["xp"]))
+        : 0;
+    player_profile.xpRequiredForNextLevel = player_profile_dictionary.has("xp_required_for_next_level")
+        ? std::max(1, static_cast<int>(player_profile_dictionary["xp_required_for_next_level"]))
+        : PlayerProfileBalance::BaseXpForNextLevel;
+
+    if (player_profile_dictionary.has("learned_skill_ids"))
+    {
+        Array learned_skills = player_profile_dictionary["learned_skill_ids"];
+        for (int index = 0; index < learned_skills.size(); ++index)
+        {
+            player_profile.learnedSkillIds.push_back(std::string(String(learned_skills[index]).utf8().get_data()));
+        }
+    }
+
+    if (player_profile_dictionary.has("active_skill_ids"))
+    {
+        Array active_skills = player_profile_dictionary["active_skill_ids"];
+        for (int index = 0; index < active_skills.size(); ++index)
+        {
+            player_profile.activeSkillIds.push_back(std::string(String(active_skills[index]).utf8().get_data()));
+        }
+    }
+
+    PlayerProfileSystem profiles(data_);
+    player_profile.rank = profiles.GetRankForLevel(player_profile.level);
+    player_profile.passiveBonuses = profiles.GetPassiveBonusesForRank(player_profile.rank);
+    return player_profile;
 }
 
 BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictionary) const

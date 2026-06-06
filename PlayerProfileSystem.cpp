@@ -50,12 +50,37 @@ PlayerProfileState PlayerProfileSystem::CreateStarter(
         return playerProfile;
     }
 
-    for (int index = 0;
-        index < PlayerProfileBalance::StartingSkillCount && index < static_cast<int>(specData->skillIds.size());
-        ++index)
+    for (const std::string& skillId : specData->skillIds)
     {
-        playerProfile.learnedSkillIds.push_back(specData->skillIds[index]);
-        playerProfile.activeSkillIds.push_back(specData->skillIds[index]);
+        const Skill* skill = data_.FindSkill(skillId);
+        if (skill == nullptr
+            || (skill->requiredStyle.has_value() && skill->requiredStyle.value() != Style::Balanced))
+        {
+            continue;
+        }
+
+        playerProfile.learnedSkillIds.push_back(skillId);
+        playerProfile.activeSkillIds.push_back(skillId);
+        if (static_cast<int>(playerProfile.activeSkillIds.size()) >= PlayerProfileBalance::StartingSkillCount)
+        {
+            break;
+        }
+    }
+
+    for (const std::string& skillId : specData->skillIds)
+    {
+        if (static_cast<int>(playerProfile.activeSkillIds.size()) >= PlayerProfileBalance::StartingSkillCount)
+        {
+            break;
+        }
+
+        if (HasLearnedSkill(playerProfile, skillId))
+        {
+            continue;
+        }
+
+        playerProfile.learnedSkillIds.push_back(skillId);
+        playerProfile.activeSkillIds.push_back(skillId);
     }
 
     return playerProfile;
@@ -79,6 +104,11 @@ ProfileCommandResult PlayerProfileSystem::LearnSkill(
     PlayerProfileState& playerProfile,
     const std::string& skillId) const
 {
+    if (data_.FindSkill(skillId) == nullptr)
+    {
+        return Reject(SimulationError::UnknownSkill, "Unknown skill.");
+    }
+
     if (HasLearnedSkill(playerProfile, skillId))
     {
         return Reject(SimulationError::SkillAlreadyLearned, "Skill already learned.");
@@ -92,6 +122,11 @@ ProfileCommandResult PlayerProfileSystem::EquipSkill(
     PlayerProfileState& playerProfile,
     const std::string& skillId) const
 {
+    if (data_.FindSkill(skillId) == nullptr)
+    {
+        return Reject(SimulationError::UnknownSkill, "Unknown skill.");
+    }
+
     if (!HasLearnedSkill(playerProfile, skillId))
     {
         return Reject(SimulationError::SkillNotLearned, "Skill is not learned.");

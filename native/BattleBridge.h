@@ -22,6 +22,8 @@ public:
     godot::Dictionary start_demo_battle();
     godot::Dictionary use_skill(const godot::String& skill_id);
     godot::Dictionary switch_player(int player_index);
+    godot::Dictionary create_player_profile(const godot::String& player_name, const godot::String& spec) const;
+    godot::Dictionary award_player_profile_xp(const godot::Dictionary& player_profile, int amount) const;
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;
     godot::Dictionary get_last_result() const;
@@ -36,6 +38,12 @@ private:
     godot::Dictionary event_to_dictionary(const BattleEvent& event) const;
     godot::Dictionary result_to_dictionary(const BattleActionResult& result) const;
     godot::Dictionary reward_to_dictionary(const BattleRewardResult& reward) const;
+    godot::Dictionary passive_bonuses_to_dictionary(const PassiveBonuses& bonuses) const;
+    godot::Dictionary player_profile_to_dictionary(const PlayerProfileState& player_profile) const;
+    godot::Dictionary profile_result_to_dictionary(
+        const ProfileCommandResult& result,
+        const PlayerProfileState& player_profile) const;
+    PlayerProfileState player_profile_from_dictionary(const godot::Dictionary& player_profile) const;
     BattleSetup setup_from_dictionary(const godot::Dictionary& setup) const;
     Spec spec_from_string(const godot::String& value) const;
     Style style_from_string(const godot::String& value) const;

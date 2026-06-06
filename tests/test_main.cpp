@@ -225,10 +225,19 @@ namespace
         test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(4), "starter learns four skills");
         test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(4), "starter equips four skills");
         test.ExpectEqual(player.learnedSkillIds[0], std::string("top-basic"), "starter loadout begins with the spec basic");
+        test.ExpectEqual(player.activeSkillIds[1], std::string("top-consistent"), "starter loadout favors balanced skills");
 
         ProfileCommandResult equipUnknown = profiles.EquipSkill(player, "support-basic");
         test.Expect(!equipUnknown.accepted, "cannot equip a skill before learning it");
         test.ExpectEqual(equipUnknown.errorCode, SimulationError::SkillNotLearned, "equip reject has a stable error code");
+
+        ProfileCommandResult learnMissing = profiles.LearnSkill(player, "missing-skill");
+        test.Expect(!learnMissing.accepted, "cannot learn an unknown skill");
+        test.ExpectEqual(learnMissing.errorCode, SimulationError::UnknownSkill, "unknown learn reject has a stable error code");
+
+        ProfileCommandResult equipMissing = profiles.EquipSkill(player, "missing-skill");
+        test.Expect(!equipMissing.accepted, "cannot equip an unknown skill");
+        test.ExpectEqual(equipMissing.errorCode, SimulationError::UnknownSkill, "unknown equip reject has a stable error code");
 
         ProfileCommandResult learnRecover = profiles.LearnSkill(player, "top-recover");
         test.Expect(learnRecover.accepted, "can learn a new skill");
