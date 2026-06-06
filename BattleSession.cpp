@@ -104,6 +104,17 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         setup.opponentSpec,
         setup.opponentStyle,
         {});
+    if (setup.opponentMaxHp > 0)
+    {
+        opponent_.maxHp = std::max(1, setup.opponentMaxHp);
+        opponent_.hp = opponent_.maxHp;
+    }
+    if (setup.opponentMaxFocus > 0)
+    {
+        opponent_.maxFocus = std::max(1, setup.opponentMaxFocus);
+        opponent_.focus = opponent_.maxFocus;
+    }
+    opponent_.basePower += setup.opponentBasePowerBonus;
     opponentStatus_ = {};
     started_ = true;
     finished_ = false;

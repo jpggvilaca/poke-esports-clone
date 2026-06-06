@@ -1,7 +1,5 @@
 extends Node
 
-const WIN_MONEY := 100
-const WIN_RATING := 20
 const LOSS_RATING := -10
 const BASE_XP_FOR_NEXT_LEVEL := 100
 const XP_GROWTH_PER_LEVEL := 50
@@ -14,6 +12,13 @@ const NPC_BATTLES := {
 		"opponent_spec": "Jungle",
 		"opponent_style": "Balanced",
 		"trophy_id": "defeated_rival",
+		"single_use": true,
+		"money_reward": 100,
+		"rating_min": 20,
+		"rating_max": 40,
+		"opponent_hp": 110,
+		"opponent_focus": 55,
+		"opponent_base_power_bonus": 1,
 	},
 	"Coach": {
 		"id": "Coach",
@@ -22,6 +27,13 @@ const NPC_BATTLES := {
 		"opponent_spec": "Mid",
 		"opponent_style": "Defensive",
 		"trophy_id": "defeated_coach",
+		"single_use": true,
+		"money_reward": 120,
+		"rating_min": 30,
+		"rating_max": 55,
+		"opponent_hp": 125,
+		"opponent_focus": 60,
+		"opponent_base_power_bonus": 2,
 	},
 	"Fan": {
 		"id": "Fan",
@@ -30,7 +42,30 @@ const NPC_BATTLES := {
 		"opponent_spec": "Support",
 		"opponent_style": "Aggressive",
 		"trophy_id": "defeated_fan",
+		"single_use": true,
+		"money_reward": 60,
+		"rating_min": 10,
+		"rating_max": 25,
+		"opponent_hp": 90,
+		"opponent_focus": 45,
+		"opponent_base_power_bonus": 0,
 	},
+}
+
+const TOURNAMENT_BATTLE := {
+	"id": "MajorHallTournament",
+	"display_name": "Major Hall Tournament",
+	"opponent_name": "Tournament Seed",
+	"opponent_spec": "ADC",
+	"opponent_style": "Balanced",
+	"trophy_id": "major_hall_tournament_win",
+	"single_use": false,
+	"money_reward": 250,
+	"rating_min": 45,
+	"rating_max": 80,
+	"opponent_hp": 160,
+	"opponent_focus": 80,
+	"opponent_base_power_bonus": 4,
 }
 
 var trainer_name := "Human Trainer"
@@ -70,6 +105,24 @@ func prepare_npc_battle(npc_id: String, player_position: Vector2) -> bool:
 	pending_battle = config.duplicate(true)
 	pending_battle["seed"] = int(Time.get_ticks_msec() % 2147483647)
 	return true
+
+
+func prepare_tournament_battle(player_position: Vector2) -> bool:
+	_ensure_started()
+	saved_map_position = player_position
+	pending_battle = TOURNAMENT_BATTLE.duplicate(true)
+	pending_battle["seed"] = int(Time.get_ticks_msec() % 2147483647)
+	return true
+
+
+func recover_roster() -> String:
+	_ensure_started()
+	for index in range(roster.size()):
+		var player: Dictionary = roster[index]
+		player["current_hp"] = int(player.get("max_hp", 100))
+		player["current_focus"] = int(player.get("max_focus", 50))
+		roster[index] = player
+	return "LAN Cafe restored all HP and Focus."
 
 
 func has_pending_battle() -> bool:
@@ -120,6 +173,9 @@ func build_battle_setup() -> Dictionary:
 		"opponent_name": battle.get("opponent_name", "Opponent"),
 		"opponent_spec": battle.get("opponent_spec", "Jungle"),
 		"opponent_style": battle.get("opponent_style", "Balanced"),
+		"opponent_hp": int(battle.get("opponent_hp", 100)),
+		"opponent_focus": int(battle.get("opponent_focus", 50)),
+		"opponent_base_power_bonus": int(battle.get("opponent_base_power_bonus", 0)),
 		"seed": int(battle.get("seed", 20260606)),
 	}
 
@@ -135,24 +191,28 @@ func complete_battle(result: Dictionary) -> void:
 	_apply_skill_progress(result)
 
 	if won:
-		if not npc_id.is_empty():
+		var level_up_messages: Array[String] = []
+		if not npc_id.is_empty() and bool(pending_battle.get("single_use", true)):
 			defeated_npcs[npc_id] = true
 
 		var reward: Dictionary = result.get("reward", {})
 		var battle_xp := int(reward.get("xp_per_participant", 0))
 		for profile_index in reward.get("participant_player_indices", []):
-			_award_player_xp(int(profile_index), battle_xp)
+			level_up_messages.append_array(_award_player_xp(int(profile_index), battle_xp))
 
-		money += WIN_MONEY
-		rating += WIN_RATING
+		var money_reward := int(pending_battle.get("money_reward", 100))
+		var rating_reward := _roll_rating_reward(pending_battle)
+		money += money_reward
+		rating += rating_reward
 		var trophy_id := String(pending_battle.get("trophy_id", ""))
 		if not trophy_id.is_empty() and not trophies.has(trophy_id):
 			trophies.push_back(trophy_id)
 
 		last_battle_summary = {
-			"text": "Won against %s (+%s money, +%s rating)." % [display_name, WIN_MONEY, WIN_RATING],
+			"text": "Won against %s (+%s money, +%s rating)." % [display_name, money_reward, rating_reward],
 			"winner": winner,
 			"npc_id": npc_id,
+			"level_up_messages": level_up_messages,
 		}
 	else:
 		rating = max(0, rating + LOSS_RATING)
@@ -160,6 +220,7 @@ func complete_battle(result: Dictionary) -> void:
 			"text": "Lost against %s (%s rating)." % [display_name, LOSS_RATING],
 			"winner": winner,
 			"npc_id": npc_id,
+			"level_up_messages": [],
 		}
 
 	pending_battle.clear()
@@ -322,11 +383,12 @@ func _apply_battle_vitals(result: Dictionary) -> void:
 		roster[profile_index] = player
 
 
-func _award_player_xp(profile_index: int, amount: int) -> void:
+func _award_player_xp(profile_index: int, amount: int) -> Array[String]:
 	if amount <= 0 or profile_index < 0 or profile_index >= roster.size():
-		return
+		return []
 
 	var player: Dictionary = roster[profile_index]
+	var old_level := int(player.get("level", 1))
 	player["xp"] = int(player.get("xp", 0)) + amount
 	while int(player["xp"]) >= _xp_required_for_level(int(player.get("level", 1))):
 		player["xp"] = int(player["xp"]) - _xp_required_for_level(int(player.get("level", 1)))
@@ -341,6 +403,17 @@ func _award_player_xp(profile_index: int, amount: int) -> void:
 	player["max_focus"] = int(player.get("max_focus", 50))
 	player["current_focus"] = min(int(player.get("current_focus", player["max_focus"])), int(player["max_focus"]))
 	roster[profile_index] = player
+	if int(player.get("level", 1)) > old_level:
+		return ["LEVEL UP: %s reached Lv%s." % [player.get("name", "Player"), player.get("level", 1)]]
+	return []
+
+
+func _roll_rating_reward(config: Dictionary) -> int:
+	var min_value := int(config.get("rating_min", 20))
+	var max_value := int(config.get("rating_max", min_value))
+	if max_value < min_value:
+		max_value = min_value
+	return randi_range(min_value, max_value)
 
 
 func _xp_required_for_level(level: int) -> int:

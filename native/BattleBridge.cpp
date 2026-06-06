@@ -109,6 +109,12 @@ Dictionary BattleBridge::get_last_result() const
 Dictionary BattleBridge::competitor_to_dictionary(const CompetitorView& competitor) const
 {
     Dictionary dictionary;
+    Dictionary status;
+    status["attack_modifier_percent"] = competitor.status.attackModifierPercent;
+    status["attack_modifier_hits"] = competitor.status.attackModifierHits;
+    status["defense_modifier_percent"] = competitor.status.defenseModifierPercent;
+    status["defense_modifier_hits"] = competitor.status.defenseModifierHits;
+
     dictionary["profile_index"] = competitor.profileIndex;
     dictionary["name"] = String(competitor.name.c_str());
     dictionary["spec"] = String(ToString(competitor.spec).c_str());
@@ -119,6 +125,7 @@ Dictionary BattleBridge::competitor_to_dictionary(const CompetitorView& competit
     dictionary["max_focus"] = competitor.maxFocus;
     dictionary["base_power"] = competitor.basePower;
     dictionary["counter_damage_bonus_percent"] = competitor.counterDamageBonusPercent;
+    dictionary["status"] = status;
     return dictionary;
 }
 
@@ -237,6 +244,21 @@ BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictiona
     if (setup_dictionary.has("opponent_style"))
     {
         setup.opponentStyle = style_from_string(String(setup_dictionary["opponent_style"]));
+    }
+
+    if (setup_dictionary.has("opponent_hp"))
+    {
+        setup.opponentMaxHp = std::max(1, static_cast<int>(setup_dictionary["opponent_hp"]));
+    }
+
+    if (setup_dictionary.has("opponent_focus"))
+    {
+        setup.opponentMaxFocus = std::max(1, static_cast<int>(setup_dictionary["opponent_focus"]));
+    }
+
+    if (setup_dictionary.has("opponent_base_power_bonus"))
+    {
+        setup.opponentBasePowerBonus = static_cast<int>(setup_dictionary["opponent_base_power_bonus"]);
     }
 
     if (!setup_dictionary.has("player_team"))

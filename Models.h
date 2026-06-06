@@ -317,6 +317,9 @@ struct BattleSetup
     std::string opponentName = "Opponent";
     Spec opponentSpec = Spec::Jungle;
     Style opponentStyle = Style::Balanced;
+    int opponentMaxHp = -1;
+    int opponentMaxFocus = -1;
+    int opponentBasePowerBonus = 0;
 };
 
 struct BattleRewardResult

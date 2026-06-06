@@ -3,15 +3,19 @@ extends Node2D
 const MAP_SIZE := Vector2(1600, 1100)
 const PLAYER_SPEED := 210.0
 const INTERACT_DISTANCE := 82.0
+const BUILDING_INTERACT_DISTANCE := 190.0
 
 @onready var player_body: CharacterBody2D = $HumanPlayer
 @onready var player_sprite: Sprite2D = $HumanPlayer/Sprite
 @onready var npc_root: Node2D = $NPCs
+@onready var lan_cafe: Node2D = $Buildings/LanCafe
+@onready var major_hall: Node2D = $Buildings/MajorHall
 
 var player_frame_timer := 0.0
 var npc_frame_timer := 0.0
 var battle_triggered := false
 var nearest_battle_npc: Node2D
+var nearest_interaction := {}
 var npc_base_rows: Dictionary = {}
 var prompt_panel: PanelContainer
 var prompt_label: Label
@@ -49,8 +53,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept") and nearest_battle_npc != null and not trainer_panel.visible:
-		_start_npc_battle(nearest_battle_npc)
+	if event.is_action_pressed("ui_accept") and not nearest_interaction.is_empty() and not trainer_panel.visible:
+		_use_nearest_interaction()
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_M:
@@ -188,7 +192,8 @@ func _panel_style(color: Color, border: Color, radius: int) -> StyleBoxFlat:
 
 func _update_nearest_battle_npc() -> void:
 	nearest_battle_npc = null
-	var nearest_distance := INTERACT_DISTANCE
+	nearest_interaction.clear()
+	var nearest_distance := BUILDING_INTERACT_DISTANCE + 1.0
 	for npc in npc_root.get_children():
 		if not (npc is Node2D) or not npc.is_in_group("battle_npc"):
 			continue
@@ -196,16 +201,44 @@ func _update_nearest_battle_npc() -> void:
 			continue
 
 		var distance := player_body.global_position.distance_to(npc.global_position)
-		if distance < nearest_distance:
+		if distance <= INTERACT_DISTANCE and distance < nearest_distance:
 			nearest_distance = distance
 			nearest_battle_npc = npc
+			nearest_interaction = {"type": "battle_npc", "node": npc, "label": "Press Enter to battle %s" % GameState.get_npc_display_name(String(npc.name))}
 
-	if nearest_battle_npc == null:
+	var recovery_distance := player_body.global_position.distance_to(lan_cafe.global_position)
+	if recovery_distance <= BUILDING_INTERACT_DISTANCE and recovery_distance < nearest_distance:
+		nearest_distance = recovery_distance
+		nearest_interaction = {"type": "recovery", "label": "Press Enter to recover at LAN CAFE"}
+
+	var tournament_distance := player_body.global_position.distance_to(major_hall.global_position)
+	if tournament_distance <= BUILDING_INTERACT_DISTANCE and tournament_distance < nearest_distance:
+		nearest_distance = tournament_distance
+		nearest_interaction = {"type": "tournament", "label": "Press Enter to enter MAJOR HALL tournament"}
+
+	if nearest_interaction.is_empty():
 		prompt_panel.visible = false
 		return
 
-	prompt_label.text = "Press Enter to battle %s" % GameState.get_npc_display_name(String(nearest_battle_npc.name))
+	prompt_label.text = String(nearest_interaction.get("label", "Press Enter"))
 	prompt_panel.visible = true
+
+
+func _use_nearest_interaction() -> void:
+	match String(nearest_interaction.get("type", "")):
+		"battle_npc":
+			var npc = nearest_interaction.get("node")
+			if npc is Node2D:
+				_start_npc_battle(npc)
+		"recovery":
+			prompt_label.text = GameState.recover_roster()
+			_refresh_trainer_menu()
+		"tournament":
+			battle_triggered = true
+			if GameState.prepare_tournament_battle(player_body.global_position):
+				get_tree().change_scene_to_file("res://battle.tscn")
+			else:
+				battle_triggered = false
 
 
 func _start_npc_battle(npc: Node2D) -> void:
@@ -255,6 +288,8 @@ func _format_trainer_text() -> String:
 	lines.push_back("")
 	lines.push_back("Last battle:")
 	lines.push_back("%s" % state.get("last_battle_summary", {}).get("text", "No battles yet."))
+	for message in state.get("last_battle_summary", {}).get("level_up_messages", []):
+		lines.push_back("%s" % message)
 	lines.push_back("")
 	lines.push_back("Roster:")
 
@@ -269,11 +304,10 @@ func _format_trainer_text() -> String:
 			player.get("spec", "Spec"),
 			player.get("rank", "Rookie"),
 		])
-		lines.push_back("  Level %s | XP %s/%s | Style %s" % [
+		lines.push_back("  Level %s | XP %s/%s" % [
 			player.get("level", 1),
 			player.get("xp", 0),
 			player.get("xp_required_for_next_level", 100),
-			player.get("style", "Balanced"),
 		])
 		lines.push_back("  HP %s/%s | Focus %s/%s" % [
 			player.get("current_hp", player.get("max_hp", 100)),

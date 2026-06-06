@@ -1,13 +1,19 @@
 extends Control
 
-const FIELD_COLOR := Color(0.56, 0.72, 0.55)
-const PANEL_COLOR := Color(0.94, 0.91, 0.78)
-const PANEL_BORDER := Color(0.20, 0.20, 0.18)
-const PLAYER_COLOR := Color(0.24, 0.43, 0.82)
-const OPPONENT_COLOR := Color(0.78, 0.28, 0.24)
+const FIELD_COLOR := Color(0.045, 0.055, 0.075)
+const PANEL_COLOR := Color(0.13, 0.15, 0.18)
+const PANEL_BORDER := Color(0.36, 0.62, 0.78)
+const PLAYER_COLOR := Color(0.14, 0.34, 0.74)
+const OPPONENT_COLOR := Color(0.78, 0.24, 0.28)
 const LOG_LINES := 5
 const PLAYER_AVATAR_PATH := "res://assets/players/avatars/portrait1.png"
 const OPPONENT_AVATAR_PATH := "res://assets/players/avatars/portrait2.png"
+const LOG_COLOR_ATTACK := "#ff6b4a"
+const LOG_COLOR_DEFENSE := "#5aa7ff"
+const LOG_COLOR_DAMAGE := "#ff934f"
+const LOG_COLOR_HP := "#5bd487"
+const LOG_COLOR_FOCUS := "#57d7ff"
+const LOG_COLOR_XP := "#f3d35b"
 
 var bridge: BattleBridge
 var opponent_name: Label
@@ -16,14 +22,16 @@ var opponent_hp: ProgressBar
 var opponent_hp_value: Label
 var opponent_focus: ProgressBar
 var opponent_focus_value: Label
+var opponent_status: Label
 var player_name: Label
 var player_meta: Label
 var player_hp: ProgressBar
 var player_hp_value: Label
 var player_focus: ProgressBar
 var player_focus_value: Label
+var player_status: Label
 var message_label: Label
-var log_label: Label
+var log_label: RichTextLabel
 var main_menu_grid: GridContainer
 var skill_grid: GridContainer
 var switch_label: Label
@@ -76,41 +84,55 @@ func _build_ui() -> void:
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
 
-	var opponent_platform := ColorRect.new()
-	opponent_platform.color = Color(0.78, 0.84, 0.62)
-	opponent_platform.anchor_left = 0.58
-	opponent_platform.anchor_top = 0.19
-	opponent_platform.anchor_right = 0.91
-	opponent_platform.anchor_bottom = 0.31
-	add_child(opponent_platform)
+	var stage_glow := ColorRect.new()
+	stage_glow.color = Color(0.08, 0.12, 0.16)
+	stage_glow.anchor_left = 0.07
+	stage_glow.anchor_top = 0.12
+	stage_glow.anchor_right = 0.93
+	stage_glow.anchor_bottom = 0.68
+	add_child(stage_glow)
 
-	var player_platform := ColorRect.new()
-	player_platform.color = Color(0.68, 0.80, 0.58)
-	player_platform.anchor_left = 0.09
-	player_platform.anchor_top = 0.57
-	player_platform.anchor_right = 0.42
-	player_platform.anchor_bottom = 0.70
-	add_child(player_platform)
+	var desk := ColorRect.new()
+	desk.color = Color(0.09, 0.095, 0.105)
+	desk.anchor_left = 0.31
+	desk.anchor_top = 0.44
+	desk.anchor_right = 0.69
+	desk.anchor_bottom = 0.58
+	add_child(desk)
+
+	var player_monitor := _make_monitor_block("PLAYER PC", PLAYER_COLOR)
+	player_monitor.anchor_left = 0.37
+	player_monitor.anchor_top = 0.25
+	player_monitor.anchor_right = 0.49
+	player_monitor.anchor_bottom = 0.48
+	add_child(player_monitor)
+
+	var opponent_monitor := _make_monitor_block("ENEMY PC", OPPONENT_COLOR)
+	opponent_monitor.anchor_left = 0.51
+	opponent_monitor.anchor_top = 0.25
+	opponent_monitor.anchor_right = 0.63
+	opponent_monitor.anchor_bottom = 0.48
+	add_child(opponent_monitor)
 
 	var opponent_sprite := _make_avatar_block(OPPONENT_AVATAR_PATH, OPPONENT_COLOR, "OPPONENT")
-	opponent_sprite.anchor_left = 0.68
-	opponent_sprite.anchor_top = 0.08
-	opponent_sprite.anchor_right = 0.82
-	opponent_sprite.anchor_bottom = 0.25
+	opponent_sprite.anchor_left = 0.73
+	opponent_sprite.anchor_top = 0.22
+	opponent_sprite.anchor_right = 0.88
+	opponent_sprite.anchor_bottom = 0.53
 	add_child(opponent_sprite)
 
 	var player_sprite := _make_avatar_block(PLAYER_AVATAR_PATH, PLAYER_COLOR, "PLAYER")
-	player_sprite.anchor_left = 0.18
-	player_sprite.anchor_top = 0.41
-	player_sprite.anchor_right = 0.32
-	player_sprite.anchor_bottom = 0.61
+	player_sprite.anchor_left = 0.12
+	player_sprite.anchor_top = 0.22
+	player_sprite.anchor_right = 0.27
+	player_sprite.anchor_bottom = 0.53
 	add_child(player_sprite)
 
 	var opponent_panel := _make_status_panel()
-	opponent_panel.anchor_left = 0.07
+	opponent_panel.anchor_left = 0.60
 	opponent_panel.anchor_top = 0.08
-	opponent_panel.anchor_right = 0.43
-	opponent_panel.anchor_bottom = 0.25
+	opponent_panel.anchor_right = 0.94
+	opponent_panel.anchor_bottom = 0.24
 	add_child(opponent_panel)
 	opponent_name = opponent_panel.get_node("Content/Name")
 	opponent_meta = opponent_panel.get_node("Content/Meta")
@@ -118,12 +140,13 @@ func _build_ui() -> void:
 	opponent_hp_value = opponent_panel.get_node("Content/HpRow/Value")
 	opponent_focus = opponent_panel.get_node("Content/FocusRow/Focus")
 	opponent_focus_value = opponent_panel.get_node("Content/FocusRow/Value")
+	opponent_status = opponent_panel.get_node("Content/Status")
 
 	var player_panel := _make_status_panel()
-	player_panel.anchor_left = 0.57
-	player_panel.anchor_top = 0.45
-	player_panel.anchor_right = 0.93
-	player_panel.anchor_bottom = 0.63
+	player_panel.anchor_left = 0.06
+	player_panel.anchor_top = 0.55
+	player_panel.anchor_right = 0.40
+	player_panel.anchor_bottom = 0.71
 	add_child(player_panel)
 	player_name = player_panel.get_node("Content/Name")
 	player_meta = player_panel.get_node("Content/Meta")
@@ -131,13 +154,14 @@ func _build_ui() -> void:
 	player_hp_value = player_panel.get_node("Content/HpRow/Value")
 	player_focus = player_panel.get_node("Content/FocusRow/Focus")
 	player_focus_value = player_panel.get_node("Content/FocusRow/Value")
+	player_status = player_panel.get_node("Content/Status")
 
 	var bottom := PanelContainer.new()
 	bottom.anchor_left = 0.035
 	bottom.anchor_top = 0.74
 	bottom.anchor_right = 0.965
 	bottom.anchor_bottom = 0.965
-	bottom.add_theme_stylebox_override("panel", _panel_style(Color(0.93, 0.90, 0.76), PANEL_BORDER, 10))
+	bottom.add_theme_stylebox_override("panel", _panel_style(Color(0.10, 0.11, 0.13), PANEL_BORDER, 10))
 	add_child(bottom)
 
 	var bottom_split := HBoxContainer.new()
@@ -154,14 +178,18 @@ func _build_ui() -> void:
 	message_label.text = ""
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	message_label.add_theme_font_size_override("font_size", 34)
+	message_label.add_theme_color_override("font_color", Color(0.92, 0.95, 0.96))
 	message_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	text_box.add_child(message_label)
 
-	log_label = Label.new()
+	log_label = RichTextLabel.new()
 	log_label.text = ""
+	log_label.bbcode_enabled = true
+	log_label.fit_content = true
+	log_label.scroll_active = false
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	log_label.add_theme_font_size_override("font_size", 20)
-	log_label.modulate = Color(0.22, 0.22, 0.20)
+	log_label.add_theme_color_override("default_color", Color(0.84, 0.88, 0.90))
 	text_box.add_child(log_label)
 
 	var action_box := VBoxContainer.new()
@@ -231,12 +259,13 @@ func _make_status_panel() -> PanelContainer:
 	var name_label := Label.new()
 	name_label.name = "Name"
 	name_label.add_theme_font_size_override("font_size", 26)
+	name_label.add_theme_color_override("font_color", Color(0.94, 0.97, 0.98))
 	content.add_child(name_label)
 
 	var meta_label := Label.new()
 	meta_label.name = "Meta"
 	meta_label.add_theme_font_size_override("font_size", 18)
-	meta_label.modulate = Color(0.25, 0.25, 0.23)
+	meta_label.add_theme_color_override("font_color", Color(0.62, 0.72, 0.80))
 	content.add_child(meta_label)
 
 	var hp_row := HBoxContainer.new()
@@ -248,6 +277,7 @@ func _make_status_panel() -> PanelContainer:
 	hp_label.text = "HP"
 	hp_label.custom_minimum_size = Vector2(58, 0)
 	hp_label.add_theme_font_size_override("font_size", 16)
+	hp_label.add_theme_color_override("font_color", Color(0.78, 0.96, 0.84))
 	hp_row.add_child(hp_label)
 
 	var hp_bar := ProgressBar.new()
@@ -262,6 +292,7 @@ func _make_status_panel() -> PanelContainer:
 	hp_value.custom_minimum_size = Vector2(88, 0)
 	hp_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hp_value.add_theme_font_size_override("font_size", 16)
+	hp_value.add_theme_color_override("font_color", Color(0.78, 0.96, 0.84))
 	hp_row.add_child(hp_value)
 
 	var focus_row := HBoxContainer.new()
@@ -273,6 +304,7 @@ func _make_status_panel() -> PanelContainer:
 	focus_label.text = "Focus"
 	focus_label.custom_minimum_size = Vector2(58, 0)
 	focus_label.add_theme_font_size_override("font_size", 16)
+	focus_label.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
 	focus_row.add_child(focus_label)
 
 	var focus_bar := ProgressBar.new()
@@ -287,7 +319,15 @@ func _make_status_panel() -> PanelContainer:
 	focus_value.custom_minimum_size = Vector2(88, 0)
 	focus_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	focus_value.add_theme_font_size_override("font_size", 16)
+	focus_value.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
 	focus_row.add_child(focus_value)
+
+	var status_label := Label.new()
+	status_label.name = "Status"
+	status_label.text = "Status: none"
+	status_label.add_theme_font_size_override("font_size", 15)
+	status_label.add_theme_color_override("font_color", Color(0.93, 0.82, 0.45))
+	content.add_child(status_label)
 	return panel
 
 
@@ -314,6 +354,30 @@ func _make_avatar_block(texture_path: String, color: Color, label_text: String) 
 		label.add_theme_font_size_override("font_size", 24)
 		label.add_theme_color_override("font_color", Color.WHITE)
 		panel.add_child(label)
+	return panel
+
+
+func _make_monitor_block(label_text: String, accent: Color) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.04, 0.05), accent, 8))
+
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 6)
+	panel.add_child(content)
+
+	var screen := ColorRect.new()
+	screen.color = Color(0.05, 0.10, 0.13)
+	screen.custom_minimum_size = Vector2(160, 96)
+	screen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	screen.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(screen)
+
+	var label := Label.new()
+	label.text = label_text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 15)
+	label.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0))
+	content.add_child(label)
 	return panel
 
 
@@ -409,12 +473,24 @@ func _refresh_skills() -> void:
 
 	for skill in bridge.get_available_skills():
 		var button := Button.new()
-		button.text = "%s\nPWR %s / FOCUS %s" % [skill.get("name", "Skill"), skill.get("power", 0), skill.get("focus_cost", 0)]
-		button.custom_minimum_size = Vector2(270, 86)
+		button.text = _format_skill_button(skill)
+		button.custom_minimum_size = Vector2(270, 112)
 		button.disabled = input_locked
 		button.pressed.connect(_on_skill_pressed.bind(skill.get("id", "")))
 		skill_grid.add_child(button)
 		skill_buttons.push_back(button)
+
+
+func _format_skill_button(skill: Dictionary) -> String:
+	var description := String(skill.get("description", ""))
+	if description.length() > 58:
+		description = description.substr(0, 55) + "..."
+	return "%s\nPWR %s | Focus %s\n%s" % [
+		skill.get("name", "Skill"),
+		skill.get("power", 0),
+		skill.get("focus_cost", 0),
+		description,
+	]
 
 
 func _refresh_items() -> void:
@@ -585,7 +661,7 @@ func _apply_event(event: Dictionary) -> void:
 			_push_log(message_label.text)
 		"skill_started":
 			var actor := _display_actor(event.get("actor", "none"))
-			_set_message("%s used %s." % [actor, event.get("skill_id", "a skill")])
+			_set_message("%s used %s." % [actor, _format_skill_id(String(event.get("skill_id", "a skill")))])
 			_push_log(message_label.text)
 		"focus_changed":
 			_animate_focus(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0))
@@ -599,7 +675,7 @@ func _apply_event(event: Dictionary) -> void:
 			_animate_hp(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0))
 			_push_log("%s recovered %s HP." % [_display_actor(event.get("actor", "none")), event.get("amount", 0)])
 		"status_applied":
-			_push_log("A status effect changed momentum.")
+			_push_log(_format_status_log(event))
 		"skill_xp_gained":
 			_defer_progress_event(event)
 		"skill_leveled_up":
@@ -608,23 +684,24 @@ func _apply_event(event: Dictionary) -> void:
 			_set_message("The battle is over.")
 			_push_log("Winner: %s" % event.get("winner", "none"))
 		"reward_granted":
-			_push_log("Battle XP awarded.")
+			var reward: Dictionary = event.get("reward", {})
+			_push_log("Team earned %s battle XP." % reward.get("total_xp", 0))
 
 
 func _update_state(state: Dictionary) -> void:
 	var player = state.get("player", {})
 	var opponent = state.get("opponent", {})
-	_update_status(player_name, player_meta, player_hp, player_hp_value, player_focus, player_focus_value, player, "Your Player")
-	_update_status(opponent_name, opponent_meta, opponent_hp, opponent_hp_value, opponent_focus, opponent_focus_value, opponent, "Opponent")
+	_update_status(player_name, player_meta, player_hp, player_hp_value, player_focus, player_focus_value, player_status, player, "Your Player")
+	_update_status(opponent_name, opponent_meta, opponent_hp, opponent_hp_value, opponent_focus, opponent_focus_value, opponent_status, opponent, "Opponent")
 
 
-func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, hp_value: Label, focus_bar: ProgressBar, focus_value: Label, data: Dictionary, fallback_name: String) -> void:
+func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, hp_value: Label, focus_bar: ProgressBar, focus_value: Label, status_label: Label, data: Dictionary, fallback_name: String) -> void:
 	var max_hp := int(data.get("max_hp", 1))
 	var hp := int(data.get("hp", 0))
 	var max_focus := int(data.get("max_focus", 1))
 	var focus := int(data.get("focus", 0))
 	name_label.text = "%s" % data.get("name", fallback_name)
-	meta_label.text = "%s / %s" % [data.get("spec", "Spec"), data.get("style", "Style")]
+	meta_label.text = "%s" % data.get("spec", "Spec")
 	hp_bar.max_value = max(1, max_hp)
 	hp_bar.value = clamp(hp, 0, max_hp)
 	hp_bar.tooltip_text = "HP %s/%s" % [hp, max_hp]
@@ -633,6 +710,7 @@ func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, h
 	focus_bar.value = clamp(focus, 0, max_focus)
 	focus_bar.tooltip_text = "Focus %s/%s" % [focus, max_focus]
 	focus_value.text = "%s/%s" % [focus, max_focus]
+	status_label.text = _format_status_indicator(data.get("status", {}))
 
 
 func _animate_hp(actor: String, old_value: int, new_value: int) -> void:
@@ -659,10 +737,25 @@ func _push_log(text: String) -> void:
 	if text.is_empty():
 		return
 
-	log_entries.push_back(text)
+	log_entries.push_back(_colorize_log(text))
 	if log_entries.size() > LOG_LINES:
 		log_entries.remove_at(0)
 	log_label.text = _join_strings(log_entries, "\n")
+
+
+func _colorize_log(text: String) -> String:
+	var output := text
+	output = output.replace("attack", "[color=%s]attack[/color]" % LOG_COLOR_ATTACK)
+	output = output.replace("Attack", "[color=%s]Attack[/color]" % LOG_COLOR_ATTACK)
+	output = output.replace("defense", "[color=%s]defense[/color]" % LOG_COLOR_DEFENSE)
+	output = output.replace("Defense", "[color=%s]Defense[/color]" % LOG_COLOR_DEFENSE)
+	output = output.replace("damage", "[color=%s]damage[/color]" % LOG_COLOR_DAMAGE)
+	output = output.replace("Damage", "[color=%s]Damage[/color]" % LOG_COLOR_DAMAGE)
+	output = output.replace("HP", "[color=%s]HP[/color]" % LOG_COLOR_HP)
+	output = output.replace("Focus", "[color=%s]Focus[/color]" % LOG_COLOR_FOCUS)
+	output = output.replace("XP", "[color=%s]XP[/color]" % LOG_COLOR_XP)
+	output = output.replace("LEVEL UP", "[color=%s]LEVEL UP[/color]" % LOG_COLOR_XP)
+	return output
 
 
 func _display_actor(actor: String) -> String:
@@ -671,6 +764,50 @@ func _display_actor(actor: String) -> String:
 	if actor == "opponent":
 		return "Opponent"
 	return "Someone"
+
+
+func _format_status_log(event: Dictionary) -> String:
+	var actor := _display_actor(String(event.get("actor", "none")))
+	var target := _display_actor(String(event.get("target", "none")))
+	var amount := int(event.get("amount", 0))
+	match String(event.get("effect", "none")):
+		"attack_modifier":
+			if amount >= 0:
+				return "%s boosted attack pressure by %s%%." % [target, amount]
+			return "%s attack pressure fell by %s%%." % [target, abs(amount)]
+		"defense_modifier":
+			if amount >= 0:
+				return "%s reduced incoming damage by %s%%." % [target, amount]
+			return "%s became exposed and takes %s%% more damage." % [target, abs(amount)]
+	return "%s changed %s's battle state." % [actor, target]
+
+
+func _format_status_indicator(status: Dictionary) -> String:
+	var entries: Array[String] = []
+	var attack_percent := int(status.get("attack_modifier_percent", 0))
+	var attack_hits := int(status.get("attack_modifier_hits", 0))
+	var defense_percent := int(status.get("defense_modifier_percent", 0))
+	var defense_hits := int(status.get("defense_modifier_hits", 0))
+
+	if attack_percent != 0 and attack_hits > 0:
+		entries.push_back("%s ATK %s%% x%s" % [_status_marker(attack_percent), _signed_value(attack_percent), attack_hits])
+	if defense_percent != 0 and defense_hits > 0:
+		entries.push_back("%s DEF %s%% x%s" % [_status_marker(defense_percent), _signed_value(defense_percent), defense_hits])
+	if entries.is_empty():
+		return "Status: none"
+	return _join_strings(entries, "  ")
+
+
+func _status_marker(value: int) -> String:
+	if value > 0:
+		return "BUFF"
+	return "DEBUFF"
+
+
+func _signed_value(value: int) -> String:
+	if value > 0:
+		return "+%s" % value
+	return "%s" % value
 
 
 func _set_buttons_disabled(disabled: bool) -> void:
@@ -714,7 +851,7 @@ func _flush_deferred_progress_log() -> void:
 	for skill_name in deferred_skill_xp.keys():
 		_push_log("%s gained %s skill XP." % [skill_name, deferred_skill_xp[skill_name]])
 	for skill_name in deferred_skill_levels.keys():
-		_push_log("%s reached Lv%s." % [skill_name, deferred_skill_levels[skill_name]])
+		_push_log("LEVEL UP: %s reached Lv%s." % [skill_name, deferred_skill_levels[skill_name]])
 	deferred_skill_xp.clear()
 	deferred_skill_levels.clear()
 
