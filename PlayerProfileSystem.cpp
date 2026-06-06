@@ -49,20 +49,28 @@ PlayerProfileState PlayerProfileSystem::CreateStarter(
     {
         return playerProfile;
     }
+    playerProfile.traitId = specData->defaultTraitId;
 
-    for (const std::string& skillId : specData->skillIds)
+    const std::vector<std::string> starterSkillSuffixes = {
+        "-basic",
+        "-consistent",
+        "-disrupt",
+        "-setup",
+    };
+
+    for (const std::string& suffix : starterSkillSuffixes)
     {
-        const Skill* skill = data_.FindSkill(skillId);
-        if (skill == nullptr
-            || (skill->requiredStyle.has_value() && skill->requiredStyle.value() != Style::Balanced))
+        for (const std::string& skillId : specData->skillIds)
         {
-            continue;
-        }
+            if (skillId.size() < suffix.size()
+                || skillId.compare(skillId.size() - suffix.size(), suffix.size(), suffix) != 0
+                || data_.FindSkill(skillId) == nullptr)
+            {
+                continue;
+            }
 
-        playerProfile.learnedSkillIds.push_back(skillId);
-        playerProfile.activeSkillIds.push_back(skillId);
-        if (static_cast<int>(playerProfile.activeSkillIds.size()) >= PlayerProfileBalance::StartingSkillCount)
-        {
+            playerProfile.learnedSkillIds.push_back(skillId);
+            playerProfile.activeSkillIds.push_back(skillId);
             break;
         }
     }
@@ -247,6 +255,15 @@ PassiveBonuses PlayerProfileSystem::GetPassiveBonusesForRank(CareerRank rank) co
     return bonuses;
 }
 
+PassiveBonuses PlayerProfileSystem::GetPassiveBonusesForLevel(int level) const
+{
+    const int safeLevel = std::max(1, level);
+    PassiveBonuses bonuses = GetPassiveBonusesForRank(GetRankForLevel(safeLevel));
+    bonuses.maxHpBonus += (safeLevel - 1) * PlayerProfileBalance::MaxHpBonusPerLevel;
+    bonuses.basePowerBonus += (safeLevel - 1) / PlayerProfileBalance::BasePowerBonusLevelInterval;
+    return bonuses;
+}
+
 void PlayerProfileSystem::RefreshXpRequirement(PlayerProfileState& playerProfile) const
 {
     playerProfile.xpRequiredForNextLevel = GetXpRequiredForLevel(playerProfile.level);
@@ -255,5 +272,5 @@ void PlayerProfileSystem::RefreshXpRequirement(PlayerProfileState& playerProfile
 void PlayerProfileSystem::RefreshRank(PlayerProfileState& playerProfile) const
 {
     playerProfile.rank = GetRankForLevel(playerProfile.level);
-    playerProfile.passiveBonuses = GetPassiveBonusesForRank(playerProfile.rank);
+    playerProfile.passiveBonuses = GetPassiveBonusesForLevel(playerProfile.level);
 }

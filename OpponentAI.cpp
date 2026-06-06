@@ -24,9 +24,8 @@ SkillProgress* OpponentAI::SelectSkill(
     {
         const Skill* definition = data_.FindSkill(progress.skillId);
         if (definition != nullptr
-            && skills_.IsAvailableForStyle(*definition, opponent.style)
             && IsUsefulSkill(*definition, opponent, opponentStatus, player, playerStatus)
-            && rules_.GetFocusCost(*definition, progress) <= opponent.focus)
+            && rules_.GetFocusCost(*definition, progress, opponent) <= opponent.focus)
         {
             affordableSkills.push_back(&progress);
         }
@@ -53,7 +52,7 @@ bool OpponentAI::IsUsefulSkill(
     (void)player;
 
     // The initial AI is deliberately simple. It avoids pure utility actions
-    // when their result is already active, but it does not switch styles.
+    // when their result is already active.
     if (definition.power > 0 || definition.effectType == SkillEffectType::None)
     {
         return true;

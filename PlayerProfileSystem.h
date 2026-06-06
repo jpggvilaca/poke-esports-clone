@@ -18,6 +18,8 @@ namespace PlayerProfileBalance
     inline constexpr int ProRankLevel = 10;
     inline constexpr int EliteRankLevel = 15;
     inline constexpr int WorldClassRankLevel = 20;
+    inline constexpr int MaxHpBonusPerLevel = 2;
+    inline constexpr int BasePowerBonusLevelInterval = 3;
 }
 
 // PlayerProfileSystem owns rules for one controlled esports player: XP,
@@ -42,6 +44,7 @@ public:
     int GetXpRequiredForLevel(int level) const;
     CareerRank GetRankForLevel(int level) const;
     PassiveBonuses GetPassiveBonusesForRank(CareerRank rank) const;
+    PassiveBonuses GetPassiveBonusesForLevel(int level) const;
 
 private:
     void RefreshXpRequirement(PlayerProfileState& playerProfile) const;

@@ -39,6 +39,7 @@ private:
     godot::Dictionary result_to_dictionary(const BattleActionResult& result) const;
     godot::Dictionary reward_to_dictionary(const BattleRewardResult& reward) const;
     godot::Dictionary passive_bonuses_to_dictionary(const PassiveBonuses& bonuses) const;
+    void add_trait_fields(godot::Dictionary& dictionary, const std::string& trait_id) const;
     godot::Dictionary player_profile_to_dictionary(const PlayerProfileState& player_profile) const;
     godot::Dictionary profile_result_to_dictionary(
         const ProfileCommandResult& result,
@@ -46,7 +47,6 @@ private:
     PlayerProfileState player_profile_from_dictionary(const godot::Dictionary& player_profile) const;
     BattleSetup setup_from_dictionary(const godot::Dictionary& setup) const;
     Spec spec_from_string(const godot::String& value) const;
-    Style style_from_string(const godot::String& value) const;
     godot::String actor_to_string(BattleActor actor) const;
     godot::String winner_to_string(BattleWinner winner) const;
     godot::String event_type_to_string(BattleEventType type) const;

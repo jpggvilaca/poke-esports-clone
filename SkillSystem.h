@@ -16,8 +16,10 @@ public:
         const BattleRules& rules,
         const ProgressionSystem& progression);
 
-    bool IsAvailableForStyle(const Skill& definition, Style style) const;
-    SkillView CreateSkillView(const Skill& definition, const SkillProgress& progress) const;
+    SkillView CreateSkillView(
+        const Skill& definition,
+        const SkillProgress& progress,
+        const Competitor& user) const;
     SkillUseResult UseSkill(
         BattleActor actor,
         Competitor& attacker,

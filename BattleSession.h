@@ -23,7 +23,6 @@ public:
 
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId);
-    BattleActionResult ChangePlayerStyle(Style style);
     BattleActionResult SwitchPlayer(int playerIndex);
 
     BattleState GetState() const;
@@ -35,7 +34,6 @@ private:
         const std::string& name,
         GameType gameType,
         Spec spec,
-        Style style,
         const PassiveBonuses& bonuses) const;
     Competitor CreateCompetitor(const BattleSetup::PlayerSlot& slot, GameType gameType) const;
     BattleActionResult RejectAction(SimulationError errorCode, const std::string& error) const;

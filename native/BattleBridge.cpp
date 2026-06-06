@@ -46,12 +46,10 @@ Dictionary BattleBridge::start_demo_battle()
     player.profileIndex = 1;
     player.name = "Human Trainer";
     player.spec = Spec::Top;
-    player.style = Style::Balanced;
     setup.playerTeam.push_back(player);
     setup.activePlayerIndex = 0;
     setup.opponentName = "Opponent";
     setup.opponentSpec = Spec::Jungle;
-    setup.opponentStyle = Style::Balanced;
 
     last_result_ = session_->StartBattle(setup);
     return result_to_dictionary(last_result_);
@@ -139,7 +137,7 @@ Dictionary BattleBridge::competitor_to_dictionary(const CompetitorView& competit
     dictionary["profile_index"] = competitor.profileIndex;
     dictionary["name"] = String(competitor.name.c_str());
     dictionary["spec"] = String(ToString(competitor.spec).c_str());
-    dictionary["style"] = String(ToString(competitor.style).c_str());
+    add_trait_fields(dictionary, competitor.traitId);
     dictionary["hp"] = competitor.hp;
     dictionary["max_hp"] = competitor.maxHp;
     dictionary["focus"] = competitor.focus;
@@ -175,12 +173,15 @@ Dictionary BattleBridge::skill_to_dictionary(const SkillView& skill) const
     dictionary["id"] = String(skill.id.c_str());
     dictionary["name"] = String(skill.name.c_str());
     dictionary["description"] = String(skill.description.c_str());
+    dictionary["tone"] = String(ToString(skill.tone).c_str());
     dictionary["power"] = skill.power;
     dictionary["focus_cost"] = skill.focusCost;
     dictionary["accuracy"] = skill.accuracy;
     dictionary["level"] = skill.level;
     dictionary["xp"] = skill.xp;
     dictionary["effect"] = effect_to_string(skill.effectType);
+    dictionary["effect_value"] = skill.effectValue;
+    dictionary["effect_uses"] = skill.effectUses;
     return dictionary;
 }
 
@@ -191,7 +192,6 @@ Dictionary BattleBridge::event_to_dictionary(const BattleEvent& event) const
     dictionary["actor"] = actor_to_string(event.actor);
     dictionary["target"] = actor_to_string(event.target);
     dictionary["skill_id"] = String(event.skillId.c_str());
-    dictionary["style"] = String(ToString(event.style).c_str());
     dictionary["old_player_index"] = event.oldPlayerIndex;
     dictionary["new_player_index"] = event.newPlayerIndex;
     dictionary["player_name"] = String(event.playerName.c_str());
@@ -254,11 +254,20 @@ Dictionary BattleBridge::passive_bonuses_to_dictionary(const PassiveBonuses& bon
     return dictionary;
 }
 
+void BattleBridge::add_trait_fields(Dictionary& dictionary, const std::string& trait_id) const
+{
+    const TraitDefinition* trait = data_.FindTrait(trait_id);
+    dictionary["trait_id"] = trait == nullptr ? String("") : String(trait->id.c_str());
+    dictionary["trait_name"] = trait == nullptr ? String("") : String(trait->name.c_str());
+    dictionary["trait_description"] = trait == nullptr ? String("") : String(trait->description.c_str());
+}
+
 Dictionary BattleBridge::player_profile_to_dictionary(const PlayerProfileState& player_profile) const
 {
     Dictionary dictionary;
     dictionary["name"] = String(player_profile.name.c_str());
     dictionary["spec"] = String(ToString(player_profile.spec).c_str());
+    add_trait_fields(dictionary, player_profile.traitId);
     dictionary["rank"] = String(ToString(player_profile.rank).c_str());
     dictionary["level"] = player_profile.level;
     dictionary["xp"] = player_profile.xp;
@@ -309,6 +318,10 @@ PlayerProfileState BattleBridge::player_profile_from_dictionary(const Dictionary
     player_profile.spec = player_profile_dictionary.has("spec")
         ? spec_from_string(String(player_profile_dictionary["spec"]))
         : Spec::Top;
+    if (player_profile_dictionary.has("trait_id"))
+    {
+        player_profile.traitId = std::string(String(player_profile_dictionary["trait_id"]).utf8().get_data());
+    }
     player_profile.level = player_profile_dictionary.has("level")
         ? std::max(1, static_cast<int>(player_profile_dictionary["level"]))
         : 1;
@@ -339,7 +352,12 @@ PlayerProfileState BattleBridge::player_profile_from_dictionary(const Dictionary
 
     PlayerProfileSystem profiles(data_);
     player_profile.rank = profiles.GetRankForLevel(player_profile.level);
-    player_profile.passiveBonuses = profiles.GetPassiveBonusesForRank(player_profile.rank);
+    player_profile.passiveBonuses = profiles.GetPassiveBonusesForLevel(player_profile.level);
+    if (data_.FindTrait(player_profile.traitId) == nullptr)
+    {
+        const SpecData* spec_data = data_.FindSpec(player_profile.spec);
+        player_profile.traitId = spec_data == nullptr ? "" : spec_data->defaultTraitId;
+    }
     return player_profile;
 }
 
@@ -359,10 +377,9 @@ BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictiona
     {
         setup.opponentSpec = spec_from_string(String(setup_dictionary["opponent_spec"]));
     }
-
-    if (setup_dictionary.has("opponent_style"))
+    if (setup_dictionary.has("opponent_trait_id"))
     {
-        setup.opponentStyle = style_from_string(String(setup_dictionary["opponent_style"]));
+        setup.opponentTraitId = std::string(String(setup_dictionary["opponent_trait_id"]).utf8().get_data());
     }
 
     if (setup_dictionary.has("opponent_hp"))
@@ -399,9 +416,10 @@ BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictiona
         slot.spec = player_dictionary.has("spec")
             ? spec_from_string(String(player_dictionary["spec"]))
             : Spec::Top;
-        slot.style = player_dictionary.has("style")
-            ? style_from_string(String(player_dictionary["style"]))
-            : Style::Balanced;
+        if (player_dictionary.has("trait_id"))
+        {
+            slot.traitId = std::string(String(player_dictionary["trait_id"]).utf8().get_data());
+        }
         slot.currentHp = player_dictionary.has("current_hp")
             ? static_cast<int>(player_dictionary["current_hp"])
             : -1;
@@ -464,14 +482,6 @@ Spec BattleBridge::spec_from_string(const String& value) const
     return Spec::Top;
 }
 
-Style BattleBridge::style_from_string(const String& value) const
-{
-    const std::string text = std::string(value.utf8().get_data());
-    if (text == "Aggressive" || text == "aggressive") return Style::Aggressive;
-    if (text == "Defensive" || text == "defensive") return Style::Defensive;
-    return Style::Balanced;
-}
-
 String BattleBridge::actor_to_string(BattleActor actor) const
 {
     switch (actor)
@@ -501,7 +511,6 @@ String BattleBridge::event_type_to_string(BattleEventType type) const
     switch (type)
     {
     case BattleEventType::BattleStarted: return "battle_started";
-    case BattleEventType::StyleChanged: return "style_changed";
     case BattleEventType::PlayerSwitched: return "player_switched";
     case BattleEventType::SkillStarted: return "skill_started";
     case BattleEventType::FocusChanged: return "focus_changed";
@@ -527,16 +536,12 @@ String BattleBridge::error_to_string(SimulationError error) const
     case SimulationError::BattleNotStarted: return "battle_not_started";
     case SimulationError::BattleAlreadyFinished: return "battle_already_finished";
     case SimulationError::UnknownSkill: return "unknown_skill";
-    case SimulationError::SkillUnavailableForStyle: return "skill_unavailable_for_style";
     case SimulationError::InsufficientFocus: return "insufficient_focus";
     case SimulationError::UnknownGameType: return "unknown_game_type";
     case SimulationError::BattleNeedsPlayerProfile: return "battle_needs_player_profile";
     case SimulationError::UnknownSpec: return "unknown_spec";
     case SimulationError::UnknownPlayerProfileSpec: return "unknown_player_profile_spec";
-    case SimulationError::UnknownStyle: return "unknown_style";
-    case SimulationError::UnknownPlayerProfileStyle: return "unknown_player_profile_style";
     case SimulationError::UnknownActivePlayerProfile: return "unknown_active_player_profile";
-    case SimulationError::StyleAlreadyActive: return "style_already_active";
     case SimulationError::UnknownPlayerProfile: return "unknown_player_profile";
     case SimulationError::PlayerProfileAlreadyActive: return "player_profile_already_active";
     case SimulationError::PlayerProfileCannotPlay: return "player_profile_cannot_play";

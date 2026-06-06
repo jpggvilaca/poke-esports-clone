@@ -26,6 +26,7 @@ namespace Balance
     inline constexpr int SkillLevelUpPower = 4;
     inline constexpr int SkillLevelUpFocusCost = 2;
     inline constexpr int SkillLevelUpEffectValue = 4;
+    inline constexpr int ClutchLowHpThresholdPercent = 35;
     inline constexpr double AdvantageModifier = 1.05;
     inline constexpr double DisadvantageModifier = 0.95;
     inline constexpr double NeutralModifier = 1.0;
@@ -37,10 +38,12 @@ public:
     SimulationData();
 
     const Skill* FindSkill(const std::string& id) const;
+    const TraitDefinition* FindTrait(const std::string& id) const;
     const SpecData* FindSpec(Spec spec) const;
     const std::vector<SpecData>& GetSpecs() const;
 
 private:
     std::vector<Skill> skills_;
+    std::vector<TraitDefinition> traits_;
     std::vector<SpecData> specs_;
 };

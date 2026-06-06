@@ -21,13 +21,6 @@ namespace
             || spec == Spec::Adc
             || spec == Spec::Support;
     }
-
-    bool IsKnown(Style style)
-    {
-        return style == Style::Aggressive
-            || style == Style::Defensive
-            || style == Style::Balanced;
-    }
 }
 
 BattleSession::BattleSession(const SimulationData& data)
@@ -67,16 +60,6 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         {
             return RejectAction(SimulationError::UnknownPlayerProfileSpec, "Unknown player profile spec.");
         }
-
-        if (!IsKnown(slot.style))
-        {
-            return RejectAction(SimulationError::UnknownPlayerProfileStyle, "Unknown player profile style.");
-        }
-    }
-
-    if (!IsKnown(setup.opponentStyle))
-    {
-        return RejectAction(SimulationError::UnknownStyle, "Unknown style.");
     }
 
     if (setup.activePlayerIndex < 0
@@ -102,8 +85,11 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         setup.opponentName,
         setup.gameType,
         setup.opponentSpec,
-        setup.opponentStyle,
         {});
+    if (!setup.opponentTraitId.empty() && data_.FindTrait(setup.opponentTraitId) != nullptr)
+    {
+        opponent_.traitId = setup.opponentTraitId;
+    }
     if (setup.opponentMaxHp > 0)
     {
         opponent_.maxHp = std::max(1, setup.opponentMaxHp);
@@ -153,12 +139,7 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
         return RejectAction(SimulationError::UnknownSkill, "Unknown skill.");
     }
 
-    if (!skills_.IsAvailableForStyle(*definition, player.style))
-    {
-        return RejectAction(SimulationError::SkillUnavailableForStyle, "That skill is not available for the active style.");
-    }
-
-    if (rules_.GetFocusCost(*definition, *progress) > player.focus)
+    if (rules_.GetFocusCost(*definition, *progress, player) > player.focus)
     {
         return RejectAction(SimulationError::InsufficientFocus, "Not enough focus.");
     }
@@ -183,47 +164,6 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId)
         FinishBattleIfNeeded(result);
     }
 
-    result.finalState = GetState();
-    return result;
-}
-
-BattleActionResult BattleSession::ChangePlayerStyle(Style style)
-{
-    if (!started_)
-    {
-        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
-    }
-
-    if (finished_)
-    {
-        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
-    }
-
-    if (!IsKnown(style))
-    {
-        return RejectAction(SimulationError::UnknownStyle, "Unknown style.");
-    }
-
-    if (style == ActivePlayer().style)
-    {
-        return RejectAction(SimulationError::StyleAlreadyActive, "That style is already active.");
-    }
-
-    ActivePlayer().style = style;
-
-    BattleActionResult result;
-    result.accepted = true;
-    result.styleChanged = true;
-    result.newStyle = style;
-    BattleEvent event;
-    event.type = BattleEventType::StyleChanged;
-    event.actor = BattleActor::Player;
-    event.style = style;
-    result.events.push_back(event);
-
-    // Switching style is a tactical choice, not a free menu operation.
-    ResolveOpponentTurn(result);
-    FinishBattleIfNeeded(result);
     result.finalState = GetState();
     return result;
 }
@@ -309,9 +249,9 @@ std::vector<SkillView> BattleSession::GetAvailablePlayerSkills() const
     for (const SkillProgress& progress : ActivePlayer().skills)
     {
         const Skill* definition = data_.FindSkill(progress.skillId);
-        if (definition != nullptr && skills_.IsAvailableForStyle(*definition, ActivePlayer().style))
+        if (definition != nullptr)
         {
-            skills.push_back(skills_.CreateSkillView(*definition, progress));
+            skills.push_back(skills_.CreateSkillView(*definition, progress, ActivePlayer()));
         }
     }
 
@@ -323,7 +263,6 @@ Competitor BattleSession::CreateCompetitor(
     const std::string& name,
     GameType gameType,
     Spec spec,
-    Style style,
     const PassiveBonuses& bonuses) const
 {
     Competitor competitor;
@@ -331,7 +270,11 @@ Competitor BattleSession::CreateCompetitor(
     competitor.name = name;
     competitor.gameType = gameType;
     competitor.spec = spec;
-    competitor.style = style;
+    const SpecData* specData = data_.FindSpec(spec);
+    if (specData != nullptr)
+    {
+        competitor.traitId = specData->defaultTraitId;
+    }
     competitor.hp = Balance::StartingMaxHp + bonuses.maxHpBonus;
     competitor.maxHp = Balance::StartingMaxHp + bonuses.maxHpBonus;
     competitor.focus = Balance::StartingMaxFocus;
@@ -339,7 +282,6 @@ Competitor BattleSession::CreateCompetitor(
     competitor.basePower = Balance::StartingBasePower + bonuses.basePowerBonus;
     competitor.counterDamageBonusPercent = bonuses.counterDamageBonusPercent;
 
-    const SpecData* specData = data_.FindSpec(spec);
     if (specData == nullptr)
     {
         return competitor;
@@ -365,11 +307,14 @@ Competitor BattleSession::CreateCompetitor(
         slot.name,
         gameType,
         slot.spec,
-        slot.style,
         slot.passiveBonuses);
     if (!slot.skills.empty())
     {
         competitor.skills = slot.skills;
+    }
+    if (!slot.traitId.empty() && data_.FindTrait(slot.traitId) != nullptr)
+    {
+        competitor.traitId = slot.traitId;
     }
     if (slot.currentHp >= 0)
     {
@@ -471,7 +416,13 @@ CompetitorView BattleSession::CreateCompetitorView(
     view.profileIndex = competitor.profileIndex;
     view.name = competitor.name;
     view.spec = competitor.spec;
-    view.style = competitor.style;
+    view.traitId = competitor.traitId;
+    const TraitDefinition* trait = data_.FindTrait(competitor.traitId);
+    if (trait != nullptr)
+    {
+        view.traitName = trait->name;
+        view.traitDescription = trait->description;
+    }
     view.hp = competitor.hp;
     view.maxHp = competitor.maxHp;
     view.focus = competitor.focus;

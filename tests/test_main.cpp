@@ -32,11 +32,6 @@ namespace
         return ToString(value);
     }
 
-    std::string ToText(Style value)
-    {
-        return ToString(value);
-    }
-
     std::string ToText(CareerRank value)
     {
         return ToString(value);
@@ -51,15 +46,11 @@ namespace
         case SimulationError::BattleNeedsPlayerProfile: return "BattleNeedsPlayerProfile";
         case SimulationError::UnknownSpec: return "UnknownSpec";
         case SimulationError::UnknownPlayerProfileSpec: return "UnknownPlayerProfileSpec";
-        case SimulationError::UnknownStyle: return "UnknownStyle";
-        case SimulationError::UnknownPlayerProfileStyle: return "UnknownPlayerProfileStyle";
         case SimulationError::UnknownActivePlayerProfile: return "UnknownActivePlayerProfile";
         case SimulationError::BattleNotStarted: return "BattleNotStarted";
         case SimulationError::BattleAlreadyFinished: return "BattleAlreadyFinished";
         case SimulationError::UnknownSkill: return "UnknownSkill";
-        case SimulationError::SkillUnavailableForStyle: return "SkillUnavailableForStyle";
         case SimulationError::InsufficientFocus: return "InsufficientFocus";
-        case SimulationError::StyleAlreadyActive: return "StyleAlreadyActive";
         case SimulationError::UnknownPlayerProfile: return "UnknownPlayerProfile";
         case SimulationError::PlayerProfileAlreadyActive: return "PlayerProfileAlreadyActive";
         case SimulationError::PlayerProfileCannotPlay: return "PlayerProfileCannotPlay";
@@ -83,7 +74,6 @@ namespace
         {
         case BattleEventType::None: return "None";
         case BattleEventType::BattleStarted: return "BattleStarted";
-        case BattleEventType::StyleChanged: return "StyleChanged";
         case BattleEventType::PlayerSwitched: return "PlayerSwitched";
         case BattleEventType::SkillStarted: return "SkillStarted";
         case BattleEventType::FocusChanged: return "FocusChanged";
@@ -193,6 +183,19 @@ namespace
         return false;
     }
 
+    Competitor MakeCompetitor(Spec spec, const std::string& traitId)
+    {
+        Competitor competitor;
+        competitor.spec = spec;
+        competitor.traitId = traitId;
+        competitor.hp = 100;
+        competitor.maxHp = 100;
+        competitor.focus = 50;
+        competitor.maxFocus = 50;
+        competitor.basePower = Balance::StartingBasePower;
+        return competitor;
+    }
+
     BattleSetup::PlayerSlot MakeBattleSlot(
         int profileIndex,
         const std::string& name,
@@ -203,7 +206,6 @@ namespace
         slot.profileIndex = profileIndex;
         slot.name = name;
         slot.spec = spec;
-        slot.style = Style::Balanced;
         slot.passiveBonuses.maxHpBonus = 10000;
         slot.passiveBonuses.basePowerBonus = 500;
         slot.skills.push_back({ basicSkillId, 80, 0 });
@@ -225,7 +227,25 @@ namespace
         test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(4), "starter learns four skills");
         test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(4), "starter equips four skills");
         test.ExpectEqual(player.learnedSkillIds[0], std::string("top-basic"), "starter loadout begins with the spec basic");
-        test.ExpectEqual(player.activeSkillIds[1], std::string("top-consistent"), "starter loadout favors balanced skills");
+        test.ExpectEqual(player.activeSkillIds[1], std::string("top-consistent"), "starter loadout includes a reliable damage skill");
+        test.ExpectEqual(player.traitId, std::string("clutch-player"), "top starter receives the top default trait");
+
+        test.ExpectEqual(
+            profiles.CreateStarter("Rookie Jungle", Spec::Jungle).traitId,
+            std::string("shotcaller"),
+            "jungle starter receives the jungle default trait");
+        test.ExpectEqual(
+            profiles.CreateStarter("Rookie Mid", Spec::Mid).traitId,
+            std::string("lane-bully"),
+            "mid starter receives the mid default trait");
+        test.ExpectEqual(
+            profiles.CreateStarter("Rookie ADC", Spec::Adc).traitId,
+            std::string("precision-carry"),
+            "ADC starter receives the ADC default trait");
+        test.ExpectEqual(
+            profiles.CreateStarter("Rookie Support", Spec::Support).traitId,
+            std::string("stabilizer"),
+            "support starter receives the support default trait");
 
         ProfileCommandResult equipUnknown = profiles.EquipSkill(player, "support-basic");
         test.Expect(!equipUnknown.accepted, "cannot equip a skill before learning it");
@@ -268,7 +288,74 @@ namespace
         test.ExpectEqual(player.xp, 0, "exact level-up XP leaves no remainder");
         test.ExpectEqual(player.xpRequiredForNextLevel, 300, "level 5 next XP requirement is refreshed");
         test.ExpectEqual(player.rank, CareerRank::Ladder, "level 5 promotes to Ladder");
-        test.ExpectEqual(player.passiveBonuses.maxHpBonus, 10, "Ladder grants the HP passive bonus");
+        test.ExpectEqual(player.passiveBonuses.maxHpBonus, 18, "level 5 combines level HP growth with Ladder HP bonus");
+        test.ExpectEqual(player.passiveBonuses.basePowerBonus, 1, "level 5 grants one base power bonus");
+    }
+
+    void TestTraitBattleRules(TestContext& test)
+    {
+        SimulationData data;
+        BattleRules rules(data);
+
+        const Skill* topPressure = data.FindSkill("top-pressure");
+        const Skill* midBasic = data.FindSkill("mid-basic");
+        const Skill* adcAllIn = data.FindSkill("adc-all-in");
+        const Skill* jungleDisrupt = data.FindSkill("jungle-disrupt");
+        const Skill* supportRecover = data.FindSkill("support-recover");
+        const Skill* supportGuard = data.FindSkill("support-guard");
+        test.Expect(topPressure != nullptr, "top pressure skill exists");
+        test.Expect(midBasic != nullptr, "mid basic skill exists");
+        test.Expect(adcAllIn != nullptr, "ADC all-in skill exists");
+        test.Expect(jungleDisrupt != nullptr, "jungle disrupt skill exists");
+        test.Expect(supportRecover != nullptr, "support recover skill exists");
+        test.Expect(supportGuard != nullptr, "support guard skill exists");
+
+        if (topPressure == nullptr
+            || midBasic == nullptr
+            || adcAllIn == nullptr
+            || jungleDisrupt == nullptr
+            || supportRecover == nullptr
+            || supportGuard == nullptr)
+        {
+            return;
+        }
+
+        SkillProgress progress{ topPressure->id, 1, 0 };
+        Competitor clutch = MakeCompetitor(Spec::Top, "clutch-player");
+        clutch.hp = 35;
+        test.ExpectEqual(rules.GetFocusCost(*topPressure, progress, clutch), 8, "clutch does not trigger at 35 percent HP");
+        clutch.hp = 34;
+        test.ExpectEqual(rules.GetFocusCost(*topPressure, progress, clutch), 6, "clutch discounts paid skills below 35 percent HP");
+
+        Competitor mid = MakeCompetitor(Spec::Mid, "lane-bully");
+        Competitor adc = MakeCompetitor(Spec::Adc, "precision-carry");
+        BattleStatus midStatus;
+        BattleStatus adcStatus;
+        DamageResult bullyDamage = rules.CalculateDamage(*midBasic, { midBasic->id, 1, 0 }, mid, midStatus, adc, adcStatus);
+        mid.traitId = "";
+        DamageResult normalDamage = rules.CalculateDamage(*midBasic, { midBasic->id, 1, 0 }, mid, midStatus, adc, adcStatus);
+        test.Expect(bullyDamage.amount > normalDamage.amount, "lane bully increases super-effective damage");
+
+        const double precisionAccuracy = rules.GetAccuracy(*adcAllIn, { adcAllIn->id, 1, 0 }, adc);
+        test.Expect(
+            precisionAccuracy > 0.86 && precisionAccuracy < 0.88,
+            "precision carry improves damaging accuracy");
+
+        Competitor jungle = MakeCompetitor(Spec::Jungle, "shotcaller");
+        test.ExpectEqual(
+            rules.GetEffectValue(*jungleDisrupt, { jungleDisrupt->id, 1, 0 }, jungle),
+            -24,
+            "shotcaller strengthens disruption effects");
+
+        Competitor support = MakeCompetitor(Spec::Support, "stabilizer");
+        test.ExpectEqual(
+            rules.GetEffectValue(*supportRecover, { supportRecover->id, 1, 0 }, support),
+            34,
+            "stabilizer strengthens healing effects");
+        test.ExpectEqual(
+            rules.GetEffectValue(*supportGuard, { supportGuard->id, 1, 0 }, support),
+            54,
+            "stabilizer strengthens positive defense effects");
     }
 
     void TestTrainerProfile(TestContext& test)
@@ -289,6 +376,7 @@ namespace
         test.Expect(trainer.GetActivePlayerProfile() != nullptr, "active player profile is available");
         test.ExpectEqual(trainer.GetActivePlayerLevel(), 1, "active player level starts at 1");
         test.ExpectEqual(trainer.GetActivePlayerProfile()->spec, Spec::Mid, "starter spec is added to the roster");
+        test.ExpectEqual(trainer.GetActivePlayerProfile()->traitId, std::string("lane-bully"), "trainer starter carries its spec trait");
         test.Expect(trainer.GetMutablePlayerProfile(99) == nullptr, "invalid roster index returns nullptr");
 
         ProfileCommandResult ratingLoss = trainer.AwardRating(-1200);
@@ -365,7 +453,6 @@ namespace
         setup.playerTeam.push_back(MakeBattleSlot(202, "Closer", Spec::Jungle, "jungle-basic"));
         setup.activePlayerIndex = 0;
         setup.opponentSpec = Spec::Mid;
-        setup.opponentStyle = Style::Balanced;
 
         BattleActionResult start = session.StartBattle(setup);
         test.Expect(start.accepted, "battle starts with a two-player team");
@@ -429,7 +516,6 @@ namespace
         setup.playerTeam.push_back(MakeBattleSlot(101, "Starter", Spec::Top, "top-basic"));
         setup.activePlayerIndex = 0;
         setup.opponentSpec = Spec::Mid;
-        setup.opponentStyle = Style::Balanced;
 
         first.StartBattle(setup);
         second.StartBattle(setup);
@@ -458,6 +544,7 @@ int main()
 {
     const std::vector<TestCase> tests = {
         { "PlayerProfileSystem", TestPlayerProfileSystem },
+        { "TraitBattleRules", TestTraitBattleRules },
         { "TrainerProfile", TestTrainerProfile },
         { "RatingSystem", TestRatingSystem },
         { "BattleSession switching and XP sharing", TestBattleSessionSwitchingAndXpShare },

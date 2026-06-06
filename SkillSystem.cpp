@@ -12,12 +12,10 @@ SkillSystem::SkillSystem(
 {
 }
 
-bool SkillSystem::IsAvailableForStyle(const Skill& definition, Style style) const
-{
-    return !definition.requiredStyle.has_value() || definition.requiredStyle.value() == style;
-}
-
-SkillView SkillSystem::CreateSkillView(const Skill& definition, const SkillProgress& progress) const
+SkillView SkillSystem::CreateSkillView(
+    const Skill& definition,
+    const SkillProgress& progress,
+    const Competitor& user) const
 {
     SkillView view;
     view.id = definition.id;
@@ -25,13 +23,13 @@ SkillView SkillSystem::CreateSkillView(const Skill& definition, const SkillProgr
     view.description = definition.description;
     view.tone = definition.tone;
     view.power = rules_.GetPower(definition, progress);
-    view.focusCost = rules_.GetFocusCost(definition, progress);
-    view.accuracy = rules_.GetAccuracy(definition, progress);
+    view.focusCost = rules_.GetFocusCost(definition, progress, user);
+    view.accuracy = rules_.GetAccuracy(definition, progress, user);
     view.level = progress.level;
     view.xp = progress.xp;
     view.effectType = definition.effectType;
     view.effectTarget = definition.effectTarget;
-    view.effectValue = rules_.GetEffectValue(definition, progress);
+    view.effectValue = rules_.GetEffectValue(definition, progress, user);
     view.effectUses = definition.effectUses;
     return view;
 }
@@ -64,7 +62,7 @@ SkillUseResult SkillSystem::UseSkill(
 
     result.used = true;
     result.skillId = definition->id;
-    attacker.focus -= rules_.GetFocusCost(*definition, progress);
+    attacker.focus -= rules_.GetFocusCost(*definition, progress, attacker);
     result.newFocus = attacker.focus;
 
     BattleEvent skillStarted;
@@ -86,7 +84,7 @@ SkillUseResult SkillSystem::UseSkill(
         result.events.push_back(focusChanged);
     }
 
-    if (!Chance(rules_.GetAccuracy(*definition, progress), randomEngine))
+    if (!Chance(rules_.GetAccuracy(*definition, progress, attacker), randomEngine))
     {
         result.hit = false;
         BattleEvent missed;
@@ -236,7 +234,7 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
         return result;
     }
 
-    const int effectValue = rules_.GetEffectValue(definition, progress);
+    const int effectValue = rules_.GetEffectValue(definition, progress, attacker);
     BattleStatus& targetStatus = definition.effectTarget == SkillEffectTarget::Self
         ? attackerStatus
         : defenderStatus;

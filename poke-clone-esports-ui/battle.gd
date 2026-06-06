@@ -47,6 +47,7 @@ var item_buttons: Array[Button] = []
 var log_entries: Array[String] = []
 var deferred_skill_xp: Dictionary = {}
 var deferred_skill_levels: Dictionary = {}
+var battle_event_history: Array = []
 var input_locked := false
 var finished_result: Dictionary = {}
 
@@ -74,6 +75,7 @@ func _ready() -> void:
 	_refresh_skills()
 	_refresh_team_switches(state)
 	_show_main_menu()
+	_record_result_events(result)
 	await _play_events(result.get("events", []))
 	_set_message("What will your player do?")
 
@@ -538,9 +540,14 @@ func _refresh_team_switches(state: Dictionary = {}) -> void:
 		var max_hp := int(player.get("max_hp", 1))
 		var focus := int(player.get("focus", 0))
 		var max_focus := int(player.get("max_focus", 1))
+		var identity_name := String(player.get("trait_name", ""))
+		var identity_suffix := ""
+		if not identity_name.is_empty():
+			identity_suffix = " | %s" % identity_name
 		var button := Button.new()
-		button.text = "%s\nHP %s/%s | Focus %s/%s" % [
+		button.text = "%s%s\nHP %s/%s | Focus %s/%s" % [
 			player.get("name", "Player"),
+			identity_suffix,
 			hp,
 			max_hp,
 			focus,
@@ -568,6 +575,7 @@ func _on_skill_pressed(skill_id: String) -> void:
 		_set_buttons_disabled(false)
 		return
 
+	_record_result_events(result)
 	await _play_events(result.get("events", []))
 	_update_state(result.get("state", bridge.get_battle_state()))
 
@@ -597,6 +605,7 @@ func _on_switch_pressed(player_index: int) -> void:
 		_set_buttons_disabled(false)
 		return
 
+	_record_result_events(result)
 	var state: Dictionary = result.get("state", bridge.get_battle_state())
 	_update_state(state)
 	_refresh_team_switches(state)
@@ -701,7 +710,14 @@ func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, h
 	var max_focus := int(data.get("max_focus", 1))
 	var focus := int(data.get("focus", 0))
 	name_label.text = "%s" % data.get("name", fallback_name)
-	meta_label.text = "%s" % data.get("spec", "Spec")
+	var identity_name := String(data.get("trait_name", ""))
+	var identity_suffix := ""
+	if not identity_name.is_empty():
+		identity_suffix = " | %s" % identity_name
+	meta_label.text = "%s%s" % [
+		data.get("spec", "Spec"),
+		identity_suffix,
+	]
 	hp_bar.max_value = max(1, max_hp)
 	hp_bar.value = clamp(hp, 0, max_hp)
 	hp_bar.tooltip_text = "HP %s/%s" % [hp, max_hp]
@@ -835,6 +851,12 @@ func _show_return_button() -> void:
 	return_button.visible = true
 
 
+func _record_result_events(result: Dictionary) -> void:
+	for event in result.get("events", []):
+		if event is Dictionary:
+			battle_event_history.push_back(event.duplicate(true))
+
+
 func _defer_progress_event(event: Dictionary) -> void:
 	if String(event.get("actor", "none")) != "player":
 		return
@@ -866,7 +888,9 @@ func _format_skill_id(skill_id: String) -> String:
 
 func _on_return_pressed() -> void:
 	if not finished_result.is_empty():
-		GameState.complete_battle(finished_result)
+		var complete_result := finished_result.duplicate(true)
+		complete_result["events"] = battle_event_history.duplicate(true)
+		GameState.complete_battle(complete_result)
 	get_tree().change_scene_to_file("res://map.tscn")
 
 

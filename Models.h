@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,13 +20,6 @@ enum class Spec
     Support
 };
 
-enum class Style
-{
-    Aggressive,
-    Defensive,
-    Balanced
-};
-
 enum class SkillEffectType
 {
     None,
@@ -45,11 +37,20 @@ enum class SkillEffectTarget
 enum class SkillTone
 {
     Basic,
-    Aggressive,
-    Defensive,
-    Balanced,
+    Pressure,
+    Reliable,
     Risky,
     Utility
+};
+
+enum class TraitEffectType
+{
+    None,
+    LowHpFocusDiscountPercent,
+    SetupDisruptEffectBonusPercent,
+    SuperEffectiveDamageBonusPercent,
+    DamagingAccuracyBonusPercent,
+    PositiveEffectBonusPercent
 };
 
 enum class BattleActor
@@ -97,15 +98,11 @@ enum class SimulationError
     BattleNeedsPlayerProfile,
     UnknownSpec,
     UnknownPlayerProfileSpec,
-    UnknownStyle,
-    UnknownPlayerProfileStyle,
     UnknownActivePlayerProfile,
     BattleNotStarted,
     BattleAlreadyFinished,
     UnknownSkill,
-    SkillUnavailableForStyle,
     InsufficientFocus,
-    StyleAlreadyActive,
     UnknownPlayerProfile,
     PlayerProfileAlreadyActive,
     PlayerProfileCannotPlay,
@@ -124,7 +121,6 @@ enum class BattleEventType
 {
     None,
     BattleStarted,
-    StyleChanged,
     PlayerSwitched,
     SkillStarted,
     FocusChanged,
@@ -162,26 +158,13 @@ inline std::string ToString(Spec spec)
     return "Unknown";
 }
 
-inline std::string ToString(Style style)
-{
-    switch (style)
-    {
-    case Style::Aggressive: return "Aggressive";
-    case Style::Defensive: return "Defensive";
-    case Style::Balanced: return "Balanced";
-    }
-
-    return "Unknown";
-}
-
 inline std::string ToString(SkillTone tone)
 {
     switch (tone)
     {
     case SkillTone::Basic: return "Basic";
-    case SkillTone::Aggressive: return "Aggressive";
-    case SkillTone::Defensive: return "Defensive";
-    case SkillTone::Balanced: return "Balanced";
+    case SkillTone::Pressure: return "Pressure";
+    case SkillTone::Reliable: return "Reliable";
     case SkillTone::Risky: return "Risky";
     case SkillTone::Utility: return "Utility";
     }
@@ -203,15 +186,14 @@ inline std::string ToString(CareerRank rank)
     return "Unknown";
 }
 
-// Skill stores rules shared by every competitor. A missing requiredStyle means
-// every loadout can use the skill. SkillProgress below stores personal growth.
+// Skill stores rules shared by every competitor. SkillProgress below stores
+// personal growth.
 struct Skill
 {
     std::string id;
     std::string name;
     std::string description;
     SkillTone tone = SkillTone::Basic;
-    std::optional<Style> requiredStyle;
     int focusCost;
     int power;
     double accuracy;
@@ -234,6 +216,16 @@ struct SpecData
     std::string name;
     std::vector<std::string> skillIds;
     Spec counteredSpec;
+    std::string defaultTraitId;
+};
+
+struct TraitDefinition
+{
+    std::string id;
+    std::string name;
+    std::string description;
+    TraitEffectType effectType = TraitEffectType::None;
+    int effectValue = 0;
 };
 
 // These modifiers exist for one battle only. Remaining uses are measured in
@@ -261,7 +253,7 @@ struct Competitor
     std::string name;
     GameType gameType = GameType::LeagueOfLegends;
     Spec spec = Spec::Top;
-    Style style = Style::Balanced;
+    std::string traitId;
     int hp = 100;
     int maxHp = 100;
     int focus = 50;
@@ -304,7 +296,7 @@ struct BattleSetup
         int profileIndex = 0;
         std::string name = "Player";
         Spec spec = Spec::Top;
-        Style style = Style::Balanced;
+        std::string traitId;
         PassiveBonuses passiveBonuses;
         std::vector<SkillProgress> skills;
         int currentHp = -1;
@@ -316,7 +308,7 @@ struct BattleSetup
     int activePlayerIndex = 0;
     std::string opponentName = "Opponent";
     Spec opponentSpec = Spec::Jungle;
-    Style opponentStyle = Style::Balanced;
+    std::string opponentTraitId;
     int opponentMaxHp = -1;
     int opponentMaxFocus = -1;
     int opponentBasePowerBonus = 0;
@@ -337,7 +329,9 @@ struct CompetitorView
     int profileIndex = 0;
     std::string name;
     Spec spec = Spec::Top;
-    Style style = Style::Balanced;
+    std::string traitId;
+    std::string traitName;
+    std::string traitDescription;
     int hp = 0;
     int maxHp = 0;
     int focus = 0;
@@ -409,7 +403,6 @@ struct BattleEvent
     BattleActor actor = BattleActor::None;
     BattleActor target = BattleActor::None;
     std::string skillId;
-    Style style = Style::Balanced;
     int oldPlayerIndex = 0;
     int newPlayerIndex = 0;
     std::string playerName;
@@ -450,8 +443,6 @@ struct BattleActionResult
     SimulationError errorCode = SimulationError::None;
     std::string error;
     bool battleStarted = false;
-    bool styleChanged = false;
-    Style newStyle = Style::Balanced;
     bool playerSwitched = false;
     int oldPlayerIndex = 0;
     int newPlayerIndex = 0;
@@ -470,6 +461,7 @@ struct PlayerProfileState
 {
     std::string name = "Player";
     Spec spec = Spec::Top;
+    std::string traitId;
     CareerRank rank = CareerRank::Rookie;
     PassiveBonuses passiveBonuses;
     int level = 1;
