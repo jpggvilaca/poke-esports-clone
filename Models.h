@@ -307,11 +307,14 @@ struct BattleSetup
         Style style = Style::Balanced;
         PassiveBonuses passiveBonuses;
         std::vector<SkillProgress> skills;
+        int currentHp = -1;
+        int currentFocus = -1;
     };
 
     GameType gameType = GameType::LeagueOfLegends;
     std::vector<PlayerSlot> playerTeam;
     int activePlayerIndex = 0;
+    std::string opponentName = "Opponent";
     Spec opponentSpec = Spec::Jungle;
     Style opponentStyle = Style::Balanced;
 };

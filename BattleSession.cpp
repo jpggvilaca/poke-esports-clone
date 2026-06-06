@@ -2,6 +2,8 @@
 
 #include "SimulationData.h"
 
+#include <algorithm>
+
 namespace
 {
     inline constexpr int PlayerWinXpReward = 120;
@@ -97,7 +99,7 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
 
     opponent_ = CreateCompetitor(
         0,
-        "Opponent",
+        setup.opponentName,
         setup.gameType,
         setup.opponentSpec,
         setup.opponentStyle,
@@ -357,6 +359,14 @@ Competitor BattleSession::CreateCompetitor(
     if (!slot.skills.empty())
     {
         competitor.skills = slot.skills;
+    }
+    if (slot.currentHp >= 0)
+    {
+        competitor.hp = std::clamp(slot.currentHp, 0, competitor.maxHp);
+    }
+    if (slot.currentFocus >= 0)
+    {
+        competitor.focus = std::clamp(slot.currentFocus, 0, competitor.maxFocus);
     }
 
     return competitor;

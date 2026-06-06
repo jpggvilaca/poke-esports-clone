@@ -2,17 +2,35 @@
 
 #include <godot_cpp/core/class_db.hpp>
 
+#include <algorithm>
+#include <cstdint>
+#include <string>
+
 using godot::Array;
 using godot::Dictionary;
 using godot::String;
 
 void BattleBridge::_bind_methods()
 {
+    godot::ClassDB::bind_method(godot::D_METHOD("start_battle", "setup"), &BattleBridge::start_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("start_demo_battle"), &BattleBridge::start_demo_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
+    godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
     godot::ClassDB::bind_method(godot::D_METHOD("get_battle_state"), &BattleBridge::get_battle_state);
     godot::ClassDB::bind_method(godot::D_METHOD("get_available_skills"), &BattleBridge::get_available_skills);
     godot::ClassDB::bind_method(godot::D_METHOD("get_last_result"), &BattleBridge::get_last_result);
+}
+
+Dictionary BattleBridge::start_battle(const Dictionary& setup_dictionary)
+{
+    const std::uint32_t seed = setup_dictionary.has("seed")
+        ? static_cast<std::uint32_t>(static_cast<int>(setup_dictionary["seed"]))
+        : 20260606;
+
+    session_ = std::make_unique<BattleSession>(data_, seed);
+    BattleSetup setup = setup_from_dictionary(setup_dictionary);
+    last_result_ = session_->StartBattle(setup);
+    return result_to_dictionary(last_result_);
 }
 
 Dictionary BattleBridge::start_demo_battle()
@@ -27,6 +45,7 @@ Dictionary BattleBridge::start_demo_battle()
     player.style = Style::Balanced;
     setup.playerTeam.push_back(player);
     setup.activePlayerIndex = 0;
+    setup.opponentName = "Opponent";
     setup.opponentSpec = Spec::Jungle;
     setup.opponentStyle = Style::Balanced;
 
@@ -42,6 +61,17 @@ Dictionary BattleBridge::use_skill(const String& skill_id)
     }
 
     last_result_ = session_->UsePlayerSkill(std::string(skill_id.utf8().get_data()));
+    return result_to_dictionary(last_result_);
+}
+
+Dictionary BattleBridge::switch_player(int player_index)
+{
+    if (session_ == nullptr)
+    {
+        start_demo_battle();
+    }
+
+    last_result_ = session_->SwitchPlayer(player_index);
     return result_to_dictionary(last_result_);
 }
 
@@ -146,6 +176,7 @@ Dictionary BattleBridge::event_to_dictionary(const BattleEvent& event) const
     dictionary["damage"] = event.damage.amount;
     dictionary["healing"] = event.effect.healingAmount;
     dictionary["effect"] = effect_to_string(event.effect.type);
+    dictionary["reward"] = reward_to_dictionary(event.reward);
     return dictionary;
 }
 
@@ -159,6 +190,7 @@ Dictionary BattleBridge::result_to_dictionary(const BattleActionResult& result) 
     dictionary["battle_finished"] = result.battleFinished;
     dictionary["winner"] = winner_to_string(result.winner);
     dictionary["state"] = state_to_dictionary(result.finalState);
+    dictionary["reward"] = reward_to_dictionary(result.reward);
 
     Array events;
     for (const BattleEvent& event : result.events)
@@ -167,6 +199,136 @@ Dictionary BattleBridge::result_to_dictionary(const BattleActionResult& result) 
     }
     dictionary["events"] = events;
     return dictionary;
+}
+
+Dictionary BattleBridge::reward_to_dictionary(const BattleRewardResult& reward) const
+{
+    Dictionary dictionary;
+    dictionary["awarded"] = reward.awarded;
+    dictionary["total_xp"] = reward.totalXp;
+    dictionary["xp_per_participant"] = reward.xpPerParticipant;
+
+    Array participants;
+    for (int index : reward.participantPlayerIndices)
+    {
+        participants.push_back(index);
+    }
+    dictionary["participant_player_indices"] = participants;
+    return dictionary;
+}
+
+BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictionary) const
+{
+    BattleSetup setup;
+    setup.activePlayerIndex = setup_dictionary.has("active_player_index")
+        ? static_cast<int>(setup_dictionary["active_player_index"])
+        : 0;
+
+    if (setup_dictionary.has("opponent_name"))
+    {
+        setup.opponentName = std::string(String(setup_dictionary["opponent_name"]).utf8().get_data());
+    }
+
+    if (setup_dictionary.has("opponent_spec"))
+    {
+        setup.opponentSpec = spec_from_string(String(setup_dictionary["opponent_spec"]));
+    }
+
+    if (setup_dictionary.has("opponent_style"))
+    {
+        setup.opponentStyle = style_from_string(String(setup_dictionary["opponent_style"]));
+    }
+
+    if (!setup_dictionary.has("player_team"))
+    {
+        return setup;
+    }
+
+    Array player_team = setup_dictionary["player_team"];
+    for (int index = 0; index < player_team.size(); ++index)
+    {
+        Dictionary player_dictionary = player_team[index];
+        BattleSetup::PlayerSlot slot;
+        slot.profileIndex = player_dictionary.has("profile_index")
+            ? static_cast<int>(player_dictionary["profile_index"])
+            : index;
+        slot.name = player_dictionary.has("name")
+            ? std::string(String(player_dictionary["name"]).utf8().get_data())
+            : "Player";
+        slot.spec = player_dictionary.has("spec")
+            ? spec_from_string(String(player_dictionary["spec"]))
+            : Spec::Top;
+        slot.style = player_dictionary.has("style")
+            ? style_from_string(String(player_dictionary["style"]))
+            : Style::Balanced;
+        slot.currentHp = player_dictionary.has("current_hp")
+            ? static_cast<int>(player_dictionary["current_hp"])
+            : -1;
+        slot.currentFocus = player_dictionary.has("current_focus")
+            ? static_cast<int>(player_dictionary["current_focus"])
+            : -1;
+
+        if (player_dictionary.has("passive_bonuses"))
+        {
+            Dictionary bonuses = player_dictionary["passive_bonuses"];
+            slot.passiveBonuses.maxHpBonus = bonuses.has("max_hp_bonus")
+                ? static_cast<int>(bonuses["max_hp_bonus"])
+                : 0;
+            slot.passiveBonuses.basePowerBonus = bonuses.has("base_power_bonus")
+                ? static_cast<int>(bonuses["base_power_bonus"])
+                : 0;
+            slot.passiveBonuses.counterDamageBonusPercent = bonuses.has("counter_damage_bonus_percent")
+                ? static_cast<int>(bonuses["counter_damage_bonus_percent"])
+                : 0;
+        }
+
+        if (player_dictionary.has("skills"))
+        {
+            Array skills = player_dictionary["skills"];
+            for (int skill_index = 0; skill_index < skills.size(); ++skill_index)
+            {
+                Dictionary skill_dictionary = skills[skill_index];
+                SkillProgress progress;
+                const String skill_id = skill_dictionary.has("id")
+                    ? String(skill_dictionary["id"])
+                    : String(skill_dictionary.get("skill_id", ""));
+                progress.skillId = std::string(skill_id.utf8().get_data());
+                progress.level = skill_dictionary.has("level")
+                    ? std::max(1, static_cast<int>(skill_dictionary["level"]))
+                    : 1;
+                progress.xp = skill_dictionary.has("xp")
+                    ? std::max(0, static_cast<int>(skill_dictionary["xp"]))
+                    : 0;
+
+                if (!progress.skillId.empty())
+                {
+                    slot.skills.push_back(progress);
+                }
+            }
+        }
+
+        setup.playerTeam.push_back(slot);
+    }
+
+    return setup;
+}
+
+Spec BattleBridge::spec_from_string(const String& value) const
+{
+    const std::string text = std::string(value.utf8().get_data());
+    if (text == "Jungle" || text == "jungle") return Spec::Jungle;
+    if (text == "Mid" || text == "mid") return Spec::Mid;
+    if (text == "ADC" || text == "Adc" || text == "adc") return Spec::Adc;
+    if (text == "Support" || text == "support") return Spec::Support;
+    return Spec::Top;
+}
+
+Style BattleBridge::style_from_string(const String& value) const
+{
+    const std::string text = std::string(value.utf8().get_data());
+    if (text == "Aggressive" || text == "aggressive") return Style::Aggressive;
+    if (text == "Defensive" || text == "defensive") return Style::Defensive;
+    return Style::Balanced;
 }
 
 String BattleBridge::actor_to_string(BattleActor actor) const

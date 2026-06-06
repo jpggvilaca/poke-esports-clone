@@ -1,0 +1,472 @@
+[gd_scene format=3 uid="uid://c7to1owlpac77"]
+
+[ext_resource type="Script" uid="uid://s2syun0fhcqy" path="res://map.gd" id="1_map"]
+[ext_resource type="Texture2D" uid="uid://8u6ore52f26k" path="res://assets/buildings/Building6.png" id="2_lancafe"]
+[ext_resource type="Texture2D" uid="uid://b4ug8h2yoc1jf" path="res://assets/buildings/Building5.png" id="3_majorhall"]
+[ext_resource type="Texture2D" uid="uid://ceokx4h6plwia" path="res://assets/objects/Tree3.png" id="4_tree"]
+[ext_resource type="Texture2D" uid="uid://duhu7n8nwfnnh" path="res://assets/objects/Bush1.png" id="5_bush"]
+[ext_resource type="Texture2D" uid="uid://saj4n5vmiwxm" path="res://assets/objects/Sign1.png" id="6_sign"]
+[ext_resource type="Texture2D" uid="uid://btvyr4851e5fh" path="res://assets/objects/Red Vending machine.png" id="7_vending"]
+[ext_resource type="Texture2D" uid="uid://b7ws0m1tgj4bx" path="res://assets/objects/Light Pole.png" id="8_pole"]
+[ext_resource type="Texture2D" uid="uid://btcwpbxk8vg0t" path="res://assets/objects/Closed Trashbin.png" id="9_trashbin"]
+[ext_resource type="Texture2D" uid="uid://bfi6swcisjp" path="res://assets/players/Char_002_Idle.png" id="10_rival"]
+[ext_resource type="Texture2D" uid="uid://b5vnwxrqk5vkg" path="res://assets/players/Char_004_Idle.png" id="11_coach"]
+[ext_resource type="Texture2D" uid="uid://bfj3xenvfu517" path="res://assets/players/Char_006_Idle.png" id="12_fan"]
+[ext_resource type="Texture2D" uid="uid://cicc6c4gw6icj" path="res://assets/players/Char_001.png" id="13_player"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_lancafe"]
+size = Vector2(340, 175)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_majorhall"]
+size = Vector2(295, 155)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tree"]
+size = Vector2(36, 38)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_bush"]
+size = Vector2(44, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_sign"]
+size = Vector2(72, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_vending"]
+size = Vector2(42, 70)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_pole"]
+size = Vector2(28, 58)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_trashbin"]
+size = Vector2(36, 44)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_npc"]
+radius = 18.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_player"]
+radius = 15.0
+
+[node name="TownMap" type="Node2D" unique_id=1633915375]
+script = ExtResource("1_map")
+
+[node name="Ground" type="Node2D" parent="." unique_id=1284534122]
+
+[node name="Grass" type="ColorRect" parent="Ground" unique_id=1998482434]
+z_index = -20
+offset_right = 1600.0
+offset_bottom = 1100.0
+color = Color(0.45, 0.68, 0.38, 1)
+
+[node name="PathHorizontalEdge" type="ColorRect" parent="Ground" unique_id=211841593]
+z_index = -18
+offset_top = 515.0
+offset_right = 1600.0
+offset_bottom = 635.0
+color = Color(0.58, 0.48, 0.33, 1)
+
+[node name="PathHorizontal" type="ColorRect" parent="Ground" unique_id=190215223]
+z_index = -17
+offset_top = 530.0
+offset_right = 1600.0
+offset_bottom = 620.0
+color = Color(0.72, 0.61, 0.43, 1)
+
+[node name="PathVerticalEdge" type="ColorRect" parent="Ground" unique_id=1319791948]
+z_index = -18
+offset_left = 735.0
+offset_right = 855.0
+offset_bottom = 1100.0
+color = Color(0.58, 0.48, 0.33, 1)
+
+[node name="PathVertical" type="ColorRect" parent="Ground" unique_id=9718695]
+z_index = -17
+offset_left = 750.0
+offset_right = 840.0
+offset_bottom = 1100.0
+color = Color(0.72, 0.61, 0.43, 1)
+
+[node name="LanCafePathEdge" type="ColorRect" parent="Ground" unique_id=1366904696]
+z_index = -18
+offset_left = 255.0
+offset_top = 290.0
+offset_right = 605.0
+offset_bottom = 380.0
+color = Color(0.58, 0.48, 0.33, 1)
+
+[node name="LanCafePath" type="ColorRect" parent="Ground" unique_id=1521556929]
+z_index = -17
+offset_left = 270.0
+offset_top = 305.0
+offset_right = 590.0
+offset_bottom = 365.0
+color = Color(0.72, 0.61, 0.43, 1)
+
+[node name="MajorHallPathEdge" type="ColorRect" parent="Ground" unique_id=455544936]
+z_index = -18
+offset_left = 1000.0
+offset_top = 280.0
+offset_right = 1360.0
+offset_bottom = 370.0
+color = Color(0.58, 0.48, 0.33, 1)
+
+[node name="MajorHallPath" type="ColorRect" parent="Ground" unique_id=1761951654]
+z_index = -17
+offset_left = 1015.0
+offset_top = 295.0
+offset_right = 1345.0
+offset_bottom = 355.0
+color = Color(0.72, 0.61, 0.43, 1)
+
+[node name="Buildings" type="Node2D" parent="." unique_id=1885824317]
+
+[node name="LanCafe" type="StaticBody2D" parent="Buildings" unique_id=1834491883 groups=["blocker"]]
+position = Vector2(430, 275)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Buildings/LanCafe" unique_id=2133933646]
+z_index = 5
+texture = ExtResource("2_lancafe")
+
+[node name="Collision" type="CollisionShape2D" parent="Buildings/LanCafe" unique_id=99897368]
+position = Vector2(0, 18)
+shape = SubResource("RectangleShape2D_lancafe")
+
+[node name="MajorHall" type="StaticBody2D" parent="Buildings" unique_id=334443306 groups=["blocker"]]
+position = Vector2(1170, 305)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Buildings/MajorHall" unique_id=263838456]
+z_index = 5
+scale = Vector2(1.15, 1.15)
+texture = ExtResource("3_majorhall")
+
+[node name="Collision" type="CollisionShape2D" parent="Buildings/MajorHall" unique_id=335990155]
+position = Vector2(0, 16)
+shape = SubResource("RectangleShape2D_majorhall")
+
+[node name="Labels" type="Node2D" parent="." unique_id=34769876]
+
+[node name="LanCafeLabel" type="Label" parent="Labels" unique_id=1347019356]
+z_index = 20
+offset_left = 360.0
+offset_top = 410.0
+offset_right = 500.0
+offset_bottom = 438.0
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 18
+text = "LAN CAFE"
+horizontal_alignment = 1
+
+[node name="MajorHallLabel" type="Label" parent="Labels" unique_id=760563911]
+z_index = 20
+offset_left = 1100.0
+offset_top = 420.0
+offset_right = 1240.0
+offset_bottom = 448.0
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 18
+text = "MAJOR HALL"
+horizontal_alignment = 1
+
+[node name="Objects" type="Node2D" parent="." unique_id=2132240427]
+
+[node name="TreeNorthWestA" type="StaticBody2D" parent="Objects" unique_id=240714325 groups=["blocker"]]
+position = Vector2(130, 170)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/TreeNorthWestA" unique_id=653806009]
+z_index = 2
+scale = Vector2(2, 2)
+texture = ExtResource("4_tree")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/TreeNorthWestA" unique_id=1413652995]
+position = Vector2(0, 26)
+shape = SubResource("RectangleShape2D_tree")
+
+[node name="TreeNorthWestB" type="StaticBody2D" parent="Objects" unique_id=1114450319 groups=["blocker"]]
+position = Vector2(210, 170)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/TreeNorthWestB" unique_id=649486391]
+z_index = 2
+scale = Vector2(2, 2)
+texture = ExtResource("4_tree")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/TreeNorthWestB" unique_id=290873319]
+position = Vector2(0, 26)
+shape = SubResource("RectangleShape2D_tree")
+
+[node name="TreeNorthEastA" type="StaticBody2D" parent="Objects" unique_id=258766934 groups=["blocker"]]
+position = Vector2(1440, 170)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/TreeNorthEastA" unique_id=1891761975]
+z_index = 2
+scale = Vector2(2, 2)
+texture = ExtResource("4_tree")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/TreeNorthEastA" unique_id=1950049404]
+position = Vector2(0, 26)
+shape = SubResource("RectangleShape2D_tree")
+
+[node name="TreeNorthEastB" type="StaticBody2D" parent="Objects" unique_id=700403084 groups=["blocker"]]
+position = Vector2(1510, 170)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/TreeNorthEastB" unique_id=1829168164]
+z_index = 2
+scale = Vector2(2, 2)
+texture = ExtResource("4_tree")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/TreeNorthEastB" unique_id=336740868]
+position = Vector2(0, 26)
+shape = SubResource("RectangleShape2D_tree")
+
+[node name="BushA" type="StaticBody2D" parent="Objects" unique_id=1239603780 groups=["blocker"]]
+position = Vector2(145, 710)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/BushA" unique_id=1008492332]
+z_index = 2
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("5_bush")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/BushA" unique_id=1708728362]
+position = Vector2(0, 22)
+shape = SubResource("RectangleShape2D_bush")
+
+[node name="BushB" type="StaticBody2D" parent="Objects" unique_id=801667821 groups=["blocker"]]
+position = Vector2(230, 710)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/BushB" unique_id=474703119]
+z_index = 2
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("5_bush")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/BushB" unique_id=1737861055]
+position = Vector2(0, 22)
+shape = SubResource("RectangleShape2D_bush")
+
+[node name="BushC" type="StaticBody2D" parent="Objects" unique_id=1605256057 groups=["blocker"]]
+position = Vector2(1320, 710)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/BushC" unique_id=127368187]
+z_index = 2
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("5_bush")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/BushC" unique_id=682141629]
+position = Vector2(0, 22)
+shape = SubResource("RectangleShape2D_bush")
+
+[node name="BushD" type="StaticBody2D" parent="Objects" unique_id=2050932536 groups=["blocker"]]
+position = Vector2(1410, 710)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/BushD" unique_id=791167651]
+z_index = 2
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("5_bush")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/BushD" unique_id=1557863003]
+position = Vector2(0, 22)
+shape = SubResource("RectangleShape2D_bush")
+
+[node name="BushE" type="StaticBody2D" parent="Objects" unique_id=1846935103 groups=["blocker"]]
+position = Vector2(1500, 710)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/BushE" unique_id=779608906]
+z_index = 2
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("5_bush")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/BushE" unique_id=1022046695]
+position = Vector2(0, 22)
+shape = SubResource("RectangleShape2D_bush")
+
+[node name="Sign" type="StaticBody2D" parent="Objects" unique_id=266147390 groups=["blocker"]]
+position = Vector2(615, 480)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/Sign" unique_id=1888919557]
+z_index = 4
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("6_sign")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/Sign" unique_id=356885721]
+shape = SubResource("RectangleShape2D_sign")
+
+[node name="VendingMachine" type="StaticBody2D" parent="Objects" unique_id=923618590 groups=["blocker"]]
+position = Vector2(1010, 442)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/VendingMachine" unique_id=565978439]
+z_index = 4
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("7_vending")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/VendingMachine" unique_id=2023509733]
+position = Vector2(0, 10)
+shape = SubResource("RectangleShape2D_vending")
+
+[node name="LightPoleA" type="StaticBody2D" parent="Objects" unique_id=1939844995 groups=["blocker"]]
+position = Vector2(690, 470)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/LightPoleA" unique_id=1513950191]
+z_index = 4
+scale = Vector2(1.9, 1.9)
+texture = ExtResource("8_pole")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/LightPoleA" unique_id=1722260825]
+position = Vector2(0, 14)
+shape = SubResource("RectangleShape2D_pole")
+
+[node name="LightPoleB" type="StaticBody2D" parent="Objects" unique_id=1098340256 groups=["blocker"]]
+position = Vector2(900, 665)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/LightPoleB" unique_id=124345279]
+z_index = 4
+scale = Vector2(1.9, 1.9)
+texture = ExtResource("8_pole")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/LightPoleB" unique_id=2062741024]
+position = Vector2(0, 14)
+shape = SubResource("RectangleShape2D_pole")
+
+[node name="Trashbin" type="StaticBody2D" parent="Objects" unique_id=241032607 groups=["blocker"]]
+position = Vector2(360, 445)
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="Objects/Trashbin" unique_id=288797124]
+z_index = 4
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("9_trashbin")
+
+[node name="Collision" type="CollisionShape2D" parent="Objects/Trashbin" unique_id=400009460]
+position = Vector2(0, 12)
+shape = SubResource("RectangleShape2D_trashbin")
+
+[node name="NPCs" type="Node2D" parent="." unique_id=890992029]
+
+[node name="Rival" type="StaticBody2D" parent="NPCs" unique_id=776771604 groups=["battle_npc"]]
+position = Vector2(640, 565)
+collision_layer = 4
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="NPCs/Rival" unique_id=987514089]
+z_index = 8
+scale = Vector2(2, 2)
+texture = ExtResource("10_rival")
+hframes = 4
+vframes = 4
+frame = 4
+
+[node name="Collision" type="CollisionShape2D" parent="NPCs/Rival" unique_id=1566798617]
+position = Vector2(0, 16)
+shape = SubResource("CircleShape2D_npc")
+
+[node name="RivalLabel" type="Label" parent="NPCs/Rival" unique_id=379674112]
+z_index = 20
+offset_left = -60.0
+offset_top = 45.0
+offset_right = 60.0
+offset_bottom = 73.0
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Rival"
+horizontal_alignment = 1
+
+[node name="Coach" type="StaticBody2D" parent="NPCs" unique_id=1674582325 groups=["battle_npc"]]
+position = Vector2(1090, 585)
+collision_layer = 4
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="NPCs/Coach" unique_id=875301274]
+z_index = 8
+scale = Vector2(2, 2)
+texture = ExtResource("11_coach")
+hframes = 4
+vframes = 4
+frame = 8
+
+[node name="Collision" type="CollisionShape2D" parent="NPCs/Coach" unique_id=2091216765]
+position = Vector2(0, 16)
+shape = SubResource("CircleShape2D_npc")
+
+[node name="CoachLabel" type="Label" parent="NPCs/Coach" unique_id=1463782588]
+z_index = 20
+offset_left = -60.0
+offset_top = 45.0
+offset_right = 60.0
+offset_bottom = 73.0
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Coach"
+horizontal_alignment = 1
+
+[node name="Fan" type="StaticBody2D" parent="NPCs" unique_id=2002512236 groups=["battle_npc"]]
+position = Vector2(845, 835)
+collision_layer = 4
+collision_mask = 0
+
+[node name="Sprite" type="Sprite2D" parent="NPCs/Fan" unique_id=1219969819]
+z_index = 8
+scale = Vector2(2, 2)
+texture = ExtResource("12_fan")
+hframes = 4
+vframes = 4
+
+[node name="Collision" type="CollisionShape2D" parent="NPCs/Fan" unique_id=802218706]
+position = Vector2(0, 16)
+shape = SubResource("CircleShape2D_npc")
+
+[node name="FanLabel" type="Label" parent="NPCs/Fan" unique_id=1978184432]
+z_index = 20
+offset_left = -60.0
+offset_top = 45.0
+offset_right = 60.0
+offset_bottom = 73.0
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Fan"
+horizontal_alignment = 1
+
+[node name="HumanPlayer" type="CharacterBody2D" parent="." unique_id=769025744]
+z_index = 10
+position = Vector2(760, 690)
+collision_mask = 6
+
+[node name="Sprite" type="Sprite2D" parent="HumanPlayer" unique_id=25388552]
+scale = Vector2(2.2, 2.2)
+texture = ExtResource("13_player")
+hframes = 4
+vframes = 4
+
+[node name="Collision" type="CollisionShape2D" parent="HumanPlayer" unique_id=656590112]
+position = Vector2(0, 16)
+shape = SubResource("CircleShape2D_player")
+
+[node name="Camera" type="Camera2D" parent="HumanPlayer" unique_id=2024213091]
+limit_left = 0
+limit_top = 0
+limit_right = 1600
+limit_bottom = 1100

@@ -11,8 +11,12 @@ config_version=5
 [application]
 
 config/name="poke-clone-esports-ui"
-run/main_scene="res://battle.tscn"
+run/main_scene="res://map.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
+
+[autoload]
+
+GameState="*res://game_state.gd"
 
 [display]
 

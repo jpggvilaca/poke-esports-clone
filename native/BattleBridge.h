@@ -18,8 +18,10 @@ class BattleBridge : public godot::Node
     GDCLASS(BattleBridge, godot::Node)
 
 public:
+    godot::Dictionary start_battle(const godot::Dictionary& setup);
     godot::Dictionary start_demo_battle();
     godot::Dictionary use_skill(const godot::String& skill_id);
+    godot::Dictionary switch_player(int player_index);
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;
     godot::Dictionary get_last_result() const;
@@ -33,6 +35,10 @@ private:
     godot::Dictionary skill_to_dictionary(const SkillView& skill) const;
     godot::Dictionary event_to_dictionary(const BattleEvent& event) const;
     godot::Dictionary result_to_dictionary(const BattleActionResult& result) const;
+    godot::Dictionary reward_to_dictionary(const BattleRewardResult& reward) const;
+    BattleSetup setup_from_dictionary(const godot::Dictionary& setup) const;
+    Spec spec_from_string(const godot::String& value) const;
+    Style style_from_string(const godot::String& value) const;
     godot::String actor_to_string(BattleActor actor) const;
     godot::String winner_to_string(BattleWinner winner) const;
     godot::String event_type_to_string(BattleEventType type) const;
