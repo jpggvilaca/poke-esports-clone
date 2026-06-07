@@ -1,5 +1,6 @@
 extends Node2D
 
+const STORY_DIALOGUE := preload("res://story_dialogue.gd")
 const MAP_SIZE := Vector2(1600, 1100)
 const PLAYER_SPEED := 210.0
 const INTERACT_DISTANCE := 82.0
@@ -33,7 +34,7 @@ func _physics_process(delta: float) -> void:
 
 	_animate_npcs(delta)
 
-	if map_ui.is_trainer_visible():
+	if map_ui.is_trainer_visible() or map_ui.is_dialog_open():
 		player_body.velocity = Vector2.ZERO
 		_animate_player(Vector2.ZERO, delta)
 		return
@@ -49,6 +50,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if map_ui.is_dialog_open():
+		return
+
 	if event.is_action_pressed("ui_accept") and not nearest_interaction.is_empty() and not map_ui.is_trainer_visible():
 		_use_nearest_interaction()
 		return
@@ -175,6 +179,7 @@ func _use_nearest_interaction() -> void:
 		"tournament":
 			battle_triggered = true
 			if GameState.prepare_tournament_battle(player_body.global_position):
+				await map_ui.show_dialog(STORY_DIALOGUE.get_tournament_intro())
 				get_tree().change_scene_to_file("res://battle.tscn")
 			else:
 				map_ui.show_prompt(GameState.get_tournament_locked_message())
@@ -183,6 +188,7 @@ func _use_nearest_interaction() -> void:
 
 func _start_npc_battle(npc: Node2D) -> void:
 	battle_triggered = true
+	await map_ui.show_dialog(STORY_DIALOGUE.get_npc_intro(String(npc.name)))
 	if GameState.prepare_npc_battle(String(npc.name), player_body.global_position):
 		get_tree().change_scene_to_file("res://battle.tscn")
 		return
@@ -258,11 +264,11 @@ func _format_trainer_text() -> String:
 			player.get("xp", 0),
 			player.get("xp_required_for_next_level", 100),
 		])
-		lines.push_back("  HP %s/%s | Focus %s/%s" % [
+		lines.push_back("  HP %s/%s | Mana %s/%s" % [
 			player.get("current_hp", player.get("max_hp", 100)),
 			player.get("max_hp", 100),
-			player.get("current_focus", player.get("max_focus", 50)),
-			player.get("max_focus", 50),
+			player.get("current_mana", 0),
+			player.get("max_mana", 100),
 		])
 		var passive_bonuses: Dictionary = player.get("passive_bonuses", {})
 		lines.push_back("  Bonuses: Max HP +%s | Base Power +%s | Counter +%s%%" % [
@@ -275,12 +281,12 @@ func _format_trainer_text() -> String:
 		for skill_id in player.get("active_skill_ids", []):
 			var progress: Dictionary = progress_by_skill.get(skill_id, {})
 			var skill_summary: Dictionary = GameState.get_skill_progress_summary(player, String(skill_id), progress)
-			lines.push_back("   - %s Lv%s XP %s | PWR %s Focus %s" % [
+			lines.push_back("   - %s Lv%s XP %s | Mana %s CD %s" % [
 				skill_summary.get("name", GameState.format_skill_name(String(skill_id))),
 				skill_summary.get("level", 1),
 				skill_summary.get("xp", 0),
-				skill_summary.get("power", 0),
-				skill_summary.get("focus_cost", 0),
+				skill_summary.get("mana_cost", 0),
+				skill_summary.get("cooldown_turns", 0),
 			])
 		lines.push_back("")
 
@@ -334,10 +340,10 @@ func _format_candidate_skills(candidate: Dictionary) -> String:
 	for skill_id in candidate.get("active_skill_ids", []):
 		var progress: Dictionary = progress_by_skill.get(skill_id, {})
 		var skill_summary: Dictionary = GameState.get_skill_progress_summary(candidate, String(skill_id), progress)
-		skill_names.push_back("%s PWR %s/F%s" % [
+		skill_names.push_back("%s M%s/CD%s" % [
 			skill_summary.get("name", GameState.format_skill_name(String(skill_id))),
-			skill_summary.get("power", 0),
-			skill_summary.get("focus_cost", 0),
+			skill_summary.get("mana_cost", 0),
+			skill_summary.get("cooldown_turns", 0),
 		])
 	if skill_names.is_empty():
 		return "None"

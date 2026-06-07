@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://c7to1owlpac77"]
 
 [ext_resource type="Script" uid="uid://s2syun0fhcqy" path="res://map.gd" id="1_map"]
-[ext_resource type="PackedScene" path="res://ui/map_ui.tscn" id="2_map_ui"]
 [ext_resource type="Texture2D" uid="uid://8u6ore52f26k" path="res://assets/buildings/Building6.png" id="2_lancafe"]
+[ext_resource type="PackedScene" path="res://ui/map_ui.tscn" id="2_map_ui"]
 [ext_resource type="Texture2D" uid="uid://b4ug8h2yoc1jf" path="res://assets/buildings/Building5.png" id="3_majorhall"]
 [ext_resource type="Texture2D" uid="uid://ceokx4h6plwia" path="res://assets/objects/Tree3.png" id="4_tree"]
 [ext_resource type="Texture2D" uid="uid://duhu7n8nwfnnh" path="res://assets/objects/Bush1.png" id="5_bush"]
@@ -49,14 +49,15 @@ radius = 15.0
 [node name="TownMap" type="Node2D" unique_id=1633915375]
 script = ExtResource("1_map")
 
-[node name="MapUI" parent="." instance=ExtResource("2_map_ui")]
+[node name="MapUI" parent="." unique_id=248203091 instance=ExtResource("2_map_ui")]
 
 [node name="Ground" type="Node2D" parent="." unique_id=1284534122]
 
 [node name="Grass" type="ColorRect" parent="Ground" unique_id=1998482434]
 z_index = -20
+offset_top = -1.0
 offset_right = 1600.0
-offset_bottom = 1100.0
+offset_bottom = 1099.0
 color = Color(0.45, 0.68, 0.38, 1)
 
 [node name="PathHorizontalEdge" type="ColorRect" parent="Ground" unique_id=211841593]

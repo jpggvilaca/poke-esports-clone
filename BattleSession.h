@@ -23,10 +23,12 @@ public:
 
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId);
+    BattleActionResult UsePlayerDrill(DrillResultQuality quality);
     BattleActionResult SwitchPlayer(int playerIndex);
 
     BattleState GetState() const;
     std::vector<SkillView> GetAvailablePlayerSkills() const;
+    DrillView GetPlayerDrill() const;
 
 private:
     Competitor CreateCompetitor(
@@ -44,6 +46,36 @@ private:
     const BattleStatus& ActivePlayerStatus() const;
     void MarkParticipant(int playerIndex);
     bool IsKnownPlayerIndex(int playerIndex) const;
+    bool IsBasicAbility(const Skill& definition) const;
+    AbilityRuntimeState& EnsureAbilityState(Competitor& competitor, const std::string& skillId) const;
+    int GetCooldownRemaining(const Competitor& competitor, const std::string& skillId) const;
+    BattleActionResult RejectSkillAction(
+        SimulationError errorCode,
+        const std::string& error,
+        BattleActor actor,
+        const std::string& skillId) const;
+    DrillView CreateDrillView(const Competitor& competitor, const BattleStatus& status) const;
+    DrillUseResult ResolveDrill(
+        BattleActor actor,
+        Competitor& competitor,
+        DrillResultQuality quality,
+        BattleActionResult& result) const;
+    int GetDrillManaGain(const DrillDefinition& drill, DrillResultQuality quality) const;
+    std::string DrillQualityToString(DrillResultQuality quality) const;
+    void StartCooldown(
+        BattleActor actor,
+        Competitor& competitor,
+        BattleStatus& status,
+        const Skill& definition,
+        BattleActionResult& result) const;
+    void TickCooldowns(BattleActor actor, Competitor& competitor, BattleActionResult& result) const;
+    void TickStatusDurations(BattleActor actor, BattleStatus& status, BattleActionResult& result) const;
+    void FinishActionOpportunity(BattleActor actor, Competitor& competitor, BattleStatus& status, BattleActionResult& result) const;
+    void AppendActionBlocked(
+        BattleActionResult& result,
+        BattleActor actor,
+        const std::string& skillId,
+        const std::string& reason) const;
     void ResolveOpponentTurn(BattleActionResult& result);
     CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;
     void FinishBattleIfNeeded(BattleActionResult& result);

@@ -18,13 +18,14 @@
 namespace Balance
 {
     inline constexpr int StartingMaxHp = 100;
-    inline constexpr int StartingMaxFocus = 50;
+    inline constexpr int StartingMaxMana = 100;
+    inline constexpr int StartingMana = 25;
+    inline constexpr int BasicManaGain = 25;
     inline constexpr int StartingBasePower = 5;
-    inline constexpr int StarterSkillsPerSpec = 10;
+    inline constexpr int StarterSkillsPerSpec = 4;
     inline constexpr int SkillXpPerUse = 25;
     inline constexpr int SkillXpPerLevel = 100;
     inline constexpr int SkillLevelUpPower = 4;
-    inline constexpr int SkillLevelUpFocusCost = 2;
     inline constexpr int SkillLevelUpEffectValue = 4;
     inline constexpr int ClutchLowHpThresholdPercent = 35;
     inline constexpr double AdvantageModifier = 1.05;
@@ -38,12 +39,14 @@ public:
     SimulationData();
 
     const Skill* FindSkill(const std::string& id) const;
+    const DrillDefinition* FindDrill(GameType gameType) const;
     const TraitDefinition* FindTrait(const std::string& id) const;
     const SpecData* FindSpec(Spec spec) const;
     const std::vector<SpecData>& GetSpecs() const;
 
 private:
     std::vector<Skill> skills_;
+    std::vector<DrillDefinition> drills_;
     std::vector<TraitDefinition> traits_;
     std::vector<SpecData> specs_;
 };

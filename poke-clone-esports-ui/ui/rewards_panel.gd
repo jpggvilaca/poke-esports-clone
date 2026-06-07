@@ -1,13 +1,17 @@
 class_name RewardsPanel
 extends Control
 
+signal return_requested
+
 @onready var overlay: ColorRect = $Overlay
 @onready var panel: PanelContainer = $Panel
 @onready var title_label: Label = $Panel/Margin/Content/Title
 @onready var body_label: RichTextLabel = $Panel/Margin/Content/Body
+@onready var return_button: Button = $Panel/Margin/Content/ReturnButton
 
 
 func _ready() -> void:
+	return_button.pressed.connect(_on_return_button_pressed)
 	hide_rewards()
 
 
@@ -17,6 +21,7 @@ func show_rewards(title: String, lines: Array[String]) -> void:
 	visible = true
 	overlay.visible = true
 	panel.visible = true
+	return_button.grab_focus()
 	panel.modulate = Color(1, 1, 1, 0)
 	panel.scale = Vector2(0.92, 0.92)
 
@@ -31,6 +36,19 @@ func hide_rewards() -> void:
 	if is_node_ready():
 		overlay.visible = false
 		panel.visible = false
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+
+	if event.is_action_pressed("ui_accept"):
+		get_viewport().set_input_as_handled()
+		return_requested.emit()
+
+
+func _on_return_button_pressed() -> void:
+	return_requested.emit()
 
 
 func _join_lines(lines: Array[String]) -> String:

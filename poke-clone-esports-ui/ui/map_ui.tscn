@@ -1,6 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://ui/map_ui.gd" id="1_map_ui_script"]
+[ext_resource type="PackedScene" path="res://ui/dialog_box.tscn" id="2_dialog_box"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_prompt"]
 bg_color = Color(0.95, 0.92, 0.78, 1)
@@ -36,6 +37,8 @@ content_margin_bottom = 10.0
 
 [node name="MapUI" type="CanvasLayer"]
 script = ExtResource("1_map_ui_script")
+
+[node name="DialogBox" parent="." instance=ExtResource("2_dialog_box")]
 
 [node name="PromptPanel" type="PanelContainer" parent="."]
 visible = false

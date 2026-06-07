@@ -10,7 +10,9 @@ public:
     explicit BattleRules(const SimulationData& data);
 
     int GetPower(const Skill& definition, const SkillProgress& progress) const;
-    int GetFocusCost(const Skill& definition, const SkillProgress& progress, const Competitor& user) const;
+    int GetManaCost(const Skill& definition, const SkillProgress& progress, const Competitor& user) const;
+    int GetManaGain(const Skill& definition, const SkillProgress& progress) const;
+    int GetCooldownTurns(const Skill& definition, const BattleStatus& userStatus) const;
     double GetAccuracy(const Skill& definition, const SkillProgress& progress, const Competitor& user) const;
     int GetEffectValue(const Skill& definition, const SkillProgress& progress, const Competitor& user) const;
     double GetSpecModifier(Spec attackerSpec, Spec defenderSpec) const;

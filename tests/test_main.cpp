@@ -6,7 +6,9 @@
 #include "TrainerProfile.h"
 
 #include <cstddef>
+#include <initializer_list>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -51,7 +53,12 @@ namespace
         case SimulationError::BattleNotStarted: return "BattleNotStarted";
         case SimulationError::BattleAlreadyFinished: return "BattleAlreadyFinished";
         case SimulationError::UnknownSkill: return "UnknownSkill";
-        case SimulationError::InsufficientFocus: return "InsufficientFocus";
+        case SimulationError::UnknownDrill: return "UnknownDrill";
+        case SimulationError::InsufficientMana: return "InsufficientMana";
+        case SimulationError::SkillOnCooldown: return "SkillOnCooldown";
+        case SimulationError::ActorStunned: return "ActorStunned";
+        case SimulationError::ActorSilenced: return "ActorSilenced";
+        case SimulationError::ActorRooted: return "ActorRooted";
         case SimulationError::UnknownPlayerProfile: return "UnknownPlayerProfile";
         case SimulationError::PlayerProfileAlreadyActive: return "PlayerProfileAlreadyActive";
         case SimulationError::PlayerProfileCannotPlay: return "PlayerProfileCannotPlay";
@@ -77,11 +84,21 @@ namespace
         case BattleEventType::BattleStarted: return "BattleStarted";
         case BattleEventType::PlayerSwitched: return "PlayerSwitched";
         case BattleEventType::SkillStarted: return "SkillStarted";
-        case BattleEventType::FocusChanged: return "FocusChanged";
+        case BattleEventType::DrillStarted: return "DrillStarted";
+        case BattleEventType::DrillCompleted: return "DrillCompleted";
+        case BattleEventType::ManaChanged: return "ManaChanged";
+        case BattleEventType::CooldownStarted: return "CooldownStarted";
+        case BattleEventType::CooldownTicked: return "CooldownTicked";
+        case BattleEventType::CooldownReady: return "CooldownReady";
+        case BattleEventType::ActionBlocked: return "ActionBlocked";
         case BattleEventType::AttackMissed: return "AttackMissed";
         case BattleEventType::DamageApplied: return "DamageApplied";
         case BattleEventType::HealingApplied: return "HealingApplied";
         case BattleEventType::StatusApplied: return "StatusApplied";
+        case BattleEventType::StatusExpired: return "StatusExpired";
+        case BattleEventType::MarkApplied: return "MarkApplied";
+        case BattleEventType::MarkTriggered: return "MarkTriggered";
+        case BattleEventType::MarkExpired: return "MarkExpired";
         case BattleEventType::SkillXpGained: return "SkillXpGained";
         case BattleEventType::SkillLeveledUp: return "SkillLeveledUp";
         case BattleEventType::BattleFinished: return "BattleFinished";
@@ -191,8 +208,8 @@ namespace
         competitor.traitId = traitId;
         competitor.hp = 100;
         competitor.maxHp = 100;
-        competitor.focus = 50;
-        competitor.maxFocus = 50;
+        competitor.mana = 0;
+        competitor.maxMana = Balance::StartingMaxMana;
         competitor.basePower = Balance::StartingBasePower;
         return competitor;
     }
@@ -213,6 +230,27 @@ namespace
         return slot;
     }
 
+    BattleSetup::PlayerSlot MakeAbilityBattleSlot(
+        int profileIndex,
+        const std::string& name,
+        Spec spec,
+        std::initializer_list<const char*> skillIds,
+        int currentMana = -1)
+    {
+        BattleSetup::PlayerSlot slot;
+        slot.profileIndex = profileIndex;
+        slot.name = name;
+        slot.spec = spec;
+        slot.passiveBonuses.maxHpBonus = 1000;
+        slot.currentMana = currentMana;
+        slot.maxMana = Balance::StartingMaxMana;
+        for (const char* skillId : skillIds)
+        {
+            slot.skills.push_back({ skillId, 1, 0 });
+        }
+        return slot;
+    }
+
     void TestPlayerProfileSystem(TestContext& test)
     {
         SimulationData data;
@@ -228,7 +266,7 @@ namespace
         test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(4), "starter learns four skills");
         test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(4), "starter equips four skills");
         test.ExpectEqual(player.learnedSkillIds[0], std::string("top-basic"), "starter loadout begins with the spec basic");
-        test.ExpectEqual(player.activeSkillIds[1], std::string("top-consistent"), "starter loadout includes a reliable damage skill");
+        test.ExpectEqual(player.activeSkillIds[1], std::string("top-hold-line"), "starter loadout includes the spec utility ability");
         test.ExpectEqual(player.traitId, std::string("clutch-player"), "top starter receives the top default trait");
 
         test.ExpectEqual(
@@ -260,23 +298,23 @@ namespace
         test.Expect(!equipMissing.accepted, "cannot equip an unknown skill");
         test.ExpectEqual(equipMissing.errorCode, SimulationError::UnknownSkill, "unknown equip reject has a stable error code");
 
-        ProfileCommandResult learnRecover = profiles.LearnSkill(player, "top-recover");
+        ProfileCommandResult learnRecover = profiles.LearnSkill(player, "jungle-gank");
         test.Expect(learnRecover.accepted, "can learn a new skill");
-        test.Expect(profiles.HasLearnedSkill(player, "top-recover"), "learned skill is tracked");
+        test.Expect(profiles.HasLearnedSkill(player, "jungle-gank"), "learned skill is tracked");
 
-        ProfileCommandResult duplicateLearn = profiles.LearnSkill(player, "top-recover");
+        ProfileCommandResult duplicateLearn = profiles.LearnSkill(player, "jungle-gank");
         test.Expect(!duplicateLearn.accepted, "cannot learn the same skill twice");
 
-        ProfileCommandResult equipWhenFull = profiles.EquipSkill(player, "top-recover");
+        ProfileCommandResult equipWhenFull = profiles.EquipSkill(player, "jungle-gank");
         test.Expect(!equipWhenFull.accepted, "cannot equip when all active slots are full");
 
         ProfileCommandResult unequipBasic = profiles.UnequipSkill(player, "top-basic");
         test.Expect(unequipBasic.accepted, "can unequip an active skill");
         test.Expect(!profiles.HasActiveSkill(player, "top-basic"), "unequipped skill is no longer active");
 
-        ProfileCommandResult equipRecover = profiles.EquipSkill(player, "top-recover");
+        ProfileCommandResult equipRecover = profiles.EquipSkill(player, "jungle-gank");
         test.Expect(equipRecover.accepted, "can equip a learned skill after freeing a slot");
-        test.Expect(profiles.HasActiveSkill(player, "top-recover"), "equipped skill is active");
+        test.Expect(profiles.HasActiveSkill(player, "jungle-gank"), "equipped skill is active");
 
         ProfileCommandResult negativeXp = profiles.AwardXp(player, -1);
         test.Expect(!negativeXp.accepted, "negative XP awards are rejected");
@@ -298,12 +336,12 @@ namespace
         SimulationData data;
         BattleRules rules(data);
 
-        const Skill* topPressure = data.FindSkill("top-pressure");
+        const Skill* topPressure = data.FindSkill("top-sunder");
         const Skill* midBasic = data.FindSkill("mid-basic");
-        const Skill* adcAllIn = data.FindSkill("adc-all-in");
-        const Skill* jungleDisrupt = data.FindSkill("jungle-disrupt");
-        const Skill* supportRecover = data.FindSkill("support-recover");
-        const Skill* supportGuard = data.FindSkill("support-guard");
+        const Skill* adcAllIn = data.FindSkill("adc-bullet-time");
+        const Skill* jungleDisrupt = data.FindSkill("jungle-invade");
+        const Skill* supportRecover = data.FindSkill("support-teamfight");
+        const Skill* supportGuard = data.FindSkill("support-peel");
         test.Expect(topPressure != nullptr, "top pressure skill exists");
         test.Expect(midBasic != nullptr, "mid basic skill exists");
         test.Expect(adcAllIn != nullptr, "ADC all-in skill exists");
@@ -324,9 +362,9 @@ namespace
         SkillProgress progress{ topPressure->id, 1, 0 };
         Competitor clutch = MakeCompetitor(Spec::Top, "clutch-player");
         clutch.hp = 35;
-        test.ExpectEqual(rules.GetFocusCost(*topPressure, progress, clutch), 8, "clutch does not trigger at 35 percent HP");
+        test.ExpectEqual(rules.GetManaCost(*topPressure, progress, clutch), 45, "clutch does not trigger at 35 percent HP");
         clutch.hp = 34;
-        test.ExpectEqual(rules.GetFocusCost(*topPressure, progress, clutch), 6, "clutch discounts paid skills below 35 percent HP");
+        test.ExpectEqual(rules.GetManaCost(*topPressure, progress, clutch), 33, "clutch discounts paid abilities below 35 percent HP");
 
         Competitor mid = MakeCompetitor(Spec::Mid, "lane-bully");
         Competitor adc = MakeCompetitor(Spec::Adc, "precision-carry");
@@ -339,23 +377,23 @@ namespace
 
         const double precisionAccuracy = rules.GetAccuracy(*adcAllIn, { adcAllIn->id, 1, 0 }, adc);
         test.Expect(
-            precisionAccuracy > 0.86 && precisionAccuracy < 0.88,
+            precisionAccuracy > 0.92 && precisionAccuracy < 0.94,
             "precision carry improves damaging accuracy");
 
         Competitor jungle = MakeCompetitor(Spec::Jungle, "shotcaller");
         test.ExpectEqual(
             rules.GetEffectValue(*jungleDisrupt, { jungleDisrupt->id, 1, 0 }, jungle),
-            -24,
+            60,
             "shotcaller strengthens disruption effects");
 
         Competitor support = MakeCompetitor(Spec::Support, "stabilizer");
         test.ExpectEqual(
             rules.GetEffectValue(*supportRecover, { supportRecover->id, 1, 0 }, support),
-            34,
+            66,
             "stabilizer strengthens healing effects");
         test.ExpectEqual(
             rules.GetEffectValue(*supportGuard, { supportGuard->id, 1, 0 }, support),
-            54,
+            42,
             "stabilizer strengthens positive defense effects");
     }
 
@@ -556,6 +594,188 @@ namespace
         test.Expect(ContainsInt(finalAction.reward.participantPlayerIndices, 202), "switched-in player receives shared XP");
     }
 
+    void TestManaCooldownAndControlMechanics(TestContext& test)
+    {
+        SimulationData data;
+
+        {
+            BattleSession session(data, 222);
+            BattleSetup setup;
+            setup.gameType = GameType::LeagueOfLegends;
+            setup.playerTeam.push_back(MakeAbilityBattleSlot(
+                0,
+                "Mana Tester",
+                Spec::Top,
+                { "top-basic", "top-sunder" }));
+            setup.opponentSpec = Spec::Support;
+            setup.opponentMaxHp = 1000;
+
+            BattleActionResult start = session.StartBattle(setup);
+            test.Expect(start.accepted, "mana battle starts");
+            test.ExpectEqual(session.GetState().player.mana, Balance::StartingMana, "battle mana starts with the configured opening mana");
+
+            BattleActionResult rejected = session.UsePlayerSkill("top-sunder");
+            test.Expect(!rejected.accepted, "paid ability rejects without mana");
+            test.ExpectEqual(rejected.errorCode, SimulationError::InsufficientMana, "paid reject reports insufficient mana");
+            test.Expect(ContainsEventType(rejected.events, BattleEventType::ActionBlocked), "paid reject emits action blocked");
+
+            BattleActionResult basic = session.UsePlayerSkill("top-basic");
+            test.Expect(basic.accepted, "basic is legal at zero mana");
+            test.Expect(ContainsEventType(basic.events, BattleEventType::ManaChanged), "basic generates mana");
+            test.ExpectEqual(session.GetState().player.mana, Balance::StartingMana + Balance::BasicManaGain, "basic grants configured mana");
+        }
+
+        {
+            BattleSession session(data, 333);
+            BattleSetup setup;
+            setup.gameType = GameType::LeagueOfLegends;
+            setup.playerTeam.push_back(MakeAbilityBattleSlot(
+                0,
+                "Cooldown Tester",
+                Spec::Top,
+                { "top-basic", "top-sunder" },
+                100));
+            setup.opponentSpec = Spec::Support;
+            setup.opponentMaxHp = 1000;
+
+            test.Expect(session.StartBattle(setup).accepted, "cooldown battle starts");
+            BattleActionResult sunder = session.UsePlayerSkill("top-sunder");
+            test.Expect(sunder.accepted, "paid ability can be used with mana");
+            test.Expect(ContainsEventType(sunder.events, BattleEventType::CooldownStarted), "paid ability starts cooldown");
+
+            BattleActionResult blocked = session.UsePlayerSkill("top-sunder");
+            test.Expect(!blocked.accepted, "cooldown blocks immediate reuse");
+            test.ExpectEqual(blocked.errorCode, SimulationError::SkillOnCooldown, "cooldown reject reports stable error");
+
+            test.Expect(session.UsePlayerSkill("top-basic").accepted, "first basic ticks cooldown");
+            test.ExpectEqual(session.GetAvailablePlayerSkills()[1].cooldownRemaining, 1, "cooldown ticks after owner action");
+            test.Expect(session.UsePlayerSkill("top-basic").accepted, "second basic ticks cooldown");
+            test.ExpectEqual(session.GetAvailablePlayerSkills()[1].cooldownRemaining, 0, "cooldown reaches ready");
+        }
+
+        {
+            BattleSession session(data, 444);
+            BattleSetup setup;
+            setup.gameType = GameType::LeagueOfLegends;
+            setup.playerTeam.push_back(MakeAbilityBattleSlot(
+                0,
+                "ADC",
+                Spec::Adc,
+                { "adc-basic", "adc-trap" },
+                100));
+            setup.opponentSpec = Spec::Support;
+            setup.opponentMaxHp = 1000;
+
+            test.Expect(session.StartBattle(setup).accepted, "control battle starts");
+            BattleActionResult trap = session.UsePlayerSkill("adc-trap");
+            test.Expect(trap.accepted, "trap ability is accepted");
+            test.Expect(ContainsEventType(trap.events, BattleEventType::StatusApplied), "trap applies stun status");
+            test.Expect(ContainsEventType(trap.events, BattleEventType::ActionBlocked), "stunned opponent skips action");
+        }
+    }
+
+    void TestMarksBuffsDebuffsAndOpponentAI(TestContext& test)
+    {
+        SimulationData data;
+
+        {
+            BattleSession session(data, 555);
+            BattleSetup setup;
+            setup.gameType = GameType::LeagueOfLegends;
+            setup.playerTeam.push_back(MakeAbilityBattleSlot(
+                0,
+                "Jungle",
+                Spec::Jungle,
+                { "jungle-basic", "jungle-smite-fight" },
+                100));
+            setup.opponentSpec = Spec::Support;
+            setup.opponentMaxHp = 1000;
+
+            test.Expect(session.StartBattle(setup).accepted, "mark battle starts");
+            BattleActionResult mark = session.UsePlayerSkill("jungle-smite-fight");
+            test.Expect(mark.accepted, "mark ability is accepted");
+            test.Expect(ContainsEventType(mark.events, BattleEventType::MarkApplied), "mark is applied");
+
+            BattleActionResult trigger = session.UsePlayerSkill("jungle-basic");
+            test.Expect(trigger.accepted, "follow-up basic is accepted");
+            test.Expect(ContainsEventType(trigger.events, BattleEventType::MarkTriggered), "damaging follow-up triggers mark");
+        }
+
+        {
+            BattleRules rules(data);
+            const Skill* adcBasic = data.FindSkill("adc-basic");
+            test.Expect(adcBasic != nullptr, "ADC basic exists for modifier tests");
+            if (adcBasic != nullptr)
+            {
+                Competitor attacker = MakeCompetitor(Spec::Adc, "");
+                Competitor defender = MakeCompetitor(Spec::Support, "");
+                BattleStatus plainAttacker;
+                BattleStatus plainDefender;
+                const DamageResult plain = rules.CalculateDamage(
+                    *adcBasic,
+                    { adcBasic->id, 1, 0 },
+                    attacker,
+                    plainAttacker,
+                    defender,
+                    plainDefender);
+
+                BattleStatus buffedAttacker;
+                buffedAttacker.attackModifierPercent = 50;
+                buffedAttacker.attackModifierTurns = 1;
+                buffedAttacker.attackPenetrationPercent = 50;
+                buffedAttacker.attackPenetrationTurns = 1;
+                BattleStatus defendedTarget;
+                defendedTarget.defenseModifierPercent = 40;
+                defendedTarget.defenseModifierTurns = 1;
+                const DamageResult modified = rules.CalculateDamage(
+                    *adcBasic,
+                    { adcBasic->id, 1, 0 },
+                    attacker,
+                    buffedAttacker,
+                    defender,
+                    defendedTarget);
+                test.Expect(modified.amount > plain.amount, "attack buff and penetration increase damage through defense");
+            }
+
+            const Skill* topSunder = data.FindSkill("top-sunder");
+            test.Expect(topSunder != nullptr, "top spender exists for cooldown modifier tests");
+            if (topSunder != nullptr)
+            {
+                BattleStatus reduced;
+                reduced.cooldownModifierPercent = -50;
+                reduced.cooldownModifierTurns = 1;
+                BattleStatus increased;
+                increased.cooldownModifierPercent = 50;
+                increased.cooldownModifierTurns = 1;
+                test.ExpectEqual(rules.GetCooldownTurns(*topSunder, reduced), 1, "cooldown reduction lowers cooldown");
+                test.ExpectEqual(rules.GetCooldownTurns(*topSunder, increased), 3, "cooldown increase raises cooldown");
+            }
+        }
+
+        {
+            BattleRules rules(data);
+            ProgressionSystem progression;
+            SkillSystem skillSystem(data, rules, progression);
+            OpponentAI ai(data, rules, skillSystem);
+            Competitor opponent = MakeCompetitor(Spec::Adc, "");
+            opponent.skills.push_back({ "adc-basic", 1, 0 });
+            opponent.skills.push_back({ "adc-multi-strike", 1, 0 });
+            opponent.abilityStates.push_back({ "adc-basic", 0 });
+            opponent.abilityStates.push_back({ "adc-multi-strike", 0 });
+            opponent.mana = 0;
+            Competitor player = MakeCompetitor(Spec::Support, "");
+            BattleStatus opponentStatus;
+            BattleStatus playerStatus;
+            std::mt19937 randomEngine(42);
+            SkillProgress* selected = ai.SelectSkill(opponent, opponentStatus, player, playerStatus, randomEngine);
+            test.Expect(selected != nullptr, "AI finds a legal fallback ability");
+            if (selected != nullptr)
+            {
+                test.ExpectEqual(selected->skillId, std::string("adc-basic"), "AI falls back to basic when spender is illegal");
+            }
+        }
+    }
+
     void TestBattleSessionSeededReplay(TestContext& test)
     {
         SimulationData data;
@@ -600,6 +820,8 @@ int main()
         { "RatingSystem", TestRatingSystem },
         { "ScoutSystem", TestScoutSystem },
         { "BattleSession switching and XP sharing", TestBattleSessionSwitchingAndXpShare },
+        { "Mana, cooldown, and control mechanics", TestManaCooldownAndControlMechanics },
+        { "Marks, modifiers, and opponent AI", TestMarksBuffsDebuffsAndOpponentAI },
         { "BattleSession seeded replay", TestBattleSessionSeededReplay },
     };
 

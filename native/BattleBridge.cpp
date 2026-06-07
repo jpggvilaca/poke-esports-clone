@@ -18,6 +18,7 @@ void BattleBridge::_bind_methods()
 {
     godot::ClassDB::bind_method(godot::D_METHOD("start_battle", "setup"), &BattleBridge::start_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
+    godot::ClassDB::bind_method(godot::D_METHOD("use_drill", "result_quality"), &BattleBridge::use_drill);
     godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
     godot::ClassDB::bind_method(godot::D_METHOD("create_player_profile", "player_name", "spec"), &BattleBridge::create_player_profile);
     godot::ClassDB::bind_method(godot::D_METHOD("get_player_skill_summary", "player_profile", "skill_id", "progress"), &BattleBridge::get_player_skill_summary);
@@ -26,6 +27,7 @@ void BattleBridge::_bind_methods()
     godot::ClassDB::bind_method(godot::D_METHOD("complete_trainer_battle", "trainer_state", "battle_config", "battle_result"), &BattleBridge::complete_trainer_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("get_battle_state"), &BattleBridge::get_battle_state);
     godot::ClassDB::bind_method(godot::D_METHOD("get_available_skills"), &BattleBridge::get_available_skills);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_drill_action"), &BattleBridge::get_drill_action);
     godot::ClassDB::bind_method(godot::D_METHOD("get_last_result"), &BattleBridge::get_last_result);
 }
 
@@ -50,6 +52,18 @@ Dictionary BattleBridge::use_skill(const String& skill_id)
     }
 
     last_result_ = session_->UsePlayerSkill(std::string(skill_id.utf8().get_data()));
+    return result_to_dictionary(last_result_);
+}
+
+Dictionary BattleBridge::use_drill(const String& result_quality)
+{
+    if (session_ == nullptr)
+    {
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return result_to_dictionary(last_result_);
+    }
+
+    last_result_ = session_->UsePlayerDrill(drill_quality_from_string(result_quality));
     return result_to_dictionary(last_result_);
 }
 
@@ -88,8 +102,12 @@ Dictionary BattleBridge::get_player_skill_summary(
         summary["name"] = skill_id;
         summary["level"] = 1;
         summary["xp"] = 0;
-        summary["power"] = 0;
-        summary["focus_cost"] = 0;
+        summary["mana_cost"] = 0;
+        summary["mana_gain"] = 0;
+        summary["cooldown_turns"] = 0;
+        summary["cooldown_remaining"] = 0;
+        summary["can_use"] = true;
+        summary["disabled_reason"] = "";
         return summary;
     }
 
@@ -106,7 +124,7 @@ Dictionary BattleBridge::get_player_skill_summary(
     ProgressionSystem progression;
     SkillSystem skills(data_, rules, progression);
     const Competitor user = competitor_from_player_profile(player_profile);
-    return skill_to_dictionary(skills.CreateSkillView(*definition, progress, user));
+    return skill_to_dictionary(skills.CreateSkillView(*definition, progress, user, {}, 0));
 }
 
 Dictionary BattleBridge::get_pending_scout_offer(
@@ -247,6 +265,16 @@ Array BattleBridge::get_available_skills() const
     return skills;
 }
 
+Dictionary BattleBridge::get_drill_action() const
+{
+    if (session_ == nullptr)
+    {
+        return drill_to_dictionary({});
+    }
+
+    return drill_to_dictionary(session_->GetPlayerDrill());
+}
+
 Dictionary BattleBridge::get_last_result() const
 {
     return result_to_dictionary(last_result_);
@@ -291,8 +319,8 @@ void BattleBridge::apply_battle_vitals(
         Dictionary player = roster[profile_index];
         player["current_hp"] = player_state.get("hp", player.get("current_hp", 100));
         player["max_hp"] = player_state.get("max_hp", player.get("max_hp", 100));
-        player["current_focus"] = player_state.get("focus", player.get("current_focus", 50));
-        player["max_focus"] = player_state.get("max_focus", player.get("max_focus", 50));
+        player["current_mana"] = player_state.get("mana", player.get("current_mana", player.get("current_focus", 0)));
+        player["max_mana"] = player_state.get("max_mana", player.get("max_mana", player.get("max_focus", Balance::StartingMaxMana)));
         roster[profile_index] = player;
     }
 }
@@ -411,9 +439,9 @@ void BattleBridge::award_participant_xp(
         player["current_hp"] = std::min(
             static_cast<int>(player.get("current_hp", player.get("max_hp", 100))),
             static_cast<int>(player.get("max_hp", 100)));
-        player["current_focus"] = std::min(
-            static_cast<int>(player.get("current_focus", player.get("max_focus", 50))),
-            static_cast<int>(player.get("max_focus", 50)));
+        player["current_mana"] = std::min(
+            static_cast<int>(player.get("current_mana", 0)),
+            static_cast<int>(player.get("max_mana", Balance::StartingMaxMana)));
         roster[profile_index] = player;
 
         level_up_messages.push_back(String("XP: ") + player_name + String(" gained ") + String::num_int64(battle_xp) + String(" player XP."));
@@ -519,10 +547,21 @@ Competitor BattleBridge::competitor_from_player_profile(const Dictionary& player
     competitor.hp = player_profile.has("current_hp")
         ? std::clamp(static_cast<int>(player_profile["current_hp"]), 0, competitor.maxHp)
         : competitor.maxHp;
-    competitor.maxFocus = Balance::StartingMaxFocus;
-    competitor.focus = player_profile.has("current_focus")
-        ? std::clamp(static_cast<int>(player_profile["current_focus"]), 0, competitor.maxFocus)
-        : competitor.maxFocus;
+    competitor.maxMana = player_profile.has("max_mana")
+        ? std::max(1, static_cast<int>(player_profile["max_mana"]))
+        : Balance::StartingMaxMana;
+    if (player_profile.has("current_mana"))
+    {
+        competitor.mana = std::clamp(static_cast<int>(player_profile["current_mana"]), 0, competitor.maxMana);
+    }
+    else if (player_profile.has("current_focus"))
+    {
+        competitor.mana = std::clamp(static_cast<int>(player_profile["current_focus"]), 0, competitor.maxMana);
+    }
+    else
+    {
+        competitor.mana = 0;
+    }
     competitor.basePower = Balance::StartingBasePower + bonuses.basePowerBonus;
     competitor.counterDamageBonusPercent = bonuses.counterDamageBonusPercent;
     return competitor;
@@ -588,7 +627,7 @@ Dictionary BattleBridge::player_profile_to_roster_dictionary(const PlayerProfile
 {
     Dictionary dictionary = player_profile_to_dictionary(player_profile);
     dictionary["current_hp"] = dictionary.get("max_hp", Balance::StartingMaxHp);
-    dictionary["current_focus"] = dictionary.get("max_focus", Balance::StartingMaxFocus);
+    dictionary["current_mana"] = 0;
 
     Dictionary progress_by_skill;
     Array active_skills = dictionary["active_skill_ids"];
@@ -610,9 +649,21 @@ Dictionary BattleBridge::competitor_to_dictionary(const CompetitorView& competit
     Dictionary dictionary;
     Dictionary status;
     status["attack_modifier_percent"] = competitor.status.attackModifierPercent;
-    status["attack_modifier_hits"] = competitor.status.attackModifierHits;
+    status["attack_modifier_turns"] = competitor.status.attackModifierTurns;
     status["defense_modifier_percent"] = competitor.status.defenseModifierPercent;
-    status["defense_modifier_hits"] = competitor.status.defenseModifierHits;
+    status["defense_modifier_turns"] = competitor.status.defenseModifierTurns;
+    status["attack_penetration_percent"] = competitor.status.attackPenetrationPercent;
+    status["attack_penetration_turns"] = competitor.status.attackPenetrationTurns;
+    status["cooldown_modifier_percent"] = competitor.status.cooldownModifierPercent;
+    status["cooldown_modifier_turns"] = competitor.status.cooldownModifierTurns;
+    status["healing_received_modifier_percent"] = competitor.status.healingReceivedModifierPercent;
+    status["healing_received_modifier_turns"] = competitor.status.healingReceivedModifierTurns;
+    status["stunned_turns"] = competitor.status.stunnedTurns;
+    status["silenced_turns"] = competitor.status.silencedTurns;
+    status["rooted_turns"] = competitor.status.rootedTurns;
+    status["mark_turns"] = competitor.status.markTurns;
+    status["mark_bonus_damage"] = competitor.status.markBonusDamage;
+    status["mark_source"] = actor_to_string(competitor.status.markSource);
 
     dictionary["profile_index"] = competitor.profileIndex;
     dictionary["name"] = String(competitor.name.c_str());
@@ -620,8 +671,8 @@ Dictionary BattleBridge::competitor_to_dictionary(const CompetitorView& competit
     add_trait_fields(dictionary, competitor.traitId);
     dictionary["hp"] = competitor.hp;
     dictionary["max_hp"] = competitor.maxHp;
-    dictionary["focus"] = competitor.focus;
-    dictionary["max_focus"] = competitor.maxFocus;
+    dictionary["mana"] = competitor.mana;
+    dictionary["max_mana"] = competitor.maxMana;
     dictionary["base_power"] = competitor.basePower;
     dictionary["counter_damage_bonus_percent"] = competitor.counterDamageBonusPercent;
     dictionary["status"] = status;
@@ -654,14 +705,33 @@ Dictionary BattleBridge::skill_to_dictionary(const SkillView& skill) const
     dictionary["name"] = String(skill.name.c_str());
     dictionary["description"] = String(skill.description.c_str());
     dictionary["tone"] = String(ToString(skill.tone).c_str());
-    dictionary["power"] = skill.power;
-    dictionary["focus_cost"] = skill.focusCost;
+    dictionary["mana_cost"] = skill.manaCost;
+    dictionary["mana_gain"] = skill.manaGain;
+    dictionary["cooldown_turns"] = skill.cooldownTurns;
+    dictionary["cooldown_remaining"] = skill.cooldownRemaining;
+    dictionary["can_use"] = skill.canUse;
+    dictionary["disabled_reason"] = String(skill.disabledReason.c_str());
     dictionary["accuracy"] = skill.accuracy;
     dictionary["level"] = skill.level;
     dictionary["xp"] = skill.xp;
     dictionary["effect"] = effect_to_string(skill.effectType);
     dictionary["effect_value"] = skill.effectValue;
-    dictionary["effect_uses"] = skill.effectUses;
+    dictionary["duration_turns"] = skill.durationTurns;
+    dictionary["mark_bonus_damage"] = skill.markBonusDamage;
+    return dictionary;
+}
+
+Dictionary BattleBridge::drill_to_dictionary(const DrillView& drill) const
+{
+    Dictionary dictionary;
+    dictionary["id"] = String(drill.id.c_str());
+    dictionary["display_name"] = String(drill.displayName.c_str());
+    dictionary["description"] = String(drill.description.c_str());
+    dictionary["miss_mana_gain"] = drill.missManaGain;
+    dictionary["good_mana_gain"] = drill.goodManaGain;
+    dictionary["perfect_mana_gain"] = drill.perfectManaGain;
+    dictionary["can_use"] = drill.canUse;
+    dictionary["disabled_reason"] = String(drill.disabledReason.c_str());
     return dictionary;
 }
 
@@ -678,12 +748,17 @@ Dictionary BattleBridge::event_to_dictionary(const BattleEvent& event) const
     dictionary["old_value"] = event.oldValue;
     dictionary["new_value"] = event.newValue;
     dictionary["amount"] = event.amount;
+    dictionary["reason"] = String(event.reason.c_str());
     dictionary["old_level"] = event.oldLevel;
     dictionary["new_level"] = event.newLevel;
     dictionary["winner"] = winner_to_string(event.winner);
     dictionary["damage"] = event.damage.amount;
+    dictionary["mark_bonus_damage"] = event.damage.markBonusDamage > 0
+        ? event.damage.markBonusDamage
+        : event.effect.markBonusDamage;
     dictionary["healing"] = event.effect.healingAmount;
     dictionary["effect"] = effect_to_string(event.effect.type);
+    dictionary["duration"] = event.effect.duration;
     dictionary["reward"] = reward_to_dictionary(event.reward);
     return dictionary;
 }
@@ -699,6 +774,16 @@ Dictionary BattleBridge::result_to_dictionary(const BattleActionResult& result) 
     dictionary["winner"] = winner_to_string(result.winner);
     dictionary["state"] = state_to_dictionary(result.finalState);
     dictionary["reward"] = reward_to_dictionary(result.reward);
+
+    Dictionary drill;
+    drill["used"] = result.drillUse.used;
+    drill["actor"] = actor_to_string(result.drillUse.actor);
+    drill["id"] = String(result.drillUse.drillId.c_str());
+    drill["quality"] = drill_quality_to_string(result.drillUse.quality);
+    drill["old_mana"] = result.drillUse.oldMana;
+    drill["new_mana"] = result.drillUse.newMana;
+    drill["mana_gained"] = result.drillUse.manaGained;
+    dictionary["drill"] = drill;
 
     Array events;
     for (const BattleEvent& event : result.events)
@@ -754,7 +839,7 @@ Dictionary BattleBridge::player_profile_to_dictionary(const PlayerProfileState& 
     dictionary["xp_required_for_next_level"] = player_profile.xpRequiredForNextLevel;
     dictionary["passive_bonuses"] = passive_bonuses_to_dictionary(player_profile.passiveBonuses);
     dictionary["max_hp"] = Balance::StartingMaxHp + player_profile.passiveBonuses.maxHpBonus;
-    dictionary["max_focus"] = Balance::StartingMaxFocus;
+    dictionary["max_mana"] = Balance::StartingMaxMana;
 
     Array learned_skills;
     for (const std::string& skill_id : player_profile.learnedSkillIds)
@@ -907,7 +992,11 @@ BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictiona
         setup.opponentMaxHp = std::max(1, static_cast<int>(setup_dictionary["opponent_hp"]));
     }
 
-    if (setup_dictionary.has("opponent_focus"))
+    if (setup_dictionary.has("opponent_mana"))
+    {
+        setup.opponentMaxMana = std::max(1, static_cast<int>(setup_dictionary["opponent_mana"]));
+    }
+    else if (setup_dictionary.has("opponent_focus"))
     {
         setup.opponentMaxFocus = std::max(1, static_cast<int>(setup_dictionary["opponent_focus"]));
     }
@@ -943,9 +1032,22 @@ BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictiona
         slot.currentHp = player_dictionary.has("current_hp")
             ? static_cast<int>(player_dictionary["current_hp"])
             : -1;
-        slot.currentFocus = player_dictionary.has("current_focus")
-            ? static_cast<int>(player_dictionary["current_focus"])
-            : -1;
+        if (player_dictionary.has("max_mana"))
+        {
+            slot.maxMana = std::max(1, static_cast<int>(player_dictionary["max_mana"]));
+        }
+        else if (player_dictionary.has("max_focus"))
+        {
+            slot.maxMana = std::max(1, static_cast<int>(player_dictionary["max_focus"]));
+        }
+        if (player_dictionary.has("current_mana"))
+        {
+            slot.currentMana = static_cast<int>(player_dictionary["current_mana"]);
+        }
+        else if (player_dictionary.has("current_focus"))
+        {
+            slot.currentFocus = static_cast<int>(player_dictionary["current_focus"]);
+        }
 
         if (player_dictionary.has("passive_bonuses"))
         {
@@ -1042,11 +1144,21 @@ String BattleBridge::event_type_to_string(BattleEventType type) const
     case BattleEventType::BattleStarted: return "battle_started";
     case BattleEventType::PlayerSwitched: return "player_switched";
     case BattleEventType::SkillStarted: return "skill_started";
-    case BattleEventType::FocusChanged: return "focus_changed";
+    case BattleEventType::DrillStarted: return "drill_started";
+    case BattleEventType::DrillCompleted: return "drill_completed";
+    case BattleEventType::ManaChanged: return "mana_changed";
+    case BattleEventType::CooldownStarted: return "cooldown_started";
+    case BattleEventType::CooldownTicked: return "cooldown_ticked";
+    case BattleEventType::CooldownReady: return "cooldown_ready";
+    case BattleEventType::ActionBlocked: return "action_blocked";
     case BattleEventType::AttackMissed: return "attack_missed";
     case BattleEventType::DamageApplied: return "damage_applied";
     case BattleEventType::HealingApplied: return "healing_applied";
     case BattleEventType::StatusApplied: return "status_applied";
+    case BattleEventType::StatusExpired: return "status_expired";
+    case BattleEventType::MarkApplied: return "mark_applied";
+    case BattleEventType::MarkTriggered: return "mark_triggered";
+    case BattleEventType::MarkExpired: return "mark_expired";
     case BattleEventType::SkillXpGained: return "skill_xp_gained";
     case BattleEventType::SkillLeveledUp: return "skill_leveled_up";
     case BattleEventType::BattleFinished: return "battle_finished";
@@ -1065,7 +1177,12 @@ String BattleBridge::error_to_string(SimulationError error) const
     case SimulationError::BattleNotStarted: return "battle_not_started";
     case SimulationError::BattleAlreadyFinished: return "battle_already_finished";
     case SimulationError::UnknownSkill: return "unknown_skill";
-    case SimulationError::InsufficientFocus: return "insufficient_focus";
+    case SimulationError::UnknownDrill: return "unknown_drill";
+    case SimulationError::InsufficientMana: return "insufficient_mana";
+    case SimulationError::SkillOnCooldown: return "skill_on_cooldown";
+    case SimulationError::ActorStunned: return "actor_stunned";
+    case SimulationError::ActorSilenced: return "actor_silenced";
+    case SimulationError::ActorRooted: return "actor_rooted";
     case SimulationError::UnknownGameType: return "unknown_game_type";
     case SimulationError::BattleNeedsPlayerProfile: return "battle_needs_player_profile";
     case SimulationError::UnknownSpec: return "unknown_spec";
@@ -1088,6 +1205,33 @@ String BattleBridge::error_to_string(SimulationError error) const
     return "unknown";
 }
 
+DrillResultQuality BattleBridge::drill_quality_from_string(const String& value) const
+{
+    const String normalized = value.to_lower();
+    if (normalized == "miss")
+    {
+        return DrillResultQuality::Miss;
+    }
+    if (normalized == "perfect")
+    {
+        return DrillResultQuality::Perfect;
+    }
+
+    return DrillResultQuality::Good;
+}
+
+String BattleBridge::drill_quality_to_string(DrillResultQuality quality) const
+{
+    switch (quality)
+    {
+    case DrillResultQuality::Miss: return "miss";
+    case DrillResultQuality::Perfect: return "perfect";
+    case DrillResultQuality::Good: return "good";
+    }
+
+    return "good";
+}
+
 String BattleBridge::effect_to_string(SkillEffectType effect) const
 {
     switch (effect)
@@ -1095,6 +1239,13 @@ String BattleBridge::effect_to_string(SkillEffectType effect) const
     case SkillEffectType::Heal: return "heal";
     case SkillEffectType::AttackModifier: return "attack_modifier";
     case SkillEffectType::DefenseModifier: return "defense_modifier";
+    case SkillEffectType::AttackPenetrationModifier: return "attack_penetration_modifier";
+    case SkillEffectType::CooldownModifier: return "cooldown_modifier";
+    case SkillEffectType::HealingReceivedModifier: return "healing_received_modifier";
+    case SkillEffectType::Stunned: return "stunned";
+    case SkillEffectType::Silenced: return "silenced";
+    case SkillEffectType::Rooted: return "rooted";
+    case SkillEffectType::Mark: return "mark";
     case SkillEffectType::None: return "none";
     }
 

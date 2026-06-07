@@ -16,29 +16,49 @@ int BattleRules::GetPower(const Skill& definition, const SkillProgress& progress
     return definition.power + (progress.level - 1) * Balance::SkillLevelUpPower;
 }
 
-int BattleRules::GetFocusCost(
+int BattleRules::GetManaCost(
     const Skill& definition,
     const SkillProgress& progress,
     const Competitor& user) const
 {
-    // Free basic skills stay free forever, so neither side can run out of legal
-    // actions during a long battle.
-    if (definition.focusCost == 0)
+    (void)progress;
+    if (definition.manaCost == 0)
     {
         return 0;
     }
 
-    // Edit Balance::SkillLevelUpFocusCost to tune the strength-versus-cost tradeoff.
-    int focusCost = definition.focusCost + (progress.level - 1) * Balance::SkillLevelUpFocusCost;
-    if (HasTraitEffect(user, TraitEffectType::LowHpFocusDiscountPercent)
+    int manaCost = definition.manaCost;
+    if (HasTraitEffect(user, TraitEffectType::LowHpManaDiscountPercent)
         && user.maxHp > 0
         && user.hp * 100 < user.maxHp * Balance::ClutchLowHpThresholdPercent)
     {
-        const int discount = GetTraitEffectValue(user, TraitEffectType::LowHpFocusDiscountPercent);
-        focusCost = focusCost * (100 - discount) / 100;
+        const int discount = GetTraitEffectValue(user, TraitEffectType::LowHpManaDiscountPercent);
+        manaCost = manaCost * (100 - discount) / 100;
     }
 
-    return std::max(0, focusCost);
+    return std::max(0, manaCost);
+}
+
+int BattleRules::GetManaGain(const Skill& definition, const SkillProgress& progress) const
+{
+    (void)progress;
+    return std::max(0, definition.manaGain);
+}
+
+int BattleRules::GetCooldownTurns(const Skill& definition, const BattleStatus& userStatus) const
+{
+    int cooldown = definition.cooldownTurns;
+    if (cooldown <= 0)
+    {
+        return 0;
+    }
+
+    if (userStatus.cooldownModifierTurns > 0)
+    {
+        cooldown = static_cast<int>(std::round(cooldown * (100.0 + userStatus.cooldownModifierPercent) / 100.0));
+    }
+
+    return std::max(1, cooldown);
 }
 
 double BattleRules::GetAccuracy(
@@ -69,7 +89,9 @@ int BattleRules::GetEffectValue(
         ? definition.effectValue - growth
         : definition.effectValue + growth;
 
-    if (definition.effectType == SkillEffectType::AttackModifier
+    if ((definition.effectType == SkillEffectType::AttackModifier
+            || definition.effectType == SkillEffectType::AttackPenetrationModifier
+            || definition.effectType == SkillEffectType::CooldownModifier)
         && HasTraitEffect(user, TraitEffectType::SetupDisruptEffectBonusPercent))
     {
         effectValue = ApplyPercentBonus(
@@ -143,30 +165,30 @@ DamageResult BattleRules::CalculateDamage(
         damage *= (100.0 + GetTraitEffectValue(attacker, TraitEffectType::SuperEffectiveDamageBonusPercent)) / 100.0;
     }
 
-    if (attackerStatus.attackModifierHits > 0)
+    if (attackerStatus.attackModifierTurns > 0)
     {
         damage *= (100.0 + attackerStatus.attackModifierPercent) / 100.0;
-        --attackerStatus.attackModifierHits;
-        if (attackerStatus.attackModifierHits == 0)
-        {
-            attackerStatus.attackModifierPercent = 0;
-        }
     }
 
-    if (defenderStatus.defenseModifierHits > 0)
+    if (defenderStatus.defenseModifierTurns > 0)
     {
-        damage *= (100.0 - defenderStatus.defenseModifierPercent) / 100.0;
-        --defenderStatus.defenseModifierHits;
-        if (defenderStatus.defenseModifierHits == 0)
+        int defensePercent = defenderStatus.defenseModifierPercent;
+        if (defensePercent > 0 && attackerStatus.attackPenetrationTurns > 0)
         {
-            defenderStatus.defenseModifierPercent = 0;
+            defensePercent = defensePercent * (100 - attackerStatus.attackPenetrationPercent) / 100;
         }
+        damage *= (100.0 - defensePercent) / 100.0;
+    }
+
+    if (defenderStatus.markTurns > 0 && defenderStatus.markSource != BattleActor::None)
+    {
+        result.markBonusDamage = defenderStatus.markBonusDamage;
     }
 
     // CORE COMBAT FORMULA:
     // Edit status percentages in SimulationData.cpp to tune buffs. A successful
     // damaging hit always deals at least one damage.
-    result.amount = std::max(1, static_cast<int>(std::round(damage)));
+    result.amount = std::max(1, static_cast<int>(std::round(damage)) + result.markBonusDamage);
     return result;
 }
 

@@ -51,30 +51,6 @@ PlayerProfileState PlayerProfileSystem::CreateStarter(
     }
     playerProfile.traitId = specData->defaultTraitId;
 
-    const std::vector<std::string> starterSkillSuffixes = {
-        "-basic",
-        "-consistent",
-        "-disrupt",
-        "-setup",
-    };
-
-    for (const std::string& suffix : starterSkillSuffixes)
-    {
-        for (const std::string& skillId : specData->skillIds)
-        {
-            if (skillId.size() < suffix.size()
-                || skillId.compare(skillId.size() - suffix.size(), suffix.size(), suffix) != 0
-                || data_.FindSkill(skillId) == nullptr)
-            {
-                continue;
-            }
-
-            playerProfile.learnedSkillIds.push_back(skillId);
-            playerProfile.activeSkillIds.push_back(skillId);
-            break;
-        }
-    }
-
     for (const std::string& skillId : specData->skillIds)
     {
         if (static_cast<int>(playerProfile.activeSkillIds.size()) >= PlayerProfileBalance::StartingSkillCount)

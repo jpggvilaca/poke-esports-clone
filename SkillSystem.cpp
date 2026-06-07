@@ -15,7 +15,9 @@ SkillSystem::SkillSystem(
 SkillView SkillSystem::CreateSkillView(
     const Skill& definition,
     const SkillProgress& progress,
-    const Competitor& user) const
+    const Competitor& user,
+    const BattleStatus& userStatus,
+    int cooldownRemaining) const
 {
     SkillView view;
     view.id = definition.id;
@@ -23,14 +25,39 @@ SkillView SkillSystem::CreateSkillView(
     view.description = definition.description;
     view.tone = definition.tone;
     view.power = rules_.GetPower(definition, progress);
-    view.focusCost = rules_.GetFocusCost(definition, progress, user);
+    view.manaCost = rules_.GetManaCost(definition, progress, user);
+    view.manaGain = rules_.GetManaGain(definition, progress);
+    view.cooldownTurns = rules_.GetCooldownTurns(definition, userStatus);
+    view.cooldownRemaining = cooldownRemaining;
     view.accuracy = rules_.GetAccuracy(definition, progress, user);
     view.level = progress.level;
     view.xp = progress.xp;
     view.effectType = definition.effectType;
     view.effectTarget = definition.effectTarget;
     view.effectValue = rules_.GetEffectValue(definition, progress, user);
-    view.effectUses = definition.effectUses;
+    view.durationTurns = definition.durationTurns;
+    view.markBonusDamage = definition.markBonusDamage;
+    view.canUse = true;
+    if (userStatus.stunnedTurns > 0)
+    {
+        view.canUse = false;
+        view.disabledReason = "Stunned";
+    }
+    else if (userStatus.silencedTurns > 0 && view.manaCost > 0)
+    {
+        view.canUse = false;
+        view.disabledReason = "Silenced";
+    }
+    else if (cooldownRemaining > 0)
+    {
+        view.canUse = false;
+        view.disabledReason = "Cooldown " + std::to_string(cooldownRemaining);
+    }
+    else if (view.manaCost > user.mana)
+    {
+        view.canUse = false;
+        view.disabledReason = "Need " + std::to_string(view.manaCost) + " mana";
+    }
     return view;
 }
 
@@ -47,8 +74,8 @@ SkillUseResult SkillSystem::UseSkill(
     result.actor = actor;
     result.target = Opposite(actor);
     result.skillId = progress.skillId;
-    result.oldFocus = attacker.focus;
-    result.newFocus = attacker.focus;
+    result.oldMana = attacker.mana;
+    result.newMana = attacker.mana;
     result.oldActorHp = attacker.hp;
     result.newActorHp = attacker.hp;
     result.oldTargetHp = defender.hp;
@@ -62,8 +89,11 @@ SkillUseResult SkillSystem::UseSkill(
 
     result.used = true;
     result.skillId = definition->id;
-    attacker.focus -= rules_.GetFocusCost(*definition, progress, attacker);
-    result.newFocus = attacker.focus;
+    attacker.mana = std::clamp(
+        attacker.mana - rules_.GetManaCost(*definition, progress, attacker) + rules_.GetManaGain(*definition, progress),
+        0,
+        attacker.maxMana);
+    result.newMana = attacker.mana;
 
     BattleEvent skillStarted;
     skillStarted.type = BattleEventType::SkillStarted;
@@ -72,16 +102,16 @@ SkillUseResult SkillSystem::UseSkill(
     skillStarted.skillId = definition->id;
     result.events.push_back(skillStarted);
 
-    if (result.oldFocus != result.newFocus)
+    if (result.oldMana != result.newMana)
     {
-        BattleEvent focusChanged;
-        focusChanged.type = BattleEventType::FocusChanged;
-        focusChanged.actor = actor;
-        focusChanged.skillId = definition->id;
-        focusChanged.oldValue = result.oldFocus;
-        focusChanged.newValue = result.newFocus;
-        focusChanged.amount = result.oldFocus - result.newFocus;
-        result.events.push_back(focusChanged);
+        BattleEvent manaChanged;
+        manaChanged.type = BattleEventType::ManaChanged;
+        manaChanged.actor = actor;
+        manaChanged.skillId = definition->id;
+        manaChanged.oldValue = result.oldMana;
+        manaChanged.newValue = result.newMana;
+        manaChanged.amount = result.newMana - result.oldMana;
+        result.events.push_back(manaChanged);
     }
 
     if (!Chance(rules_.GetAccuracy(*definition, progress, attacker), randomEngine))
@@ -144,6 +174,20 @@ SkillUseResult SkillSystem::UseSkill(
         damageApplied.amount = result.damage.amount;
         damageApplied.damage = result.damage;
         result.events.push_back(damageApplied);
+
+        if (result.damage.markBonusDamage > 0)
+        {
+            BattleEvent markTriggered;
+            markTriggered.type = BattleEventType::MarkTriggered;
+            markTriggered.actor = actor;
+            markTriggered.target = result.target;
+            markTriggered.skillId = definition->id;
+            markTriggered.amount = result.damage.markBonusDamage;
+            result.events.push_back(markTriggered);
+            defenderStatus.markTurns = 0;
+            defenderStatus.markBonusDamage = 0;
+            defenderStatus.markSource = BattleActor::None;
+        }
     }
 
     result.effect = ApplySecondaryEffect(
@@ -170,6 +214,11 @@ SkillUseResult SkillSystem::UseSkill(
             effectApplied.oldValue = result.oldActorHp;
             effectApplied.newValue = result.newActorHp;
             effectApplied.amount = result.effect.healingAmount;
+        }
+        else if (result.effect.type == SkillEffectType::Mark)
+        {
+            effectApplied.type = BattleEventType::MarkApplied;
+            effectApplied.amount = result.effect.markBonusDamage;
         }
         else
         {
@@ -246,12 +295,17 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     result.type = definition.effectType;
     result.target = effectTarget;
     result.value = effectValue;
-    result.duration = definition.effectUses;
+    result.duration = definition.durationTurns;
 
     if (definition.effectType == SkillEffectType::Heal)
     {
         const int oldHp = attacker.hp;
-        attacker.hp = std::min(attacker.maxHp, attacker.hp + effectValue);
+        int healing = effectValue;
+        if (attackerStatus.healingReceivedModifierTurns > 0)
+        {
+            healing = healing * (100 + attackerStatus.healingReceivedModifierPercent) / 100;
+        }
+        attacker.hp = std::min(attacker.maxHp, attacker.hp + healing);
         result.healingAmount = attacker.hp - oldHp;
         return result;
     }
@@ -259,12 +313,46 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     if (definition.effectType == SkillEffectType::AttackModifier)
     {
         targetStatus.attackModifierPercent = effectValue;
-        targetStatus.attackModifierHits = definition.effectUses;
+        targetStatus.attackModifierTurns = definition.durationTurns;
     }
-    else
+    else if (definition.effectType == SkillEffectType::DefenseModifier)
     {
         targetStatus.defenseModifierPercent = effectValue;
-        targetStatus.defenseModifierHits = definition.effectUses;
+        targetStatus.defenseModifierTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::AttackPenetrationModifier)
+    {
+        targetStatus.attackPenetrationPercent = effectValue;
+        targetStatus.attackPenetrationTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::CooldownModifier)
+    {
+        targetStatus.cooldownModifierPercent = effectValue;
+        targetStatus.cooldownModifierTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::HealingReceivedModifier)
+    {
+        targetStatus.healingReceivedModifierPercent = effectValue;
+        targetStatus.healingReceivedModifierTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::Stunned)
+    {
+        targetStatus.stunnedTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::Silenced)
+    {
+        targetStatus.silencedTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::Rooted)
+    {
+        targetStatus.rootedTurns = definition.durationTurns;
+    }
+    else if (definition.effectType == SkillEffectType::Mark)
+    {
+        targetStatus.markTurns = definition.durationTurns;
+        targetStatus.markBonusDamage = definition.markBonusDamage;
+        targetStatus.markSource = actor;
+        result.markBonusDamage = definition.markBonusDamage;
     }
 
     return result;

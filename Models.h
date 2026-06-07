@@ -25,13 +25,27 @@ enum class SkillEffectType
     None,
     Heal,
     AttackModifier,
-    DefenseModifier
+    DefenseModifier,
+    AttackPenetrationModifier,
+    CooldownModifier,
+    HealingReceivedModifier,
+    Stunned,
+    Silenced,
+    Rooted,
+    Mark
 };
 
 enum class SkillEffectTarget
 {
     Self,
     Opponent
+};
+
+enum class DrillResultQuality
+{
+    Miss,
+    Good,
+    Perfect
 };
 
 enum class SkillTone
@@ -46,7 +60,7 @@ enum class SkillTone
 enum class TraitEffectType
 {
     None,
-    LowHpFocusDiscountPercent,
+    LowHpManaDiscountPercent,
     SetupDisruptEffectBonusPercent,
     SuperEffectiveDamageBonusPercent,
     DamagingAccuracyBonusPercent,
@@ -102,7 +116,12 @@ enum class SimulationError
     BattleNotStarted,
     BattleAlreadyFinished,
     UnknownSkill,
-    InsufficientFocus,
+    UnknownDrill,
+    InsufficientMana,
+    SkillOnCooldown,
+    ActorStunned,
+    ActorSilenced,
+    ActorRooted,
     UnknownPlayerProfile,
     PlayerProfileAlreadyActive,
     PlayerProfileCannotPlay,
@@ -123,11 +142,21 @@ enum class BattleEventType
     BattleStarted,
     PlayerSwitched,
     SkillStarted,
-    FocusChanged,
+    DrillStarted,
+    DrillCompleted,
+    ManaChanged,
+    CooldownStarted,
+    CooldownTicked,
+    CooldownReady,
+    ActionBlocked,
     AttackMissed,
     DamageApplied,
     HealingApplied,
     StatusApplied,
+    StatusExpired,
+    MarkApplied,
+    MarkTriggered,
+    MarkExpired,
     SkillXpGained,
     SkillLeveledUp,
     BattleFinished,
@@ -194,13 +223,16 @@ struct Skill
     std::string name;
     std::string description;
     SkillTone tone = SkillTone::Basic;
-    int focusCost;
-    int power;
-    double accuracy;
+    int manaCost = 0;
+    int manaGain = 0;
+    int cooldownTurns = 0;
+    int power = 0;
+    double accuracy = 1.0;
     SkillEffectType effectType = SkillEffectType::None;
     SkillEffectTarget effectTarget = SkillEffectTarget::Self;
     int effectValue = 0;
-    int effectUses = 0;
+    int durationTurns = 0;
+    int markBonusDamage = 0;
 };
 
 struct SkillProgress
@@ -228,14 +260,43 @@ struct TraitDefinition
     int effectValue = 0;
 };
 
-// These modifiers exist for one battle only. Remaining uses are measured in
-// hits: attack modifiers affect outgoing hits and defense modifiers incoming.
+struct DrillDefinition
+{
+    GameType gameType = GameType::LeagueOfLegends;
+    std::string id;
+    std::string displayName;
+    std::string description;
+    int missManaGain = 0;
+    int goodManaGain = 0;
+    int perfectManaGain = 0;
+};
+
+struct AbilityRuntimeState
+{
+    std::string skillId;
+    int cooldownRemaining = 0;
+};
+
+// These modifiers exist for one battle only. Durations tick down after the
+// affected competitor's own action opportunity.
 struct BattleStatus
 {
     int attackModifierPercent = 0;
-    int attackModifierHits = 0;
+    int attackModifierTurns = 0;
     int defenseModifierPercent = 0;
-    int defenseModifierHits = 0;
+    int defenseModifierTurns = 0;
+    int attackPenetrationPercent = 0;
+    int attackPenetrationTurns = 0;
+    int cooldownModifierPercent = 0;
+    int cooldownModifierTurns = 0;
+    int healingReceivedModifierPercent = 0;
+    int healingReceivedModifierTurns = 0;
+    int stunnedTurns = 0;
+    int silencedTurns = 0;
+    int rootedTurns = 0;
+    int markTurns = 0;
+    int markBonusDamage = 0;
+    BattleActor markSource = BattleActor::None;
 };
 
 struct PassiveBonuses
@@ -256,11 +317,12 @@ struct Competitor
     std::string traitId;
     int hp = 100;
     int maxHp = 100;
-    int focus = 50;
-    int maxFocus = 50;
+    int mana = 0;
+    int maxMana = 100;
     int basePower = 5;
     int counterDamageBonusPercent = 0;
     std::vector<SkillProgress> skills;
+    std::vector<AbilityRuntimeState> abilityStates;
 
     SkillProgress* FindSkill(const std::string& skillId)
     {
@@ -287,6 +349,32 @@ struct Competitor
 
         return nullptr;
     }
+
+    AbilityRuntimeState* FindAbilityState(const std::string& skillId)
+    {
+        for (AbilityRuntimeState& state : abilityStates)
+        {
+            if (state.skillId == skillId)
+            {
+                return &state;
+            }
+        }
+
+        return nullptr;
+    }
+
+    const AbilityRuntimeState* FindAbilityState(const std::string& skillId) const
+    {
+        for (const AbilityRuntimeState& state : abilityStates)
+        {
+            if (state.skillId == skillId)
+            {
+                return &state;
+            }
+        }
+
+        return nullptr;
+    }
 };
 
 struct BattleSetup
@@ -300,6 +388,8 @@ struct BattleSetup
         PassiveBonuses passiveBonuses;
         std::vector<SkillProgress> skills;
         int currentHp = -1;
+        int currentMana = -1;
+        int maxMana = -1;
         int currentFocus = -1;
     };
 
@@ -310,6 +400,7 @@ struct BattleSetup
     Spec opponentSpec = Spec::Jungle;
     std::string opponentTraitId;
     int opponentMaxHp = -1;
+    int opponentMaxMana = -1;
     int opponentMaxFocus = -1;
     int opponentBasePowerBonus = 0;
 };
@@ -334,8 +425,8 @@ struct CompetitorView
     std::string traitDescription;
     int hp = 0;
     int maxHp = 0;
-    int focus = 0;
-    int maxFocus = 0;
+    int mana = 0;
+    int maxMana = 0;
     int basePower = 0;
     int counterDamageBonusPercent = 0;
     BattleStatus status;
@@ -359,14 +450,32 @@ struct SkillView
     std::string description;
     SkillTone tone = SkillTone::Basic;
     int power = 0;
-    int focusCost = 0;
+    int manaCost = 0;
+    int manaGain = 0;
+    int cooldownTurns = 0;
+    int cooldownRemaining = 0;
+    bool canUse = true;
+    std::string disabledReason;
     double accuracy = 0.0;
     int level = 1;
     int xp = 0;
     SkillEffectType effectType = SkillEffectType::None;
     SkillEffectTarget effectTarget = SkillEffectTarget::Self;
     int effectValue = 0;
-    int effectUses = 0;
+    int durationTurns = 0;
+    int markBonusDamage = 0;
+};
+
+struct DrillView
+{
+    std::string id;
+    std::string displayName;
+    std::string description;
+    int missManaGain = 0;
+    int goodManaGain = 0;
+    int perfectManaGain = 0;
+    bool canUse = true;
+    std::string disabledReason;
 };
 
 struct SkillXpResult
@@ -383,6 +492,7 @@ struct DamageResult
 {
     bool applied = false;
     int amount = 0;
+    int markBonusDamage = 0;
     double specModifier = 1.0;
     Effectiveness effectiveness = Effectiveness::Neutral;
 };
@@ -395,6 +505,7 @@ struct SecondaryEffectResult
     int value = 0;
     int duration = 0;
     int healingAmount = 0;
+    int markBonusDamage = 0;
 };
 
 struct BattleEvent
@@ -409,6 +520,7 @@ struct BattleEvent
     int oldValue = 0;
     int newValue = 0;
     int amount = 0;
+    std::string reason;
     int oldLevel = 1;
     int newLevel = 1;
     DamageResult damage;
@@ -425,8 +537,8 @@ struct SkillUseResult
     BattleActor target = BattleActor::None;
     std::string skillId;
     bool hit = true;
-    int oldFocus = 0;
-    int newFocus = 0;
+    int oldMana = 0;
+    int newMana = 0;
     int oldActorHp = 0;
     int newActorHp = 0;
     int oldTargetHp = 0;
@@ -435,6 +547,17 @@ struct SkillUseResult
     SecondaryEffectResult effect;
     SkillXpResult xp;
     std::vector<BattleEvent> events;
+};
+
+struct DrillUseResult
+{
+    bool used = false;
+    BattleActor actor = BattleActor::None;
+    std::string drillId;
+    DrillResultQuality quality = DrillResultQuality::Good;
+    int oldMana = 0;
+    int newMana = 0;
+    int manaGained = 0;
 };
 
 struct BattleActionResult
@@ -448,6 +571,7 @@ struct BattleActionResult
     int newPlayerIndex = 0;
     std::string newPlayerName;
     std::vector<SkillUseResult> skillUses;
+    DrillUseResult drillUse;
     std::vector<BattleEvent> events;
     bool battleFinished = false;
     BattleWinner winner = BattleWinner::None;

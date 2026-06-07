@@ -24,6 +24,7 @@ class BattleBridge : public godot::Node
 public:
     godot::Dictionary start_battle(const godot::Dictionary& setup);
     godot::Dictionary use_skill(const godot::String& skill_id);
+    godot::Dictionary use_drill(const godot::String& result_quality);
     godot::Dictionary switch_player(int player_index);
     godot::Dictionary create_player_profile(const godot::String& player_name, const godot::String& spec) const;
     godot::Dictionary get_player_skill_summary(
@@ -44,6 +45,7 @@ public:
         const godot::Dictionary& battle_result) const;
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;
+    godot::Dictionary get_drill_action() const;
     godot::Dictionary get_last_result() const;
 
 protected:
@@ -76,6 +78,7 @@ private:
     godot::Dictionary competitor_to_dictionary(const CompetitorView& competitor) const;
     godot::Dictionary state_to_dictionary(const BattleState& state) const;
     godot::Dictionary skill_to_dictionary(const SkillView& skill) const;
+    godot::Dictionary drill_to_dictionary(const DrillView& drill) const;
     godot::Dictionary event_to_dictionary(const BattleEvent& event) const;
     godot::Dictionary result_to_dictionary(const BattleActionResult& result) const;
     godot::Dictionary reward_to_dictionary(const BattleRewardResult& reward) const;
@@ -95,6 +98,8 @@ private:
     godot::String event_type_to_string(BattleEventType type) const;
     godot::String error_to_string(SimulationError error) const;
     godot::String effect_to_string(SkillEffectType effect) const;
+    DrillResultQuality drill_quality_from_string(const godot::String& value) const;
+    godot::String drill_quality_to_string(DrillResultQuality quality) const;
 
     SimulationData data_;
     std::unique_ptr<BattleSession> session_;

@@ -2,6 +2,7 @@ extends Node
 
 const MAJOR_HALL_REQUIRED_RATING := 1080
 const MAX_ROSTER_SIZE := 6
+const STARTING_MANA := 25
 
 const NPC_BATTLES := {
 	"OlderBrother": {
@@ -15,7 +16,7 @@ const NPC_BATTLES := {
 		"match_context": "tutorial",
 		"opponent_level": 1,
 		"opponent_hp": 85,
-		"opponent_focus": 45,
+		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
 	},
 	"Fan": {
@@ -29,7 +30,7 @@ const NPC_BATTLES := {
 		"match_context": "normal",
 		"opponent_level": 1,
 		"opponent_hp": 90,
-		"opponent_focus": 45,
+		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
 	},
 	"Rival": {
@@ -43,7 +44,7 @@ const NPC_BATTLES := {
 		"match_context": "nemesis",
 		"opponent_level": 2,
 		"opponent_hp": 105,
-		"opponent_focus": 55,
+		"opponent_mana": 100,
 		"opponent_base_power_bonus": 1,
 	},
 	"Coach": {
@@ -57,7 +58,7 @@ const NPC_BATTLES := {
 		"match_context": "normal",
 		"opponent_level": 3,
 		"opponent_hp": 125,
-		"opponent_focus": 60,
+		"opponent_mana": 100,
 		"opponent_base_power_bonus": 2,
 	},
 }
@@ -73,7 +74,7 @@ const TOURNAMENT_BATTLE := {
 	"match_context": "major",
 	"opponent_level": 5,
 	"opponent_hp": 160,
-	"opponent_focus": 80,
+	"opponent_mana": 100,
 	"opponent_base_power_bonus": 4,
 	"required_rating": MAJOR_HALL_REQUIRED_RATING,
 }
@@ -134,9 +135,9 @@ func recover_roster() -> String:
 	for index in range(roster.size()):
 		var player: Dictionary = roster[index]
 		player["current_hp"] = int(player.get("max_hp", 100))
-		player["current_focus"] = int(player.get("max_focus", 50))
+		player["current_mana"] = STARTING_MANA
 		roster[index] = player
-	return "LAN Cafe restored all HP and Focus."
+	return "LAN Cafe restored all HP."
 
 
 func has_pending_battle() -> bool:
@@ -174,7 +175,8 @@ func build_battle_setup() -> Dictionary:
 			"spec": player.get("spec", "Top"),
 			"trait_id": player.get("trait_id", ""),
 			"current_hp": int(player.get("current_hp", player.get("max_hp", 100))),
-			"current_focus": int(player.get("current_focus", player.get("max_focus", 50))),
+			"current_mana": STARTING_MANA,
+			"max_mana": int(player.get("max_mana", player.get("max_focus", 100))),
 			"passive_bonuses": player.get("passive_bonuses", {}),
 			"skills": skills,
 		})
@@ -187,7 +189,7 @@ func build_battle_setup() -> Dictionary:
 		"opponent_spec": battle.get("opponent_spec", "Jungle"),
 		"opponent_trait_id": battle.get("opponent_trait_id", ""),
 		"opponent_hp": int(battle.get("opponent_hp", 100)),
-		"opponent_focus": int(battle.get("opponent_focus", 50)),
+		"opponent_mana": int(battle.get("opponent_mana", battle.get("opponent_focus", 100))),
 		"opponent_base_power_bonus": int(battle.get("opponent_base_power_bonus", 0)),
 		"seed": int(battle.get("seed", 20260606)),
 	}
@@ -359,10 +361,10 @@ func _ensure_started() -> void:
 			player["max_hp"] = 100
 		if not player.has("current_hp"):
 			player["current_hp"] = player["max_hp"]
-		if not player.has("max_focus"):
-			player["max_focus"] = 50
-		if not player.has("current_focus"):
-			player["current_focus"] = player["max_focus"]
+		if not player.has("max_mana"):
+			player["max_mana"] = int(player.get("max_focus", 100))
+		if not player.has("current_mana"):
+			player["current_mana"] = int(player.get("current_focus", STARTING_MANA))
 		roster[index] = player
 
 
@@ -370,7 +372,7 @@ func _create_player(player_name: String, spec: String) -> Dictionary:
 	var bridge := _ensure_profile_bridge()
 	var player: Dictionary = bridge.create_player_profile(player_name, spec)
 	player["current_hp"] = int(player.get("max_hp", 100))
-	player["current_focus"] = int(player.get("max_focus", 50))
+	player["current_mana"] = STARTING_MANA
 
 	var progress := {}
 	for skill_id in player.get("active_skill_ids", []):

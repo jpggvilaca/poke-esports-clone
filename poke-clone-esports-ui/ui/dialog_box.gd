@@ -73,7 +73,7 @@ func _process(delta: float) -> void:
 
 	reveal_elapsed += delta
 	var target_count := _current_line_length()
-	var next_count := min(target_count, int(reveal_elapsed * characters_per_second))
+	var next_count = min(target_count, int(reveal_elapsed * characters_per_second))
 	body_label.visible_characters = next_count
 
 	if next_count >= target_count:

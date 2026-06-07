@@ -19,7 +19,9 @@ public:
     SkillView CreateSkillView(
         const Skill& definition,
         const SkillProgress& progress,
-        const Competitor& user) const;
+        const Competitor& user,
+        const BattleStatus& userStatus,
+        int cooldownRemaining) const;
     SkillUseResult UseSkill(
         BattleActor actor,
         Competitor& attacker,

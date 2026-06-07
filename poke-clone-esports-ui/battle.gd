@@ -12,7 +12,7 @@ const LOG_COLOR_ATTACK := "#ff6b4a"
 const LOG_COLOR_DEFENSE := "#5aa7ff"
 const LOG_COLOR_DAMAGE := "#ff934f"
 const LOG_COLOR_HP := "#5bd487"
-const LOG_COLOR_FOCUS := "#57d7ff"
+const LOG_COLOR_MANA := "#57d7ff"
 const LOG_COLOR_XP := "#f3d35b"
 
 var bridge: BattleBridge
@@ -21,15 +21,15 @@ var opponent_name: Label
 var opponent_meta: Label
 var opponent_hp: ProgressBar
 var opponent_hp_value: Label
-var opponent_focus: ProgressBar
-var opponent_focus_value: Label
+var opponent_mana: ProgressBar
+var opponent_mana_value: Label
 var opponent_status: Label
 var player_name: Label
 var player_meta: Label
 var player_hp: ProgressBar
 var player_hp_value: Label
-var player_focus: ProgressBar
-var player_focus_value: Label
+var player_mana: ProgressBar
+var player_mana_value: Label
 var player_status: Label
 var message_label: Label
 var log_label: RichTextLabel
@@ -39,6 +39,7 @@ var switch_label: Label
 var switch_grid: GridContainer
 var back_button: Button
 var return_button: Button
+var drill_button: Button
 var main_menu_buttons: Array[Button] = []
 var skill_buttons: Array[Button] = []
 var switch_buttons: Array[Button] = []
@@ -53,10 +54,12 @@ var rewards_applied := false
 
 func _ready() -> void:
 	_build_ui()
+	rewards_panel.return_requested.connect(_on_return_pressed)
 	bridge = BattleBridge.new()
 	add_child(bridge)
 
 	var result := bridge.start_battle(GameState.build_battle_setup())
+	_refresh_drill_action()
 
 	if not result.get("accepted", false):
 		finished_result = result
@@ -135,8 +138,8 @@ func _build_ui() -> void:
 	opponent_meta = opponent_panel.get_node("Content/Meta")
 	opponent_hp = opponent_panel.get_node("Content/HpRow/Hp")
 	opponent_hp_value = opponent_panel.get_node("Content/HpRow/Value")
-	opponent_focus = opponent_panel.get_node("Content/FocusRow/Focus")
-	opponent_focus_value = opponent_panel.get_node("Content/FocusRow/Value")
+	opponent_mana = opponent_panel.get_node("Content/ManaRow/Mana")
+	opponent_mana_value = opponent_panel.get_node("Content/ManaRow/Value")
 	opponent_status = opponent_panel.get_node("Content/Status")
 
 	var player_panel := _make_status_panel()
@@ -149,8 +152,8 @@ func _build_ui() -> void:
 	player_meta = player_panel.get_node("Content/Meta")
 	player_hp = player_panel.get_node("Content/HpRow/Hp")
 	player_hp_value = player_panel.get_node("Content/HpRow/Value")
-	player_focus = player_panel.get_node("Content/FocusRow/Focus")
-	player_focus_value = player_panel.get_node("Content/FocusRow/Value")
+	player_mana = player_panel.get_node("Content/ManaRow/Mana")
+	player_mana_value = player_panel.get_node("Content/ManaRow/Value")
 	player_status = player_panel.get_node("Content/Status")
 
 	var bottom := PanelContainer.new()
@@ -200,6 +203,7 @@ func _build_ui() -> void:
 	main_menu_grid.add_theme_constant_override("v_separation", 10)
 	action_box.add_child(main_menu_grid)
 	_add_main_menu_button("Fight", _on_fight_menu_pressed)
+	drill_button = _add_main_menu_button("Drill", _on_drill_pressed)
 	_add_main_menu_button("Player list", _on_player_list_menu_pressed)
 	_add_main_menu_button("Quit", _on_quit_pressed)
 
@@ -282,32 +286,32 @@ func _make_status_panel() -> PanelContainer:
 	hp_value.add_theme_color_override("font_color", Color(0.78, 0.96, 0.84))
 	hp_row.add_child(hp_value)
 
-	var focus_row := HBoxContainer.new()
-	focus_row.name = "FocusRow"
-	focus_row.add_theme_constant_override("separation", 8)
-	content.add_child(focus_row)
+	var mana_row := HBoxContainer.new()
+	mana_row.name = "ManaRow"
+	mana_row.add_theme_constant_override("separation", 8)
+	content.add_child(mana_row)
 
-	var focus_label := Label.new()
-	focus_label.text = "Focus"
-	focus_label.custom_minimum_size = Vector2(58, 0)
-	focus_label.add_theme_font_size_override("font_size", 16)
-	focus_label.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
-	focus_row.add_child(focus_label)
+	var mana_label := Label.new()
+	mana_label.text = "Mana"
+	mana_label.custom_minimum_size = Vector2(58, 0)
+	mana_label.add_theme_font_size_override("font_size", 16)
+	mana_label.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
+	mana_row.add_child(mana_label)
 
-	var focus_bar := ProgressBar.new()
-	focus_bar.name = "Focus"
-	focus_bar.show_percentage = false
-	focus_bar.custom_minimum_size = Vector2(0, 18)
-	focus_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	focus_row.add_child(focus_bar)
+	var mana_bar := ProgressBar.new()
+	mana_bar.name = "Mana"
+	mana_bar.show_percentage = false
+	mana_bar.custom_minimum_size = Vector2(0, 18)
+	mana_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mana_row.add_child(mana_bar)
 
-	var focus_value := Label.new()
-	focus_value.name = "Value"
-	focus_value.custom_minimum_size = Vector2(88, 0)
-	focus_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	focus_value.add_theme_font_size_override("font_size", 16)
-	focus_value.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
-	focus_row.add_child(focus_value)
+	var mana_value := Label.new()
+	mana_value.name = "Value"
+	mana_value.custom_minimum_size = Vector2(88, 0)
+	mana_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	mana_value.add_theme_font_size_override("font_size", 16)
+	mana_value.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
+	mana_row.add_child(mana_value)
 
 	var status_label := Label.new()
 	status_label.name = "Status"
@@ -381,13 +385,14 @@ func _panel_style(color: Color, border: Color, radius: int) -> StyleBoxFlat:
 	return style
 
 
-func _add_main_menu_button(text: String, callback: Callable) -> void:
+func _add_main_menu_button(text: String, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = Vector2(270, 76)
 	button.pressed.connect(callback)
 	main_menu_grid.add_child(button)
 	main_menu_buttons.push_back(button)
+	return button
 
 
 func _show_main_menu() -> void:
@@ -398,6 +403,7 @@ func _show_main_menu() -> void:
 	back_button.visible = false
 	return_button.visible = false
 	_set_buttons_disabled(input_locked)
+	_refresh_drill_action()
 
 
 func _show_fight_menu() -> void:
@@ -430,6 +436,51 @@ func _on_player_list_menu_pressed() -> void:
 	_show_player_list_menu()
 
 
+func _on_drill_pressed() -> void:
+	if input_locked:
+		return
+
+	input_locked = true
+	_set_buttons_disabled(true)
+
+	# Placeholder until the timing minigame scene returns miss/good/perfect.
+	var result := bridge.use_drill("good")
+	if not result.get("accepted", false):
+		_set_message(result.get("error", "That action failed."))
+		input_locked = false
+		_set_buttons_disabled(false)
+		return
+
+	_record_result_events(result)
+	await _play_events(result.get("events", []))
+	var state: Dictionary = result.get("state", bridge.get_battle_state())
+	_update_state(state)
+
+	if result.get("battle_finished", false):
+		finished_result = result
+		_set_message("Battle finished. Winner: %s" % result.get("winner", "none"))
+		_show_post_battle_panel(result)
+	else:
+		_refresh_skills()
+		_refresh_team_switches(state)
+		_refresh_drill_action()
+		_set_message("What will your player do?")
+		input_locked = false
+		_set_buttons_disabled(false)
+		_show_main_menu()
+
+
+func _refresh_drill_action() -> void:
+	if drill_button == null or bridge == null:
+		return
+
+	var drill := bridge.get_drill_action()
+	var display_name := String(drill.get("display_name", "Drill"))
+	drill_button.text = display_name
+	drill_button.tooltip_text = String(drill.get("description", ""))
+	drill_button.disabled = input_locked or not bool(drill.get("can_use", true))
+
+
 func _refresh_skills() -> void:
 	for child in skill_grid.get_children():
 		child.queue_free()
@@ -439,7 +490,7 @@ func _refresh_skills() -> void:
 		var button := Button.new()
 		button.text = _format_skill_button(skill)
 		button.custom_minimum_size = Vector2(270, 112)
-		button.disabled = input_locked
+		button.disabled = input_locked or not bool(skill.get("can_use", true))
 		button.pressed.connect(_on_skill_pressed.bind(skill.get("id", "")))
 		skill_grid.add_child(button)
 		skill_buttons.push_back(button)
@@ -449,10 +500,21 @@ func _format_skill_button(skill: Dictionary) -> String:
 	var description := String(skill.get("description", ""))
 	if description.length() > 58:
 		description = description.substr(0, 55) + "..."
-	return "%s\nPWR %s | Focus %s\n%s" % [
+	var mana_cost := int(skill.get("mana_cost", 0))
+	var mana_gain := int(skill.get("mana_gain", 0))
+	var cooldown := int(skill.get("cooldown_turns", 0))
+	var cooldown_remaining := int(skill.get("cooldown_remaining", 0))
+	var availability := String(skill.get("disabled_reason", ""))
+	var cost_text := "Gain %s mana" % mana_gain if mana_cost == 0 and mana_gain > 0 else "Mana %s" % mana_cost
+	var cooldown_text := "CD %s" % cooldown
+	if cooldown_remaining > 0:
+		cooldown_text = "CD %s/%s" % [cooldown_remaining, cooldown]
+	if not availability.is_empty():
+		cooldown_text += " | %s" % availability
+	return "%s\n%s | %s\n%s" % [
 		skill.get("name", "Skill"),
-		skill.get("power", 0),
-		skill.get("focus_cost", 0),
+		cost_text,
+		cooldown_text,
 		description,
 	]
 
@@ -471,20 +533,20 @@ func _refresh_team_switches(state: Dictionary = {}) -> void:
 		var player: Dictionary = player_team[index]
 		var hp := int(player.get("hp", 0))
 		var max_hp := int(player.get("max_hp", 1))
-		var focus := int(player.get("focus", 0))
-		var max_focus := int(player.get("max_focus", 1))
+		var mana := int(player.get("mana", 0))
+		var max_mana := int(player.get("max_mana", 1))
 		var identity_name := String(player.get("trait_name", ""))
 		var identity_suffix := ""
 		if not identity_name.is_empty():
 			identity_suffix = " | %s" % identity_name
 		var button := Button.new()
-		button.text = "%s%s\nHP %s/%s | Focus %s/%s" % [
+		button.text = "%s%s\nHP %s/%s | Mana %s/%s" % [
 			player.get("name", "Player"),
 			identity_suffix,
 			hp,
 			max_hp,
-			focus,
-			max_focus,
+			mana,
+			max_mana,
 		]
 		button.custom_minimum_size = Vector2(270, 72)
 		var switch_disabled := index == active_index or hp <= 0
@@ -599,8 +661,27 @@ func _apply_event(event: Dictionary) -> void:
 			var actor := _display_actor(event.get("actor", "none"))
 			_set_message("%s used %s." % [actor, _format_skill_id(String(event.get("skill_id", "a skill")))])
 			_push_log(message_label.text)
-		"focus_changed":
-			_animate_focus(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0))
+		"drill_started":
+			var actor := _display_actor(event.get("actor", "none"))
+			var drill_name := String(event.get("reason", "Drill"))
+			_set_message("%s chose %s." % [actor, drill_name])
+			_push_log(message_label.text)
+		"drill_completed":
+			var actor := _display_actor(event.get("actor", "none"))
+			_push_log("%s drill result: %s (+%s mana)." % [
+				actor,
+				String(event.get("reason", "good")).capitalize(),
+				event.get("amount", 0),
+			])
+		"mana_changed":
+			_animate_mana(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0))
+			_push_log("%s mana %s -> %s." % [_display_actor(event.get("actor", "none")), event.get("old_value", 0), event.get("new_value", 0)])
+		"cooldown_started":
+			_push_log("%s cooldown: %s turn(s)." % [_format_skill_id(String(event.get("skill_id", ""))), event.get("new_value", 0)])
+		"cooldown_ready":
+			_push_log("%s is ready." % _format_skill_id(String(event.get("skill_id", ""))))
+		"action_blocked":
+			_push_log("%s could not act: %s." % [_display_actor(event.get("actor", "none")), event.get("reason", "blocked")])
 		"attack_missed":
 			_set_message("It missed.")
 			_push_log("The play missed.")
@@ -612,6 +693,14 @@ func _apply_event(event: Dictionary) -> void:
 			_push_log("%s recovered %s HP." % [_display_actor(event.get("actor", "none")), event.get("amount", 0)])
 		"status_applied":
 			_push_log(_format_status_log(event))
+		"status_expired":
+			_push_log("%s status expired." % _display_actor(event.get("target", "none")))
+		"mark_applied":
+			_push_log("%s was marked." % _display_actor(event.get("target", "none")))
+		"mark_triggered":
+			_push_log("Mark triggered for %s bonus damage." % event.get("amount", 0))
+		"mark_expired":
+			_push_log("%s mark expired." % _display_actor(event.get("target", "none")))
 		"skill_xp_gained":
 			_defer_progress_event(event)
 		"skill_leveled_up":
@@ -627,15 +716,15 @@ func _apply_event(event: Dictionary) -> void:
 func _update_state(state: Dictionary) -> void:
 	var player = state.get("player", {})
 	var opponent = state.get("opponent", {})
-	_update_status(player_name, player_meta, player_hp, player_hp_value, player_focus, player_focus_value, player_status, player, "Your Player")
-	_update_status(opponent_name, opponent_meta, opponent_hp, opponent_hp_value, opponent_focus, opponent_focus_value, opponent_status, opponent, "Opponent")
+	_update_status(player_name, player_meta, player_hp, player_hp_value, player_mana, player_mana_value, player_status, player, "Your Player")
+	_update_status(opponent_name, opponent_meta, opponent_hp, opponent_hp_value, opponent_mana, opponent_mana_value, opponent_status, opponent, "Opponent")
 
 
-func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, hp_value: Label, focus_bar: ProgressBar, focus_value: Label, status_label: Label, data: Dictionary, fallback_name: String) -> void:
+func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, hp_value: Label, mana_bar: ProgressBar, mana_value: Label, status_label: Label, data: Dictionary, fallback_name: String) -> void:
 	var max_hp := int(data.get("max_hp", 1))
 	var hp := int(data.get("hp", 0))
-	var max_focus := int(data.get("max_focus", 1))
-	var focus := int(data.get("focus", 0))
+	var max_mana := int(data.get("max_mana", 1))
+	var mana := int(data.get("mana", 0))
 	name_label.text = "%s" % data.get("name", fallback_name)
 	var identity_name := String(data.get("trait_name", ""))
 	var identity_suffix := ""
@@ -649,10 +738,10 @@ func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, h
 	hp_bar.value = clamp(hp, 0, max_hp)
 	hp_bar.tooltip_text = "HP %s/%s" % [hp, max_hp]
 	hp_value.text = "%s/%s" % [hp, max_hp]
-	focus_bar.max_value = max(1, max_focus)
-	focus_bar.value = clamp(focus, 0, max_focus)
-	focus_bar.tooltip_text = "Focus %s/%s" % [focus, max_focus]
-	focus_value.text = "%s/%s" % [focus, max_focus]
+	mana_bar.max_value = max(1, max_mana)
+	mana_bar.value = clamp(mana, 0, max_mana)
+	mana_bar.tooltip_text = "Mana %s/%s" % [mana, max_mana]
+	mana_value.text = "%s/%s" % [mana, max_mana]
 	status_label.text = _format_status_indicator(data.get("status", {}))
 
 
@@ -664,9 +753,9 @@ func _animate_hp(actor: String, old_value: int, new_value: int) -> void:
 	create_tween().tween_property(bar, "value", new_value, 0.30)
 
 
-func _animate_focus(actor: String, old_value: int, new_value: int) -> void:
-	var bar := opponent_focus if actor == "opponent" else player_focus
-	var value_label := opponent_focus_value if actor == "opponent" else player_focus_value
+func _animate_mana(actor: String, old_value: int, new_value: int) -> void:
+	var bar := opponent_mana if actor == "opponent" else player_mana
+	var value_label := opponent_mana_value if actor == "opponent" else player_mana_value
 	bar.value = old_value
 	value_label.text = "%s/%s" % [new_value, int(bar.max_value)]
 	create_tween().tween_property(bar, "value", new_value, 0.25)
@@ -695,7 +784,8 @@ func _colorize_log(text: String) -> String:
 	output = output.replace("damage", "[color=%s]damage[/color]" % LOG_COLOR_DAMAGE)
 	output = output.replace("Damage", "[color=%s]Damage[/color]" % LOG_COLOR_DAMAGE)
 	output = output.replace("HP", "[color=%s]HP[/color]" % LOG_COLOR_HP)
-	output = output.replace("Focus", "[color=%s]Focus[/color]" % LOG_COLOR_FOCUS)
+	output = output.replace("Mana", "[color=%s]Mana[/color]" % LOG_COLOR_MANA)
+	output = output.replace("mana", "[color=%s]mana[/color]" % LOG_COLOR_MANA)
 	output = output.replace("XP", "[color=%s]XP[/color]" % LOG_COLOR_XP)
 	output = output.replace("LEVEL UP", "[color=%s]LEVEL UP[/color]" % LOG_COLOR_XP)
 	return output
@@ -722,20 +812,54 @@ func _format_status_log(event: Dictionary) -> String:
 			if amount >= 0:
 				return "%s reduced incoming damage by %s%%." % [target, amount]
 			return "%s became exposed and takes %s%% more damage." % [target, abs(amount)]
+		"attack_penetration_modifier":
+			return "%s gained %s%% attack penetration." % [target, amount]
+		"cooldown_modifier":
+			if amount >= 0:
+				return "%s cooldowns increased by %s%%." % [target, amount]
+			return "%s cooldowns reduced by %s%%." % [target, abs(amount)]
+		"healing_received_modifier":
+			return "%s healing changed by %s%%." % [target, amount]
+		"stunned":
+			return "%s is stunned." % target
+		"silenced":
+			return "%s is silenced." % target
+		"rooted":
+			return "%s is rooted." % target
 	return "%s changed %s's battle state." % [actor, target]
 
 
 func _format_status_indicator(status: Dictionary) -> String:
 	var entries: Array[String] = []
 	var attack_percent := int(status.get("attack_modifier_percent", 0))
-	var attack_hits := int(status.get("attack_modifier_hits", 0))
+	var attack_turns := int(status.get("attack_modifier_turns", 0))
 	var defense_percent := int(status.get("defense_modifier_percent", 0))
-	var defense_hits := int(status.get("defense_modifier_hits", 0))
+	var defense_turns := int(status.get("defense_modifier_turns", 0))
+	var penetration_percent := int(status.get("attack_penetration_percent", 0))
+	var penetration_turns := int(status.get("attack_penetration_turns", 0))
+	var cooldown_percent := int(status.get("cooldown_modifier_percent", 0))
+	var cooldown_turns := int(status.get("cooldown_modifier_turns", 0))
+	var healing_percent := int(status.get("healing_received_modifier_percent", 0))
+	var healing_turns := int(status.get("healing_received_modifier_turns", 0))
 
-	if attack_percent != 0 and attack_hits > 0:
-		entries.push_back("%s ATK %s%% x%s" % [_status_marker(attack_percent), _signed_value(attack_percent), attack_hits])
-	if defense_percent != 0 and defense_hits > 0:
-		entries.push_back("%s DEF %s%% x%s" % [_status_marker(defense_percent), _signed_value(defense_percent), defense_hits])
+	if int(status.get("stunned_turns", 0)) > 0:
+		entries.push_back("STUN %s" % status.get("stunned_turns", 0))
+	if int(status.get("silenced_turns", 0)) > 0:
+		entries.push_back("SILENCE %s" % status.get("silenced_turns", 0))
+	if int(status.get("rooted_turns", 0)) > 0:
+		entries.push_back("ROOT %s" % status.get("rooted_turns", 0))
+	if int(status.get("mark_turns", 0)) > 0:
+		entries.push_back("MARK %s" % status.get("mark_turns", 0))
+	if attack_percent != 0 and attack_turns > 0:
+		entries.push_back("%s ATK %s%% %st" % [_status_marker(attack_percent), _signed_value(attack_percent), attack_turns])
+	if defense_percent != 0 and defense_turns > 0:
+		entries.push_back("%s DEF %s%% %st" % [_status_marker(defense_percent), _signed_value(defense_percent), defense_turns])
+	if penetration_percent != 0 and penetration_turns > 0:
+		entries.push_back("PEN %s%% %st" % [_signed_value(penetration_percent), penetration_turns])
+	if cooldown_percent != 0 and cooldown_turns > 0:
+		entries.push_back("CD %s%% %st" % [_signed_value(cooldown_percent), cooldown_turns])
+	if healing_percent != 0 and healing_turns > 0:
+		entries.push_back("HEAL %s%% %st" % [_signed_value(healing_percent), healing_turns])
 	if entries.is_empty():
 		return "Status: none"
 	return _join_strings(entries, "  ")

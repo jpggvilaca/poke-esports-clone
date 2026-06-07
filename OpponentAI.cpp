@@ -20,12 +20,21 @@ SkillProgress* OpponentAI::SelectSkill(
     std::mt19937& randomEngine) const
 {
     std::vector<SkillProgress*> affordableSkills;
+    if (opponentStatus.stunnedTurns > 0)
+    {
+        return nullptr;
+    }
+
     for (SkillProgress& progress : opponent.skills)
     {
         const Skill* definition = data_.FindSkill(progress.skillId);
+        const AbilityRuntimeState* abilityState = opponent.FindAbilityState(progress.skillId);
+        const int cooldownRemaining = abilityState == nullptr ? 0 : abilityState->cooldownRemaining;
         if (definition != nullptr
             && IsUsefulSkill(*definition, opponent, opponentStatus, player, playerStatus)
-            && rules_.GetFocusCost(*definition, progress, opponent) <= opponent.focus)
+            && cooldownRemaining <= 0
+            && rules_.GetManaCost(*definition, progress, opponent) <= opponent.mana
+            && !(opponentStatus.silencedTurns > 0 && definition->manaCost > 0))
         {
             affordableSkills.push_back(&progress);
         }
@@ -69,8 +78,43 @@ bool OpponentAI::IsUsefulSkill(
 
     if (definition.effectType == SkillEffectType::AttackModifier)
     {
-        return targetStatus.attackModifierHits == 0;
+        return targetStatus.attackModifierTurns == 0;
     }
 
-    return targetStatus.defenseModifierHits == 0;
+    if (definition.effectType == SkillEffectType::AttackPenetrationModifier)
+    {
+        return targetStatus.attackPenetrationTurns == 0;
+    }
+
+    if (definition.effectType == SkillEffectType::CooldownModifier)
+    {
+        return targetStatus.cooldownModifierTurns == 0;
+    }
+
+    if (definition.effectType == SkillEffectType::HealingReceivedModifier)
+    {
+        return targetStatus.healingReceivedModifierTurns == 0;
+    }
+
+    if (definition.effectType == SkillEffectType::Stunned)
+    {
+        return targetStatus.stunnedTurns == 0;
+    }
+
+    if (definition.effectType == SkillEffectType::Silenced)
+    {
+        return targetStatus.silencedTurns == 0;
+    }
+
+    if (definition.effectType == SkillEffectType::Rooted)
+    {
+        return targetStatus.rootedTurns == 0;
+    }
+
+    if (definition.effectType == SkillEffectType::Mark)
+    {
+        return targetStatus.markTurns == 0;
+    }
+
+    return targetStatus.defenseModifierTurns == 0;
 }
