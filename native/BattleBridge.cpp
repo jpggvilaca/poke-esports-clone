@@ -19,6 +19,7 @@ void BattleBridge::_bind_methods()
     godot::ClassDB::bind_method(godot::D_METHOD("start_battle", "setup"), &BattleBridge::start_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
     godot::ClassDB::bind_method(godot::D_METHOD("use_drill", "result_quality"), &BattleBridge::use_drill);
+    godot::ClassDB::bind_method(godot::D_METHOD("pass_turn"), &BattleBridge::pass_turn);
     godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
     godot::ClassDB::bind_method(godot::D_METHOD("create_player_profile", "player_name", "spec"), &BattleBridge::create_player_profile);
     godot::ClassDB::bind_method(godot::D_METHOD("get_player_skill_summary", "player_profile", "skill_id", "progress"), &BattleBridge::get_player_skill_summary);
@@ -64,6 +65,18 @@ Dictionary BattleBridge::use_drill(const String& result_quality)
     }
 
     last_result_ = session_->UsePlayerDrill(drill_quality_from_string(result_quality));
+    return result_to_dictionary(last_result_);
+}
+
+Dictionary BattleBridge::pass_turn()
+{
+    if (session_ == nullptr)
+    {
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return result_to_dictionary(last_result_);
+    }
+
+    last_result_ = session_->PassPlayerTurn();
     return result_to_dictionary(last_result_);
 }
 

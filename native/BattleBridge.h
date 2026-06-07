@@ -25,6 +25,7 @@ public:
     godot::Dictionary start_battle(const godot::Dictionary& setup);
     godot::Dictionary use_skill(const godot::String& skill_id);
     godot::Dictionary use_drill(const godot::String& result_quality);
+    godot::Dictionary pass_turn();
     godot::Dictionary switch_player(int player_index);
     godot::Dictionary create_player_profile(const godot::String& player_name, const godot::String& spec) const;
     godot::Dictionary get_player_skill_summary(

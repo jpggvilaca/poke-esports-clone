@@ -24,6 +24,7 @@ public:
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId);
     BattleActionResult UsePlayerDrill(DrillResultQuality quality);
+    BattleActionResult PassPlayerTurn();
     BattleActionResult SwitchPlayer(int playerIndex);
 
     BattleState GetState() const;

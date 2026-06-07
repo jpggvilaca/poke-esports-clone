@@ -1,13 +1,6 @@
 extends Control
 
-const FIELD_COLOR := Color(0.045, 0.055, 0.075)
-const PANEL_COLOR := Color(0.13, 0.15, 0.18)
-const PANEL_BORDER := Color(0.36, 0.62, 0.78)
-const PLAYER_COLOR := Color(0.14, 0.34, 0.74)
-const OPPONENT_COLOR := Color(0.78, 0.24, 0.28)
 const LOG_LINES := 5
-const PLAYER_AVATAR_PATH := "res://assets/players/avatars/portrait1.png"
-const OPPONENT_AVATAR_PATH := "res://assets/players/avatars/portrait2.png"
 const LOG_COLOR_ATTACK := "#ff6b4a"
 const LOG_COLOR_DEFENSE := "#5aa7ff"
 const LOG_COLOR_DAMAGE := "#ff934f"
@@ -17,29 +10,33 @@ const LOG_COLOR_XP := "#f3d35b"
 
 var bridge: BattleBridge
 @onready var rewards_panel: RewardsPanel = $RewardsPanel
-var opponent_name: Label
-var opponent_meta: Label
-var opponent_hp: ProgressBar
-var opponent_hp_value: Label
-var opponent_mana: ProgressBar
-var opponent_mana_value: Label
-var opponent_status: Label
-var player_name: Label
-var player_meta: Label
-var player_hp: ProgressBar
-var player_hp_value: Label
-var player_mana: ProgressBar
-var player_mana_value: Label
-var player_status: Label
-var message_label: Label
-var log_label: RichTextLabel
-var main_menu_grid: GridContainer
-var skill_grid: GridContainer
-var switch_label: Label
-var switch_grid: GridContainer
-var back_button: Button
-var return_button: Button
-var drill_button: Button
+@onready var drill_minigame: DrillMinigame = $DrillMinigame
+@onready var opponent_name: Label = $OpponentStatus/Content/Name
+@onready var opponent_meta: Label = $OpponentStatus/Content/Meta
+@onready var opponent_hp: ProgressBar = $OpponentStatus/Content/HpRow/Hp
+@onready var opponent_hp_value: Label = $OpponentStatus/Content/HpRow/Value
+@onready var opponent_mana: ProgressBar = $OpponentStatus/Content/ManaRow/Mana
+@onready var opponent_mana_value: Label = $OpponentStatus/Content/ManaRow/Value
+@onready var opponent_status: Label = $OpponentStatus/Content/Status
+@onready var player_name: Label = $PlayerStatus/Content/Name
+@onready var player_meta: Label = $PlayerStatus/Content/Meta
+@onready var player_hp: ProgressBar = $PlayerStatus/Content/HpRow/Hp
+@onready var player_hp_value: Label = $PlayerStatus/Content/HpRow/Value
+@onready var player_mana: ProgressBar = $PlayerStatus/Content/ManaRow/Mana
+@onready var player_mana_value: Label = $PlayerStatus/Content/ManaRow/Value
+@onready var player_status: Label = $PlayerStatus/Content/Status
+@onready var message_label: Label = $BottomPanel/BottomSplit/TextBox/Message
+@onready var log_label: RichTextLabel = $BottomPanel/BottomSplit/TextBox/Log
+@onready var main_menu_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid
+@onready var skill_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/SkillGrid
+@onready var switch_label: Label = $BottomPanel/BottomSplit/ActionBox/SwitchLabel
+@onready var switch_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/SwitchGrid
+@onready var fight_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/FightButton
+@onready var drill_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/DrillButton
+@onready var player_list_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/PlayerListButton
+@onready var quit_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/QuitButton
+@onready var back_button: Button = $BottomPanel/BottomSplit/ActionBox/BackButton
+@onready var return_button: Button = $BottomPanel/BottomSplit/ActionBox/ReturnButton
 var main_menu_buttons: Array[Button] = []
 var skill_buttons: Array[Button] = []
 var switch_buttons: Array[Button] = []
@@ -53,8 +50,20 @@ var rewards_applied := false
 
 
 func _ready() -> void:
-	_build_ui()
+	main_menu_buttons.clear()
+	main_menu_buttons.push_back(fight_button)
+	main_menu_buttons.push_back(drill_button)
+	main_menu_buttons.push_back(player_list_button)
+	main_menu_buttons.push_back(quit_button)
+	fight_button.pressed.connect(_on_fight_menu_pressed)
+	drill_button.pressed.connect(_on_drill_pressed)
+	player_list_button.pressed.connect(_on_player_list_menu_pressed)
+	quit_button.pressed.connect(_on_quit_pressed)
+	back_button.pressed.connect(_show_main_menu)
+	return_button.pressed.connect(_on_return_pressed)
 	rewards_panel.return_requested.connect(_on_return_pressed)
+	drill_minigame.drill_finished.connect(_on_drill_minigame_finished)
+	drill_minigame.drill_cancelled.connect(_on_drill_minigame_cancelled)
 	bridge = BattleBridge.new()
 	add_child(bridge)
 
@@ -76,323 +85,7 @@ func _ready() -> void:
 	_record_result_events(result)
 	await _play_events(result.get("events", []))
 	_set_message("What will your player do?")
-
-
-func _build_ui() -> void:
-	var background := ColorRect.new()
-	background.color = FIELD_COLOR
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
-
-	var stage_glow := ColorRect.new()
-	stage_glow.color = Color(0.08, 0.12, 0.16)
-	stage_glow.anchor_left = 0.07
-	stage_glow.anchor_top = 0.12
-	stage_glow.anchor_right = 0.93
-	stage_glow.anchor_bottom = 0.68
-	add_child(stage_glow)
-
-	var desk := ColorRect.new()
-	desk.color = Color(0.09, 0.095, 0.105)
-	desk.anchor_left = 0.31
-	desk.anchor_top = 0.44
-	desk.anchor_right = 0.69
-	desk.anchor_bottom = 0.58
-	add_child(desk)
-
-	var player_monitor := _make_monitor_block("PLAYER PC", PLAYER_COLOR)
-	player_monitor.anchor_left = 0.37
-	player_monitor.anchor_top = 0.25
-	player_monitor.anchor_right = 0.49
-	player_monitor.anchor_bottom = 0.48
-	add_child(player_monitor)
-
-	var opponent_monitor := _make_monitor_block("ENEMY PC", OPPONENT_COLOR)
-	opponent_monitor.anchor_left = 0.51
-	opponent_monitor.anchor_top = 0.25
-	opponent_monitor.anchor_right = 0.63
-	opponent_monitor.anchor_bottom = 0.48
-	add_child(opponent_monitor)
-
-	var opponent_sprite := _make_avatar_block(OPPONENT_AVATAR_PATH, OPPONENT_COLOR, "OPPONENT")
-	opponent_sprite.anchor_left = 0.73
-	opponent_sprite.anchor_top = 0.22
-	opponent_sprite.anchor_right = 0.88
-	opponent_sprite.anchor_bottom = 0.53
-	add_child(opponent_sprite)
-
-	var player_sprite := _make_avatar_block(PLAYER_AVATAR_PATH, PLAYER_COLOR, "PLAYER")
-	player_sprite.anchor_left = 0.12
-	player_sprite.anchor_top = 0.22
-	player_sprite.anchor_right = 0.27
-	player_sprite.anchor_bottom = 0.53
-	add_child(player_sprite)
-
-	var opponent_panel := _make_status_panel()
-	opponent_panel.anchor_left = 0.60
-	opponent_panel.anchor_top = 0.08
-	opponent_panel.anchor_right = 0.94
-	opponent_panel.anchor_bottom = 0.24
-	add_child(opponent_panel)
-	opponent_name = opponent_panel.get_node("Content/Name")
-	opponent_meta = opponent_panel.get_node("Content/Meta")
-	opponent_hp = opponent_panel.get_node("Content/HpRow/Hp")
-	opponent_hp_value = opponent_panel.get_node("Content/HpRow/Value")
-	opponent_mana = opponent_panel.get_node("Content/ManaRow/Mana")
-	opponent_mana_value = opponent_panel.get_node("Content/ManaRow/Value")
-	opponent_status = opponent_panel.get_node("Content/Status")
-
-	var player_panel := _make_status_panel()
-	player_panel.anchor_left = 0.06
-	player_panel.anchor_top = 0.55
-	player_panel.anchor_right = 0.40
-	player_panel.anchor_bottom = 0.71
-	add_child(player_panel)
-	player_name = player_panel.get_node("Content/Name")
-	player_meta = player_panel.get_node("Content/Meta")
-	player_hp = player_panel.get_node("Content/HpRow/Hp")
-	player_hp_value = player_panel.get_node("Content/HpRow/Value")
-	player_mana = player_panel.get_node("Content/ManaRow/Mana")
-	player_mana_value = player_panel.get_node("Content/ManaRow/Value")
-	player_status = player_panel.get_node("Content/Status")
-
-	var bottom := PanelContainer.new()
-	bottom.anchor_left = 0.035
-	bottom.anchor_top = 0.74
-	bottom.anchor_right = 0.965
-	bottom.anchor_bottom = 0.965
-	bottom.add_theme_stylebox_override("panel", _panel_style(Color(0.10, 0.11, 0.13), PANEL_BORDER, 10))
-	add_child(bottom)
-
-	var bottom_split := HBoxContainer.new()
-	bottom_split.add_theme_constant_override("separation", 22)
-	bottom.add_child(bottom_split)
-
-	var text_box := VBoxContainer.new()
-	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	text_box.add_theme_constant_override("separation", 12)
-	bottom_split.add_child(text_box)
-
-	message_label = Label.new()
-	message_label.text = ""
-	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message_label.add_theme_font_size_override("font_size", 34)
-	message_label.add_theme_color_override("font_color", Color(0.92, 0.95, 0.96))
-	message_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	text_box.add_child(message_label)
-
-	log_label = RichTextLabel.new()
-	log_label.text = ""
-	log_label.bbcode_enabled = true
-	log_label.fit_content = true
-	log_label.scroll_active = false
-	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	log_label.add_theme_font_size_override("font_size", 20)
-	log_label.add_theme_color_override("default_color", Color(0.84, 0.88, 0.90))
-	text_box.add_child(log_label)
-
-	var action_box := VBoxContainer.new()
-	action_box.custom_minimum_size = Vector2(560, 0)
-	action_box.add_theme_constant_override("separation", 10)
-	bottom_split.add_child(action_box)
-
-	main_menu_grid = GridContainer.new()
-	main_menu_grid.columns = 2
-	main_menu_grid.add_theme_constant_override("h_separation", 10)
-	main_menu_grid.add_theme_constant_override("v_separation", 10)
-	action_box.add_child(main_menu_grid)
-	_add_main_menu_button("Fight", _on_fight_menu_pressed)
-	drill_button = _add_main_menu_button("Drill", _on_drill_pressed)
-	_add_main_menu_button("Player list", _on_player_list_menu_pressed)
-	_add_main_menu_button("Quit", _on_quit_pressed)
-
-	skill_grid = GridContainer.new()
-	skill_grid.columns = 2
-	skill_grid.add_theme_constant_override("h_separation", 10)
-	skill_grid.add_theme_constant_override("v_separation", 10)
-	action_box.add_child(skill_grid)
-
-	switch_label = Label.new()
-	switch_label.text = "Switch Player"
-	switch_label.add_theme_font_size_override("font_size", 18)
-	action_box.add_child(switch_label)
-
-	switch_grid = GridContainer.new()
-	switch_grid.columns = 2
-	switch_grid.add_theme_constant_override("h_separation", 10)
-	switch_grid.add_theme_constant_override("v_separation", 10)
-	action_box.add_child(switch_grid)
-
-	back_button = Button.new()
-	back_button.text = "Back"
-	back_button.custom_minimum_size = Vector2(0, 52)
-	back_button.pressed.connect(_show_main_menu)
-	action_box.add_child(back_button)
-
-	return_button = Button.new()
-	return_button.text = "Return to map"
-	return_button.custom_minimum_size = Vector2(0, 76)
-	return_button.visible = false
-	return_button.pressed.connect(_on_return_pressed)
-	action_box.add_child(return_button)
-
-
-func _make_status_panel() -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _panel_style(PANEL_COLOR, PANEL_BORDER, 8))
-
-	var content := VBoxContainer.new()
-	content.name = "Content"
-	content.add_theme_constant_override("separation", 5)
-	panel.add_child(content)
-
-	var name_label := Label.new()
-	name_label.name = "Name"
-	name_label.add_theme_font_size_override("font_size", 26)
-	name_label.add_theme_color_override("font_color", Color(0.94, 0.97, 0.98))
-	content.add_child(name_label)
-
-	var meta_label := Label.new()
-	meta_label.name = "Meta"
-	meta_label.add_theme_font_size_override("font_size", 18)
-	meta_label.add_theme_color_override("font_color", Color(0.62, 0.72, 0.80))
-	content.add_child(meta_label)
-
-	var hp_row := HBoxContainer.new()
-	hp_row.name = "HpRow"
-	hp_row.add_theme_constant_override("separation", 8)
-	content.add_child(hp_row)
-
-	var hp_label := Label.new()
-	hp_label.text = "HP"
-	hp_label.custom_minimum_size = Vector2(58, 0)
-	hp_label.add_theme_font_size_override("font_size", 16)
-	hp_label.add_theme_color_override("font_color", Color(0.78, 0.96, 0.84))
-	hp_row.add_child(hp_label)
-
-	var hp_bar := ProgressBar.new()
-	hp_bar.name = "Hp"
-	hp_bar.show_percentage = false
-	hp_bar.custom_minimum_size = Vector2(0, 24)
-	hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hp_row.add_child(hp_bar)
-
-	var hp_value := Label.new()
-	hp_value.name = "Value"
-	hp_value.custom_minimum_size = Vector2(88, 0)
-	hp_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	hp_value.add_theme_font_size_override("font_size", 16)
-	hp_value.add_theme_color_override("font_color", Color(0.78, 0.96, 0.84))
-	hp_row.add_child(hp_value)
-
-	var mana_row := HBoxContainer.new()
-	mana_row.name = "ManaRow"
-	mana_row.add_theme_constant_override("separation", 8)
-	content.add_child(mana_row)
-
-	var mana_label := Label.new()
-	mana_label.text = "Mana"
-	mana_label.custom_minimum_size = Vector2(58, 0)
-	mana_label.add_theme_font_size_override("font_size", 16)
-	mana_label.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
-	mana_row.add_child(mana_label)
-
-	var mana_bar := ProgressBar.new()
-	mana_bar.name = "Mana"
-	mana_bar.show_percentage = false
-	mana_bar.custom_minimum_size = Vector2(0, 18)
-	mana_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mana_row.add_child(mana_bar)
-
-	var mana_value := Label.new()
-	mana_value.name = "Value"
-	mana_value.custom_minimum_size = Vector2(88, 0)
-	mana_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	mana_value.add_theme_font_size_override("font_size", 16)
-	mana_value.add_theme_color_override("font_color", Color(0.72, 0.90, 1.0))
-	mana_row.add_child(mana_value)
-
-	var status_label := Label.new()
-	status_label.name = "Status"
-	status_label.text = "Status: none"
-	status_label.add_theme_font_size_override("font_size", 15)
-	status_label.add_theme_color_override("font_color", Color(0.93, 0.82, 0.45))
-	content.add_child(status_label)
-	return panel
-
-
-func _make_avatar_block(texture_path: String, color: Color, label_text: String) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _panel_style(color, Color(0.12, 0.12, 0.12), 12))
-	panel.custom_minimum_size = Vector2(220, 220)
-
-	var texture := load(texture_path)
-	if texture is Texture2D:
-		var avatar := TextureRect.new()
-		avatar.texture = texture
-		avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		avatar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		avatar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		avatar.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		panel.add_child(avatar)
-	else:
-		var label := Label.new()
-		label.text = label_text
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 24)
-		label.add_theme_color_override("font_color", Color.WHITE)
-		panel.add_child(label)
-	return panel
-
-
-func _make_monitor_block(label_text: String, accent: Color) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.04, 0.05), accent, 8))
-
-	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 6)
-	panel.add_child(content)
-
-	var screen := ColorRect.new()
-	screen.color = Color(0.05, 0.10, 0.13)
-	screen.custom_minimum_size = Vector2(160, 96)
-	screen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	screen.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(screen)
-
-	var label := Label.new()
-	label.text = label_text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 15)
-	label.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0))
-	content.add_child(label)
-	return panel
-
-
-func _panel_style(color: Color, border: Color, radius: int) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = color
-	style.border_color = border
-	style.set_border_width_all(4)
-	style.set_corner_radius_all(radius)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	return style
-
-
-func _add_main_menu_button(text: String, callback: Callable) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.custom_minimum_size = Vector2(270, 76)
-	button.pressed.connect(callback)
-	main_menu_grid.add_child(button)
-	main_menu_buttons.push_back(button)
-	return button
+	await _maybe_auto_pass_stunned_turn()
 
 
 func _show_main_menu() -> void:
@@ -440,11 +133,18 @@ func _on_drill_pressed() -> void:
 	if input_locked:
 		return
 
+	var drill := bridge.get_drill_action()
+	if not bool(drill.get("can_use", true)):
+		_set_message(String(drill.get("disabled_reason", "That action is unavailable.")))
+		return
+
 	input_locked = true
 	_set_buttons_disabled(true)
+	drill_minigame.start(drill)
 
-	# Placeholder until the timing minigame scene returns miss/good/perfect.
-	var result := bridge.use_drill("good")
+
+func _on_drill_minigame_finished(quality: String) -> void:
+	var result = bridge.use_drill(quality)
 	if not result.get("accepted", false):
 		_set_message(result.get("error", "That action failed."))
 		input_locked = false
@@ -468,6 +168,61 @@ func _on_drill_pressed() -> void:
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
+		await _maybe_auto_pass_stunned_turn()
+
+
+func _on_drill_minigame_cancelled() -> void:
+	input_locked = false
+	_set_buttons_disabled(false)
+	_refresh_drill_action()
+	_set_message("What will your player do?")
+	_show_main_menu()
+
+
+func _maybe_auto_pass_stunned_turn() -> void:
+	if input_locked or bridge == null:
+		return
+
+	var state := bridge.get_battle_state()
+	if bool(state.get("finished", false)):
+		return
+
+	var player: Dictionary = state.get("player", {})
+	var status: Dictionary = player.get("status", {})
+	if int(status.get("stunned_turns", 0)) <= 0:
+		return
+
+	input_locked = true
+	_set_buttons_disabled(true)
+	_set_message("%s is stunned and loses the turn." % player.get("name", "Your player"))
+	await get_tree().create_timer(0.35).timeout
+
+	var result := bridge.pass_turn()
+	if not result.get("accepted", false):
+		_set_message(result.get("error", "That action failed."))
+		input_locked = false
+		_set_buttons_disabled(false)
+		_show_main_menu()
+		return
+
+	_record_result_events(result)
+	await _play_events(result.get("events", []))
+	state = result.get("state", bridge.get_battle_state())
+	_update_state(state)
+
+	if result.get("battle_finished", false):
+		finished_result = result
+		_set_message("Battle finished. Winner: %s" % result.get("winner", "none"))
+		_show_post_battle_panel(result)
+	else:
+		_refresh_skills()
+		_refresh_team_switches(state)
+		_refresh_drill_action()
+		_set_message("What will your player do?")
+		input_locked = false
+		_set_buttons_disabled(false)
+		_show_main_menu()
+		await _maybe_auto_pass_stunned_turn()
 
 
 func _refresh_drill_action() -> void:
@@ -584,6 +339,7 @@ func _on_skill_pressed(skill_id: String) -> void:
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
+		await _maybe_auto_pass_stunned_turn()
 
 
 func _on_switch_pressed(player_index: int) -> void:
@@ -616,6 +372,7 @@ func _on_switch_pressed(player_index: int) -> void:
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
+		await _maybe_auto_pass_stunned_turn()
 
 
 func _on_quit_pressed() -> void:

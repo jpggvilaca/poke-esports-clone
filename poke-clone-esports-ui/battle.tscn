@@ -1,7 +1,106 @@
-[gd_scene load_steps=3 format=3 uid="uid://baqcmy5yt4rvt"]
+[gd_scene format=3 uid="uid://baqcmy5yt4rvt"]
 
 [ext_resource type="Script" uid="uid://nggw675sikcq" path="res://battle.gd" id="1_battle"]
 [ext_resource type="PackedScene" path="res://ui/rewards_panel.tscn" id="2_rewards"]
+[ext_resource type="PackedScene" path="res://ui/drill_minigame.tscn" id="3_drill"]
+[ext_resource type="Texture2D" uid="uid://vtl8qok84ega" path="res://assets/players/avatars/portrait1.png" id="4_player_avatar"]
+[ext_resource type="Texture2D" uid="uid://bptittjvsb05a" path="res://assets/players/avatars/portrait2.png" id="5_opponent_avatar"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_player_monitor"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.035, 0.04, 0.05, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.14, 0.34, 0.74, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_opponent_monitor"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.035, 0.04, 0.05, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.78, 0.24, 0.28, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_opponent"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.78, 0.24, 0.28, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.12, 0.12, 0.12, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_player"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.14, 0.34, 0.74, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.12, 0.12, 0.12, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.13, 0.15, 0.18, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.36, 0.62, 0.78, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottom"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.1, 0.11, 0.13, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.36, 0.62, 0.78, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [node name="Battle" type="Control" unique_id=1640387995]
 layout_mode = 3
@@ -12,4 +111,391 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_battle")
 
-[node name="RewardsPanel" parent="." instance=ExtResource("2_rewards")]
+[node name="Background" type="ColorRect" parent="." unique_id=810450795]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.045, 0.055, 0.075, 1)
+
+[node name="StageGlow" type="ColorRect" parent="." unique_id=1188182643]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.07
+anchor_top = 0.12
+anchor_right = 0.93
+anchor_bottom = 0.68
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.12, 0.16, 1)
+
+[node name="Desk" type="ColorRect" parent="." unique_id=201888821]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.31
+anchor_top = 0.44
+anchor_right = 0.69
+anchor_bottom = 0.58
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.09, 0.095, 0.105, 1)
+
+[node name="PlayerMonitor" type="PanelContainer" parent="." unique_id=1501637472]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.37
+anchor_top = 0.25
+anchor_right = 0.49
+anchor_bottom = 0.48
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_player_monitor")
+
+[node name="Content" type="VBoxContainer" parent="PlayerMonitor" unique_id=440988442]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Screen" type="ColorRect" parent="PlayerMonitor/Content" unique_id=1998085012]
+custom_minimum_size = Vector2(160, 96)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+color = Color(0.05, 0.1, 0.13, 1)
+
+[node name="Label" type="Label" parent="PlayerMonitor/Content" unique_id=565143356]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "PLAYER PC"
+horizontal_alignment = 1
+
+[node name="OpponentMonitor" type="PanelContainer" parent="." unique_id=356626027]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.51
+anchor_top = 0.25
+anchor_right = 0.63
+anchor_bottom = 0.48
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_opponent_monitor")
+
+[node name="Content" type="VBoxContainer" parent="OpponentMonitor" unique_id=1239449867]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Screen" type="ColorRect" parent="OpponentMonitor/Content" unique_id=2141190493]
+custom_minimum_size = Vector2(160, 96)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+color = Color(0.05, 0.1, 0.13, 1)
+
+[node name="Label" type="Label" parent="OpponentMonitor/Content" unique_id=1894704573]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "ENEMY PC"
+horizontal_alignment = 1
+
+[node name="OpponentAvatar" type="PanelContainer" parent="." unique_id=1564340748]
+custom_minimum_size = Vector2(220, 220)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.73
+anchor_top = 0.22
+anchor_right = 0.88
+anchor_bottom = 0.53
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_opponent")
+
+[node name="Portrait" type="TextureRect" parent="OpponentAvatar" unique_id=902465156]
+texture_filter = 1
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+texture = ExtResource("5_opponent_avatar")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PlayerAvatar" type="PanelContainer" parent="." unique_id=1846433028]
+custom_minimum_size = Vector2(220, 220)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.12
+anchor_top = 0.22
+anchor_right = 0.27
+anchor_bottom = 0.53
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_player")
+
+[node name="Portrait" type="TextureRect" parent="PlayerAvatar" unique_id=814518737]
+texture_filter = 1
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+texture = ExtResource("4_player_avatar")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="OpponentStatus" type="PanelContainer" parent="." unique_id=920074449]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.6
+anchor_top = 0.08
+anchor_right = 0.94
+anchor_bottom = 0.24
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_status")
+
+[node name="Content" type="VBoxContainer" parent="OpponentStatus" unique_id=1512924220]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Name" type="Label" parent="OpponentStatus/Content" unique_id=1859354501]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 0.98, 1)
+theme_override_font_sizes/font_size = 26
+
+[node name="Meta" type="Label" parent="OpponentStatus/Content" unique_id=851857721]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.72, 0.8, 1)
+theme_override_font_sizes/font_size = 18
+
+[node name="HpRow" type="HBoxContainer" parent="OpponentStatus/Content" unique_id=1697131530]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="OpponentStatus/Content/HpRow" unique_id=2004025690]
+custom_minimum_size = Vector2(58, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.96, 0.84, 1)
+theme_override_font_sizes/font_size = 16
+text = "HP"
+
+[node name="Hp" type="ProgressBar" parent="OpponentStatus/Content/HpRow" unique_id=715730010]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+show_percentage = false
+
+[node name="Value" type="Label" parent="OpponentStatus/Content/HpRow" unique_id=171951650]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.96, 0.84, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 2
+
+[node name="ManaRow" type="HBoxContainer" parent="OpponentStatus/Content" unique_id=1753562785]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="OpponentStatus/Content/ManaRow" unique_id=1477768017]
+custom_minimum_size = Vector2(58, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Mana"
+
+[node name="Mana" type="ProgressBar" parent="OpponentStatus/Content/ManaRow" unique_id=508416208]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+size_flags_horizontal = 3
+show_percentage = false
+
+[node name="Value" type="Label" parent="OpponentStatus/Content/ManaRow" unique_id=1639586166]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 2
+
+[node name="Status" type="Label" parent="OpponentStatus/Content" unique_id=272502937]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.82, 0.45, 1)
+theme_override_font_sizes/font_size = 15
+text = "Status: none"
+
+[node name="PlayerStatus" type="PanelContainer" parent="." unique_id=274945578]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.06
+anchor_top = 0.55
+anchor_right = 0.4
+anchor_bottom = 0.71
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_status")
+
+[node name="Content" type="VBoxContainer" parent="PlayerStatus" unique_id=294458150]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Name" type="Label" parent="PlayerStatus/Content" unique_id=500362653]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 0.98, 1)
+theme_override_font_sizes/font_size = 26
+
+[node name="Meta" type="Label" parent="PlayerStatus/Content" unique_id=1117445429]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.72, 0.8, 1)
+theme_override_font_sizes/font_size = 18
+
+[node name="HpRow" type="HBoxContainer" parent="PlayerStatus/Content" unique_id=928429765]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="PlayerStatus/Content/HpRow" unique_id=284207316]
+custom_minimum_size = Vector2(58, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.96, 0.84, 1)
+theme_override_font_sizes/font_size = 16
+text = "HP"
+
+[node name="Hp" type="ProgressBar" parent="PlayerStatus/Content/HpRow" unique_id=1570444365]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+show_percentage = false
+
+[node name="Value" type="Label" parent="PlayerStatus/Content/HpRow" unique_id=1130307791]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.96, 0.84, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 2
+
+[node name="ManaRow" type="HBoxContainer" parent="PlayerStatus/Content" unique_id=1337417045]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="PlayerStatus/Content/ManaRow" unique_id=1040332980]
+custom_minimum_size = Vector2(58, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Mana"
+
+[node name="Mana" type="ProgressBar" parent="PlayerStatus/Content/ManaRow" unique_id=1255659590]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+size_flags_horizontal = 3
+show_percentage = false
+
+[node name="Value" type="Label" parent="PlayerStatus/Content/ManaRow" unique_id=1160526262]
+custom_minimum_size = Vector2(88, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 2
+
+[node name="Status" type="Label" parent="PlayerStatus/Content" unique_id=433816712]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.82, 0.45, 1)
+theme_override_font_sizes/font_size = 15
+text = "Status: none"
+
+[node name="BottomPanel" type="PanelContainer" parent="." unique_id=2061451147]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.035
+anchor_top = 0.74
+anchor_right = 0.965
+anchor_bottom = 0.965
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
+
+[node name="BottomSplit" type="HBoxContainer" parent="BottomPanel" unique_id=1468517398]
+layout_mode = 2
+theme_override_constants/separation = 22
+
+[node name="TextBox" type="VBoxContainer" parent="BottomPanel/BottomSplit" unique_id=787394285]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="Message" type="Label" parent="BottomPanel/BottomSplit/TextBox" unique_id=1839429302]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.92, 0.95, 0.96, 1)
+theme_override_font_sizes/font_size = 34
+autowrap_mode = 3
+
+[node name="Log" type="RichTextLabel" parent="BottomPanel/BottomSplit/TextBox" unique_id=20520077]
+layout_mode = 2
+theme_override_colors/default_color = Color(0.84, 0.88, 0.9, 1)
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="ActionBox" type="VBoxContainer" parent="BottomPanel/BottomSplit" unique_id=632524657]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MainMenuGrid" type="GridContainer" parent="BottomPanel/BottomSplit/ActionBox" unique_id=1353749082]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="FightButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox/MainMenuGrid" unique_id=1218179149]
+custom_minimum_size = Vector2(270, 76)
+layout_mode = 2
+text = "Fight"
+
+[node name="DrillButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox/MainMenuGrid" unique_id=859551440]
+custom_minimum_size = Vector2(270, 76)
+layout_mode = 2
+text = "Drill"
+
+[node name="PlayerListButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox/MainMenuGrid" unique_id=320679015]
+custom_minimum_size = Vector2(270, 76)
+layout_mode = 2
+text = "Player list"
+
+[node name="QuitButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox/MainMenuGrid" unique_id=1978210413]
+custom_minimum_size = Vector2(270, 76)
+layout_mode = 2
+text = "Quit"
+
+[node name="SkillGrid" type="GridContainer" parent="BottomPanel/BottomSplit/ActionBox" unique_id=794442566]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="SwitchLabel" type="Label" parent="BottomPanel/BottomSplit/ActionBox" unique_id=347229382]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Switch Player"
+
+[node name="SwitchGrid" type="GridContainer" parent="BottomPanel/BottomSplit/ActionBox" unique_id=1083516256]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="BackButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox" unique_id=19601501]
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Back"
+
+[node name="ReturnButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox" unique_id=1742098413]
+visible = false
+custom_minimum_size = Vector2(0, 76)
+layout_mode = 2
+text = "Return to map"
+
+[node name="DrillMinigame" parent="." unique_id=711917845 instance=ExtResource("3_drill")]
+layout_mode = 1
+
+[node name="RewardsPanel" parent="." unique_id=260005268 instance=ExtResource("2_rewards")]
+layout_mode = 1

@@ -1,0 +1,99 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://ui/drill_minigame.gd" id="1_minigame"]
+[ext_resource type="Script" path="res://ui/drill_dial.gd" id="2_dial"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_drill_panel"]
+bg_color = Color(0.08, 0.09, 0.11, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.36, 0.62, 0.78, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+
+[node name="DrillMinigame" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+z_index = 95
+mouse_filter = 0
+focus_mode = 2
+script = ExtResource("1_minigame")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+color = Color(0, 0, 0, 0.62)
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.31
+anchor_top = 0.08
+anchor_right = 0.69
+anchor_bottom = 0.92
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_drill_panel")
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+
+[node name="Content" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.97, 0.98, 1)
+theme_override_font_sizes/font_size = 42
+horizontal_alignment = 1
+text = "Farm"
+
+[node name="Dial" type="Control" parent="Panel/Margin/Content"]
+custom_minimum_size = Vector2(420, 420)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 1
+script = ExtResource("2_dial")
+
+[node name="Feedback" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.95, 0.96, 1)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+text = "Hit the highlighted window."
+
+[node name="Reward" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.69, 0.85, 0.95, 1)
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+text = "Perfect +50 mana   Good +30 mana   Miss +5 mana"
+
+[node name="CancelButton" type="Button" parent="Panel/Margin/Content"]
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Cancel"

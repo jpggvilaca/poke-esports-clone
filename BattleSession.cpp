@@ -239,6 +239,36 @@ BattleActionResult BattleSession::UsePlayerDrill(DrillResultQuality quality)
     return result;
 }
 
+BattleActionResult BattleSession::PassPlayerTurn()
+{
+    if (!started_)
+    {
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
+    }
+
+    if (finished_)
+    {
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
+    }
+
+    Competitor& player = ActivePlayer();
+    BattleStatus& playerStatus = ActivePlayerStatus();
+
+    BattleActionResult result;
+    result.accepted = true;
+    if (playerStatus.stunnedTurns > 0)
+    {
+        AppendActionBlocked(result, BattleActor::Player, "", "Stunned");
+    }
+
+    TickCooldowns(BattleActor::Player, player, result);
+    FinishActionOpportunity(BattleActor::Player, player, playerStatus, result);
+    ResolveOpponentTurn(result);
+    FinishBattleIfNeeded(result);
+    result.finalState = GetState();
+    return result;
+}
+
 BattleActionResult BattleSession::SwitchPlayer(int playerIndex)
 {
     if (!started_)
