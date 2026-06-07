@@ -1,6 +1,8 @@
 #include "BattleBridge.h"
 
 #include "PlayerProfileSystem.h"
+#include "RatingSystem.h"
+#include "TrainerProfile.h"
 
 #include <godot_cpp/core/class_db.hpp>
 
@@ -15,11 +17,13 @@ using godot::String;
 void BattleBridge::_bind_methods()
 {
     godot::ClassDB::bind_method(godot::D_METHOD("start_battle", "setup"), &BattleBridge::start_battle);
-    godot::ClassDB::bind_method(godot::D_METHOD("start_demo_battle"), &BattleBridge::start_demo_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
     godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
     godot::ClassDB::bind_method(godot::D_METHOD("create_player_profile", "player_name", "spec"), &BattleBridge::create_player_profile);
-    godot::ClassDB::bind_method(godot::D_METHOD("award_player_profile_xp", "player_profile", "amount"), &BattleBridge::award_player_profile_xp);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_player_skill_summary", "player_profile", "skill_id", "progress"), &BattleBridge::get_player_skill_summary);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_pending_scout_offer", "rating", "completed_offer_ids", "declined_offer_ids"), &BattleBridge::get_pending_scout_offer);
+    godot::ClassDB::bind_method(godot::D_METHOD("accept_scout_candidate", "roster", "pending_offer", "candidate_index"), &BattleBridge::accept_scout_candidate);
+    godot::ClassDB::bind_method(godot::D_METHOD("complete_trainer_battle", "trainer_state", "battle_config", "battle_result"), &BattleBridge::complete_trainer_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("get_battle_state"), &BattleBridge::get_battle_state);
     godot::ClassDB::bind_method(godot::D_METHOD("get_available_skills"), &BattleBridge::get_available_skills);
     godot::ClassDB::bind_method(godot::D_METHOD("get_last_result"), &BattleBridge::get_last_result);
@@ -37,29 +41,12 @@ Dictionary BattleBridge::start_battle(const Dictionary& setup_dictionary)
     return result_to_dictionary(last_result_);
 }
 
-Dictionary BattleBridge::start_demo_battle()
-{
-    session_ = std::make_unique<BattleSession>(data_, 20260605);
-
-    BattleSetup setup;
-    BattleSetup::PlayerSlot player;
-    player.profileIndex = 1;
-    player.name = "Human Trainer";
-    player.spec = Spec::Top;
-    setup.playerTeam.push_back(player);
-    setup.activePlayerIndex = 0;
-    setup.opponentName = "Opponent";
-    setup.opponentSpec = Spec::Jungle;
-
-    last_result_ = session_->StartBattle(setup);
-    return result_to_dictionary(last_result_);
-}
-
 Dictionary BattleBridge::use_skill(const String& skill_id)
 {
     if (session_ == nullptr)
     {
-        start_demo_battle();
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return result_to_dictionary(last_result_);
     }
 
     last_result_ = session_->UsePlayerSkill(std::string(skill_id.utf8().get_data()));
@@ -70,7 +57,8 @@ Dictionary BattleBridge::switch_player(int player_index)
 {
     if (session_ == nullptr)
     {
-        start_demo_battle();
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return result_to_dictionary(last_result_);
     }
 
     last_result_ = session_->SwitchPlayer(player_index);
@@ -86,12 +74,151 @@ Dictionary BattleBridge::create_player_profile(const String& player_name, const 
     return player_profile_to_dictionary(player_profile);
 }
 
-Dictionary BattleBridge::award_player_profile_xp(const Dictionary& player_profile_dictionary, int amount) const
+Dictionary BattleBridge::get_player_skill_summary(
+    const Dictionary& player_profile,
+    const String& skill_id,
+    const Dictionary& progress_dictionary) const
 {
-    PlayerProfileSystem profiles(data_);
-    PlayerProfileState player_profile = player_profile_from_dictionary(player_profile_dictionary);
-    const ProfileCommandResult result = profiles.AwardXp(player_profile, amount);
-    return profile_result_to_dictionary(result, player_profile);
+    const std::string skill_id_text = std::string(skill_id.utf8().get_data());
+    const Skill* definition = data_.FindSkill(skill_id_text);
+    if (definition == nullptr)
+    {
+        Dictionary summary;
+        summary["id"] = skill_id;
+        summary["name"] = skill_id;
+        summary["level"] = 1;
+        summary["xp"] = 0;
+        summary["power"] = 0;
+        summary["focus_cost"] = 0;
+        return summary;
+    }
+
+    SkillProgress progress;
+    progress.skillId = skill_id_text;
+    progress.level = progress_dictionary.has("level")
+        ? std::max(1, static_cast<int>(progress_dictionary["level"]))
+        : 1;
+    progress.xp = progress_dictionary.has("xp")
+        ? std::max(0, static_cast<int>(progress_dictionary["xp"]))
+        : 0;
+
+    BattleRules rules(data_);
+    ProgressionSystem progression;
+    SkillSystem skills(data_, rules, progression);
+    const Competitor user = competitor_from_player_profile(player_profile);
+    return skill_to_dictionary(skills.CreateSkillView(*definition, progress, user));
+}
+
+Dictionary BattleBridge::get_pending_scout_offer(
+    int rating,
+    const Array& completed_offer_ids,
+    const Array& declined_offer_ids) const
+{
+    ScoutSystem scouts(data_);
+    return scout_offer_to_dictionary(scouts.GetNextOffer(
+        rating,
+        string_vector_from_array(completed_offer_ids),
+        string_vector_from_array(declined_offer_ids)));
+}
+
+Dictionary BattleBridge::accept_scout_candidate(
+    const Array& roster,
+    const Dictionary& pending_offer,
+    int candidate_index) const
+{
+    ScoutSystem scouts(data_);
+    const ScoutOfferView offer = scout_offer_from_dictionary(pending_offer);
+    const ProfileCommandResult result = scouts.CanRecruitCandidate(
+        roster.size(),
+        TrainerBalance::MaxPlayerProfiles,
+        candidate_index,
+        offer);
+
+    Dictionary response;
+    response["accepted"] = result.accepted;
+    response["error_code"] = error_to_string(result.errorCode);
+    response["error"] = String(result.error.c_str());
+    response["offer_id"] = pending_offer.get("id", "");
+
+    Array updated_roster;
+    for (int index = 0; index < roster.size(); ++index)
+    {
+        updated_roster.push_back(roster[index]);
+    }
+
+    if (!result.accepted)
+    {
+        response["roster"] = updated_roster;
+        response["message"] = String(result.error.c_str());
+        return response;
+    }
+
+    Array candidates = pending_offer.has("candidates")
+        ? Array(pending_offer["candidates"])
+        : Array();
+    Dictionary candidate = candidates[candidate_index];
+    updated_roster.push_back(candidate);
+    response["roster"] = updated_roster;
+    response["message"] = String(candidate.get("name", "Prospect")) + String(" joined your roster.");
+    return response;
+}
+
+Dictionary BattleBridge::complete_trainer_battle(
+    const Dictionary& trainer_state_dictionary,
+    const Dictionary& battle_config,
+    const Dictionary& battle_result) const
+{
+    TrainerProfile trainer = TrainerProfile::FromState(trainer_profile_from_dictionary(trainer_state_dictionary));
+
+    Array roster = trainer_state_dictionary.has("roster")
+        ? Array(trainer_state_dictionary["roster"])
+        : Array();
+    Dictionary state = battle_result.has("state")
+        ? Dictionary(battle_result["state"])
+        : Dictionary();
+    const String winner_text = battle_result.has("winner")
+        ? String(battle_result["winner"])
+        : String("none");
+    const bool won = winner_text == "player";
+
+    apply_battle_vitals(trainer, roster, state);
+    apply_skill_progress(roster, trainer.GetState().activePlayerIndex, battle_result);
+
+    Array level_up_messages;
+    int money_reward = 0;
+
+    if (won)
+    {
+        award_participant_xp(roster, battle_result, level_up_messages);
+        money_reward = battle_config.has("money_reward")
+            ? static_cast<int>(battle_config["money_reward"])
+            : 100;
+        trainer.AwardMoney(money_reward);
+
+        const String trophy_id = battle_config.has("trophy_id")
+            ? String(battle_config["trophy_id"])
+            : String("");
+        if (!trophy_id.is_empty())
+        {
+            trainer.AddTrophy(std::string(trophy_id.utf8().get_data()));
+        }
+    }
+
+    const int rating_change = apply_rating_change(trainer, roster, battle_config, won);
+    const String display_name = battle_config.has("display_name")
+        ? String(battle_config["display_name"])
+        : String("Opponent");
+
+    Dictionary completion;
+    completion["accepted"] = true;
+    completion["won"] = won;
+    completion["winner"] = winner_text;
+    completion["npc_id"] = battle_config.get("id", "");
+    completion["mark_npc_defeated"] = won && bool(battle_config.get("single_use", true));
+    completion["level_up_messages"] = level_up_messages;
+    completion["trainer_state"] = trainer_profile_to_dictionary(trainer.GetState(), roster);
+    completion["summary_text"] = build_completion_summary(display_name, won, money_reward, rating_change);
+    return completion;
 }
 
 Dictionary BattleBridge::get_battle_state() const
@@ -123,6 +250,359 @@ Array BattleBridge::get_available_skills() const
 Dictionary BattleBridge::get_last_result() const
 {
     return result_to_dictionary(last_result_);
+}
+
+BattleActionResult BattleBridge::reject_action(SimulationError error_code, const std::string& error) const
+{
+    BattleActionResult result;
+    result.errorCode = error_code;
+    result.error = error;
+    result.finalState = BattleState{};
+    return result;
+}
+
+void BattleBridge::apply_battle_vitals(
+    TrainerProfile& trainer,
+    Array& roster,
+    const Dictionary& battle_state) const
+{
+    if (battle_state.has("active_player_index"))
+    {
+        trainer.SetActivePlayerIndex(std::max(0, static_cast<int>(battle_state["active_player_index"])));
+    }
+
+    if (!battle_state.has("player_team"))
+    {
+        return;
+    }
+
+    Array player_team = battle_state["player_team"];
+    for (int index = 0; index < player_team.size(); ++index)
+    {
+        Dictionary player_state = player_team[index];
+        const int profile_index = player_state.has("profile_index")
+            ? static_cast<int>(player_state["profile_index"])
+            : -1;
+        if (profile_index < 0 || profile_index >= roster.size())
+        {
+            continue;
+        }
+
+        Dictionary player = roster[profile_index];
+        player["current_hp"] = player_state.get("hp", player.get("current_hp", 100));
+        player["max_hp"] = player_state.get("max_hp", player.get("max_hp", 100));
+        player["current_focus"] = player_state.get("focus", player.get("current_focus", 50));
+        player["max_focus"] = player_state.get("max_focus", player.get("max_focus", 50));
+        roster[profile_index] = player;
+    }
+}
+
+void BattleBridge::apply_skill_progress(
+    Array& roster,
+    int active_player_index,
+    const Dictionary& battle_result) const
+{
+    int current_profile_index = active_player_index;
+    if (!battle_result.has("events"))
+    {
+        return;
+    }
+
+    Array events = battle_result["events"];
+    for (int index = 0; index < events.size(); ++index)
+    {
+        Dictionary event = events[index];
+        const String event_type = event.has("type") ? String(event["type"]) : String("none");
+        if (event_type == "battle_started" || event_type == "player_switched")
+        {
+            current_profile_index = event.has("new_player_index")
+                ? static_cast<int>(event["new_player_index"])
+                : current_profile_index;
+        }
+
+        if (!event.has("actor") || String(event["actor"]) != "player")
+        {
+            continue;
+        }
+
+        const String skill_id = event.has("skill_id") ? String(event["skill_id"]) : String("");
+        if (skill_id.is_empty())
+        {
+            continue;
+        }
+
+        const int profile_index = event.has("profile_index")
+            ? static_cast<int>(event["profile_index"])
+            : current_profile_index;
+        if (profile_index < 0 || profile_index >= roster.size())
+        {
+            continue;
+        }
+
+        Dictionary player = roster[profile_index];
+        Dictionary progress_by_skill = player.has("skill_progress")
+            ? Dictionary(player["skill_progress"])
+            : Dictionary();
+        Dictionary progress = progress_by_skill.has(skill_id)
+            ? Dictionary(progress_by_skill[skill_id])
+            : Dictionary();
+        progress["skill_id"] = skill_id;
+
+        if (event_type == "skill_xp_gained")
+        {
+            progress["xp"] = event.get("new_value", progress.get("xp", 0));
+        }
+        else if (event_type == "skill_leveled_up")
+        {
+            progress["level"] = event.get("new_level", progress.get("level", 1));
+        }
+        else
+        {
+            continue;
+        }
+
+        progress_by_skill[skill_id] = progress;
+        player["skill_progress"] = progress_by_skill;
+        roster[profile_index] = player;
+    }
+}
+
+void BattleBridge::award_participant_xp(
+    Array& roster,
+    const Dictionary& battle_result,
+    Array& level_up_messages) const
+{
+    PlayerProfileSystem profiles(data_);
+    Dictionary reward = battle_result.has("reward")
+        ? Dictionary(battle_result["reward"])
+        : Dictionary();
+    const int battle_xp = reward.has("xp_per_participant")
+        ? static_cast<int>(reward["xp_per_participant"])
+        : 0;
+    if (battle_xp <= 0 || !reward.has("participant_player_indices"))
+    {
+        return;
+    }
+
+    Array participant_indices = reward["participant_player_indices"];
+    for (int index = 0; index < participant_indices.size(); ++index)
+    {
+        const int profile_index = static_cast<int>(participant_indices[index]);
+        if (profile_index < 0 || profile_index >= roster.size())
+        {
+            continue;
+        }
+
+        Dictionary player = roster[profile_index];
+        const String player_name = player.has("name") ? String(player["name"]) : String("Player");
+        PlayerProfileState player_profile = player_profile_from_dictionary(player);
+        const ProfileCommandResult xp_result = profiles.AwardXp(player_profile, battle_xp);
+        if (!xp_result.accepted)
+        {
+            continue;
+        }
+
+        Dictionary profile_snapshot = player_profile_to_dictionary(player_profile);
+        Array keys = profile_snapshot.keys();
+        for (int key_index = 0; key_index < keys.size(); ++key_index)
+        {
+            player[keys[key_index]] = profile_snapshot[keys[key_index]];
+        }
+        player["current_hp"] = std::min(
+            static_cast<int>(player.get("current_hp", player.get("max_hp", 100))),
+            static_cast<int>(player.get("max_hp", 100)));
+        player["current_focus"] = std::min(
+            static_cast<int>(player.get("current_focus", player.get("max_focus", 50))),
+            static_cast<int>(player.get("max_focus", 50)));
+        roster[profile_index] = player;
+
+        level_up_messages.push_back(String("XP: ") + player_name + String(" gained ") + String::num_int64(battle_xp) + String(" player XP."));
+        if (xp_result.leveledUp)
+        {
+            level_up_messages.push_back(String("LEVEL UP: ") + player_name + String(" reached Lv") + String::num_int64(player_profile.level) + String("."));
+        }
+    }
+}
+
+int BattleBridge::get_active_player_level(const TrainerProfile& trainer, const Array& roster) const
+{
+    const int active_index = trainer.GetState().activePlayerIndex;
+    if (active_index < 0 || active_index >= roster.size())
+    {
+        return 1;
+    }
+
+    return player_profile_from_dictionary(Dictionary(roster[active_index])).level;
+}
+
+int BattleBridge::apply_rating_change(
+    TrainerProfile& trainer,
+    const Array& roster,
+    const Dictionary& battle_config,
+    bool won) const
+{
+    const int active_level = get_active_player_level(trainer, roster);
+    const int opponent_level = battle_config.has("opponent_level")
+        ? std::max(1, static_cast<int>(battle_config["opponent_level"]))
+        : active_level;
+    const MatchContext context = battle_config.has("match_context")
+        ? match_context_from_string(String(battle_config["match_context"]))
+        : MatchContext::Normal;
+
+    RatingSystem ratings;
+    const RatingResult rating_result = ratings.CalculateChange(
+        trainer.GetState().rating,
+        active_level,
+        opponent_level,
+        context,
+        won);
+    if (!rating_result.accepted)
+    {
+        return 0;
+    }
+
+    trainer.AwardRating(rating_result.ratingChange);
+    return rating_result.ratingChange;
+}
+
+String BattleBridge::build_completion_summary(
+    const String& display_name,
+    bool won,
+    int money_reward,
+    int rating_change) const
+{
+    if (won)
+    {
+        return String("Won against ") + display_name + String(" (+")
+            + String::num_int64(money_reward) + String(" money, +")
+            + String::num_int64(rating_change) + String(" rating).");
+    }
+
+    return String("Lost against ") + display_name + String(" (")
+        + String::num_int64(rating_change) + String(" rating).");
+}
+
+Competitor BattleBridge::competitor_from_player_profile(const Dictionary& player_profile) const
+{
+    Competitor competitor;
+    competitor.name = player_profile.has("name")
+        ? std::string(String(player_profile["name"]).utf8().get_data())
+        : "Player";
+    competitor.spec = player_profile.has("spec")
+        ? spec_from_string(String(player_profile["spec"]))
+        : Spec::Top;
+    competitor.traitId = player_profile.has("trait_id")
+        ? std::string(String(player_profile["trait_id"]).utf8().get_data())
+        : "";
+    if (data_.FindTrait(competitor.traitId) == nullptr)
+    {
+        const SpecData* spec_data = data_.FindSpec(competitor.spec);
+        competitor.traitId = spec_data == nullptr ? "" : spec_data->defaultTraitId;
+    }
+
+    PassiveBonuses bonuses;
+    if (player_profile.has("passive_bonuses"))
+    {
+        Dictionary passive_bonuses = player_profile["passive_bonuses"];
+        bonuses.maxHpBonus = passive_bonuses.has("max_hp_bonus")
+            ? static_cast<int>(passive_bonuses["max_hp_bonus"])
+            : 0;
+        bonuses.basePowerBonus = passive_bonuses.has("base_power_bonus")
+            ? static_cast<int>(passive_bonuses["base_power_bonus"])
+            : 0;
+        bonuses.counterDamageBonusPercent = passive_bonuses.has("counter_damage_bonus_percent")
+            ? static_cast<int>(passive_bonuses["counter_damage_bonus_percent"])
+            : 0;
+    }
+
+    competitor.maxHp = Balance::StartingMaxHp + bonuses.maxHpBonus;
+    competitor.hp = player_profile.has("current_hp")
+        ? std::clamp(static_cast<int>(player_profile["current_hp"]), 0, competitor.maxHp)
+        : competitor.maxHp;
+    competitor.maxFocus = Balance::StartingMaxFocus;
+    competitor.focus = player_profile.has("current_focus")
+        ? std::clamp(static_cast<int>(player_profile["current_focus"]), 0, competitor.maxFocus)
+        : competitor.maxFocus;
+    competitor.basePower = Balance::StartingBasePower + bonuses.basePowerBonus;
+    competitor.counterDamageBonusPercent = bonuses.counterDamageBonusPercent;
+    return competitor;
+}
+
+std::vector<std::string> BattleBridge::string_vector_from_array(const Array& values) const
+{
+    std::vector<std::string> output;
+    for (int index = 0; index < values.size(); ++index)
+    {
+        output.push_back(std::string(String(values[index]).utf8().get_data()));
+    }
+    return output;
+}
+
+Dictionary BattleBridge::scout_offer_to_dictionary(const ScoutOfferView& offer) const
+{
+    Dictionary dictionary;
+    if (!offer.available)
+    {
+        return dictionary;
+    }
+
+    dictionary["id"] = String(offer.id.c_str());
+    dictionary["required_rating"] = offer.requiredRating;
+    dictionary["message"] = String(offer.message.c_str());
+
+    Array candidates;
+    for (const PlayerProfileState& candidate : offer.candidates)
+    {
+        candidates.push_back(player_profile_to_roster_dictionary(candidate));
+    }
+    dictionary["candidates"] = candidates;
+    return dictionary;
+}
+
+ScoutOfferView BattleBridge::scout_offer_from_dictionary(const Dictionary& offer_dictionary) const
+{
+    ScoutOfferView offer;
+    offer.id = offer_dictionary.has("id")
+        ? std::string(String(offer_dictionary["id"]).utf8().get_data())
+        : "";
+    offer.available = !offer.id.empty();
+    offer.requiredRating = offer_dictionary.has("required_rating")
+        ? static_cast<int>(offer_dictionary["required_rating"])
+        : 0;
+    offer.message = offer_dictionary.has("message")
+        ? std::string(String(offer_dictionary["message"]).utf8().get_data())
+        : "";
+
+    if (offer_dictionary.has("candidates"))
+    {
+        Array candidates = offer_dictionary["candidates"];
+        for (int index = 0; index < candidates.size(); ++index)
+        {
+            offer.candidates.push_back(player_profile_from_dictionary(Dictionary(candidates[index])));
+        }
+    }
+    return offer;
+}
+
+Dictionary BattleBridge::player_profile_to_roster_dictionary(const PlayerProfileState& player_profile) const
+{
+    Dictionary dictionary = player_profile_to_dictionary(player_profile);
+    dictionary["current_hp"] = dictionary.get("max_hp", Balance::StartingMaxHp);
+    dictionary["current_focus"] = dictionary.get("max_focus", Balance::StartingMaxFocus);
+
+    Dictionary progress_by_skill;
+    Array active_skills = dictionary["active_skill_ids"];
+    for (int index = 0; index < active_skills.size(); ++index)
+    {
+        const String skill_id = String(active_skills[index]);
+        Dictionary progress;
+        progress["skill_id"] = skill_id;
+        progress["level"] = 1;
+        progress["xp"] = 0;
+        progress_by_skill[skill_id] = progress;
+    }
+    dictionary["skill_progress"] = progress_by_skill;
+    return dictionary;
 }
 
 Dictionary BattleBridge::competitor_to_dictionary(const CompetitorView& competitor) const
@@ -292,23 +772,6 @@ Dictionary BattleBridge::player_profile_to_dictionary(const PlayerProfileState& 
     return dictionary;
 }
 
-Dictionary BattleBridge::profile_result_to_dictionary(
-    const ProfileCommandResult& result,
-    const PlayerProfileState& player_profile) const
-{
-    Dictionary dictionary;
-    dictionary["accepted"] = result.accepted;
-    dictionary["error_code"] = error_to_string(result.errorCode);
-    dictionary["error"] = String(result.error.c_str());
-    dictionary["old_value"] = result.oldValue;
-    dictionary["new_value"] = result.newValue;
-    dictionary["old_level"] = result.oldLevel;
-    dictionary["new_level"] = result.newLevel;
-    dictionary["leveled_up"] = result.leveledUp;
-    dictionary["player_profile"] = player_profile_to_dictionary(player_profile);
-    return dictionary;
-}
-
 PlayerProfileState BattleBridge::player_profile_from_dictionary(const Dictionary& player_profile_dictionary) const
 {
     PlayerProfileState player_profile;
@@ -359,6 +822,63 @@ PlayerProfileState BattleBridge::player_profile_from_dictionary(const Dictionary
         player_profile.traitId = spec_data == nullptr ? "" : spec_data->defaultTraitId;
     }
     return player_profile;
+}
+
+TrainerProfileState BattleBridge::trainer_profile_from_dictionary(const Dictionary& trainer_state_dictionary) const
+{
+    TrainerProfileState trainer_state;
+    trainer_state.trainerName = trainer_state_dictionary.has("trainer_name")
+        ? std::string(String(trainer_state_dictionary["trainer_name"]).utf8().get_data())
+        : "Trainer";
+    trainer_state.rating = trainer_state_dictionary.has("rating")
+        ? std::max(0, static_cast<int>(trainer_state_dictionary["rating"]))
+        : TrainerBalance::StartingRating;
+    trainer_state.money = trainer_state_dictionary.has("money")
+        ? std::max(0, static_cast<int>(trainer_state_dictionary["money"]))
+        : TrainerBalance::StartingMoney;
+    trainer_state.activePlayerIndex = trainer_state_dictionary.has("active_player_index")
+        ? std::max(0, static_cast<int>(trainer_state_dictionary["active_player_index"]))
+        : 0;
+
+    if (trainer_state_dictionary.has("roster"))
+    {
+        Array roster = trainer_state_dictionary["roster"];
+        for (int index = 0; index < roster.size(); ++index)
+        {
+            trainer_state.roster.push_back(player_profile_from_dictionary(Dictionary(roster[index])));
+        }
+    }
+
+    if (trainer_state_dictionary.has("trophies"))
+    {
+        Array trophies = trainer_state_dictionary["trophies"];
+        for (int index = 0; index < trophies.size(); ++index)
+        {
+            trainer_state.trophyIds.push_back(std::string(String(trophies[index]).utf8().get_data()));
+        }
+    }
+
+    return trainer_state;
+}
+
+Dictionary BattleBridge::trainer_profile_to_dictionary(
+    const TrainerProfileState& trainer_state,
+    const Array& roster) const
+{
+    Dictionary dictionary;
+    dictionary["trainer_name"] = String(trainer_state.trainerName.c_str());
+    dictionary["rating"] = trainer_state.rating;
+    dictionary["money"] = trainer_state.money;
+    dictionary["active_player_index"] = trainer_state.activePlayerIndex;
+    dictionary["roster"] = roster;
+
+    Array trophies;
+    for (const std::string& trophy_id : trainer_state.trophyIds)
+    {
+        trophies.push_back(String(trophy_id.c_str()));
+    }
+    dictionary["trophies"] = trophies;
+    return dictionary;
 }
 
 BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictionary) const
@@ -480,6 +1000,15 @@ Spec BattleBridge::spec_from_string(const String& value) const
     if (text == "ADC" || text == "Adc" || text == "adc") return Spec::Adc;
     if (text == "Support" || text == "support") return Spec::Support;
     return Spec::Top;
+}
+
+MatchContext BattleBridge::match_context_from_string(const String& value) const
+{
+    const std::string text = std::string(value.utf8().get_data());
+    if (text == "Tutorial" || text == "tutorial") return MatchContext::Tutorial;
+    if (text == "Nemesis" || text == "nemesis") return MatchContext::Nemesis;
+    if (text == "Major" || text == "major") return MatchContext::Major;
+    return MatchContext::Normal;
 }
 
 String BattleBridge::actor_to_string(BattleActor actor) const

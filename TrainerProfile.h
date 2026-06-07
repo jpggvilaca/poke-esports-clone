@@ -23,6 +23,7 @@ public:
         GameType gameType,
         Spec starterSpec,
         const PlayerProfileSystem& playerProfiles);
+    static TrainerProfile FromState(const TrainerProfileState& state);
 
     const TrainerProfileState& GetState() const;
     const PlayerProfileState* GetActivePlayerProfile() const;
@@ -33,6 +34,7 @@ public:
 
     ProfileCommandResult AwardRating(int amount);
     ProfileCommandResult AwardMoney(int amount);
+    ProfileCommandResult SetActivePlayerIndex(int playerIndex);
     ProfileCommandResult AddTrophy(const std::string& trophyId);
     ProfileCommandResult AddPlayerProfile(const PlayerProfileState& playerProfile);
 

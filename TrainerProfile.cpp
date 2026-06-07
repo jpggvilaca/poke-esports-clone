@@ -44,6 +44,13 @@ TrainerProfile TrainerProfile::CreateNew(
     return profile;
 }
 
+TrainerProfile TrainerProfile::FromState(const TrainerProfileState& state)
+{
+    TrainerProfile profile;
+    profile.state_ = state;
+    return profile;
+}
+
 const TrainerProfileState& TrainerProfile::GetState() const
 {
     return state_;
@@ -102,6 +109,20 @@ ProfileCommandResult TrainerProfile::AwardMoney(int amount)
     result.oldValue = state_.money;
     state_.money = std::max(0, state_.money + amount);
     result.newValue = state_.money;
+    return result;
+}
+
+ProfileCommandResult TrainerProfile::SetActivePlayerIndex(int playerIndex)
+{
+    if (playerIndex < 0 || playerIndex >= static_cast<int>(state_.roster.size()))
+    {
+        return Reject(SimulationError::UnknownPlayerProfile, "Unknown player profile.");
+    }
+
+    ProfileCommandResult result = Accept();
+    result.oldValue = state_.activePlayerIndex;
+    state_.activePlayerIndex = playerIndex;
+    result.newValue = state_.activePlayerIndex;
     return result;
 }
 

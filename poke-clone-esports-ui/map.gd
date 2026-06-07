@@ -351,7 +351,7 @@ func _format_trainer_text() -> String:
 		var progress_by_skill: Dictionary = player.get("skill_progress", {})
 		for skill_id in player.get("active_skill_ids", []):
 			var progress: Dictionary = progress_by_skill.get(skill_id, {})
-			var skill_summary: Dictionary = GameState.get_skill_progress_summary(String(skill_id), progress)
+			var skill_summary: Dictionary = GameState.get_skill_progress_summary(player, String(skill_id), progress)
 			lines.push_back("   - %s Lv%s XP %s | PWR %s Focus %s" % [
 				skill_summary.get("name", GameState.format_skill_name(String(skill_id))),
 				skill_summary.get("level", 1),
@@ -410,7 +410,7 @@ func _format_candidate_skills(candidate: Dictionary) -> String:
 	var progress_by_skill: Dictionary = candidate.get("skill_progress", {})
 	for skill_id in candidate.get("active_skill_ids", []):
 		var progress: Dictionary = progress_by_skill.get(skill_id, {})
-		var skill_summary: Dictionary = GameState.get_skill_progress_summary(String(skill_id), progress)
+		var skill_summary: Dictionary = GameState.get_skill_progress_summary(candidate, String(skill_id), progress)
 		skill_names.push_back("%s PWR %s/F%s" % [
 			skill_summary.get("name", GameState.format_skill_name(String(skill_id))),
 			skill_summary.get("power", 0),

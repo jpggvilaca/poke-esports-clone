@@ -14,6 +14,7 @@ core_sources = [
     "PlayerProfileSystem.cpp",
     "RatingSystem.cpp",
     "ProgressionSystem.cpp",
+    "ScoutSystem.cpp",
     "SimulationData.cpp",
     "SkillSystem.cpp",
     "TrainerProfile.cpp",

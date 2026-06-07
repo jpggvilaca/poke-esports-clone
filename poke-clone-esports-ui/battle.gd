@@ -36,14 +36,11 @@ var main_menu_grid: GridContainer
 var skill_grid: GridContainer
 var switch_label: Label
 var switch_grid: GridContainer
-var item_label: Label
-var item_list: VBoxContainer
 var back_button: Button
 var return_button: Button
 var main_menu_buttons: Array[Button] = []
 var skill_buttons: Array[Button] = []
 var switch_buttons: Array[Button] = []
-var item_buttons: Array[Button] = []
 var log_entries: Array[String] = []
 var deferred_skill_xp: Dictionary = {}
 var deferred_skill_levels: Dictionary = {}
@@ -57,11 +54,7 @@ func _ready() -> void:
 	bridge = BattleBridge.new()
 	add_child(bridge)
 
-	var result: Dictionary
-	if GameState.has_pending_battle():
-		result = bridge.start_battle(GameState.build_battle_setup())
-	else:
-		result = bridge.start_demo_battle()
+	var result := bridge.start_battle(GameState.build_battle_setup())
 
 	if not result.get("accepted", false):
 		finished_result = result
@@ -206,7 +199,6 @@ func _build_ui() -> void:
 	action_box.add_child(main_menu_grid)
 	_add_main_menu_button("Fight", _on_fight_menu_pressed)
 	_add_main_menu_button("Player list", _on_player_list_menu_pressed)
-	_add_main_menu_button("Items", _on_items_menu_pressed)
 	_add_main_menu_button("Quit", _on_quit_pressed)
 
 	skill_grid = GridContainer.new()
@@ -225,15 +217,6 @@ func _build_ui() -> void:
 	switch_grid.add_theme_constant_override("h_separation", 10)
 	switch_grid.add_theme_constant_override("v_separation", 10)
 	action_box.add_child(switch_grid)
-
-	item_label = Label.new()
-	item_label.text = "Items"
-	item_label.add_theme_font_size_override("font_size", 18)
-	action_box.add_child(item_label)
-
-	item_list = VBoxContainer.new()
-	item_list.add_theme_constant_override("separation", 10)
-	action_box.add_child(item_list)
 
 	back_button = Button.new()
 	back_button.text = "Back"
@@ -410,8 +393,6 @@ func _show_main_menu() -> void:
 	skill_grid.visible = false
 	switch_label.visible = false
 	switch_grid.visible = false
-	item_label.visible = false
-	item_list.visible = false
 	back_button.visible = false
 	return_button.visible = false
 	_set_buttons_disabled(input_locked)
@@ -423,8 +404,6 @@ func _show_fight_menu() -> void:
 	skill_grid.visible = true
 	switch_label.visible = false
 	switch_grid.visible = false
-	item_label.visible = false
-	item_list.visible = false
 	back_button.visible = true
 
 
@@ -434,19 +413,6 @@ func _show_player_list_menu() -> void:
 	skill_grid.visible = false
 	switch_label.visible = true
 	switch_grid.visible = true
-	item_label.visible = false
-	item_list.visible = false
-	back_button.visible = true
-
-
-func _show_items_menu() -> void:
-	_refresh_items()
-	main_menu_grid.visible = false
-	skill_grid.visible = false
-	switch_label.visible = false
-	switch_grid.visible = false
-	item_label.visible = true
-	item_list.visible = true
 	back_button.visible = true
 
 
@@ -460,12 +426,6 @@ func _on_player_list_menu_pressed() -> void:
 	if input_locked:
 		return
 	_show_player_list_menu()
-
-
-func _on_items_menu_pressed() -> void:
-	if input_locked:
-		return
-	_show_items_menu()
 
 
 func _refresh_skills() -> void:
@@ -493,35 +453,6 @@ func _format_skill_button(skill: Dictionary) -> String:
 		skill.get("focus_cost", 0),
 		description,
 	]
-
-
-func _refresh_items() -> void:
-	for child in item_list.get_children():
-		child.queue_free()
-	item_buttons.clear()
-
-	var state := GameState.get_trainer_state()
-	var items: Array = state.get("items", [])
-	if items.is_empty():
-		var empty_label := Label.new()
-		empty_label.text = "No items."
-		empty_label.add_theme_font_size_override("font_size", 20)
-		item_list.add_child(empty_label)
-		return
-
-	for item in items:
-		var data: Dictionary = item
-		var button := Button.new()
-		button.text = "%s x%s\n%s" % [
-			data.get("name", "Item"),
-			data.get("quantity", 0),
-			data.get("description", ""),
-		]
-		button.custom_minimum_size = Vector2(0, 76)
-		button.disabled = input_locked
-		button.pressed.connect(_on_item_pressed.bind(String(data.get("name", "Item"))))
-		item_list.add_child(button)
-		item_buttons.push_back(button)
 
 
 func _refresh_team_switches(state: Dictionary = {}) -> void:
@@ -623,10 +554,6 @@ func _on_switch_pressed(player_index: int) -> void:
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
-
-
-func _on_item_pressed(item_name: String) -> void:
-	_set_message("%s cannot be used yet." % item_name)
 
 
 func _on_quit_pressed() -> void:
@@ -833,8 +760,6 @@ func _set_buttons_disabled(disabled: bool) -> void:
 		button.disabled = disabled
 	for button in switch_buttons:
 		button.disabled = disabled or bool(button.get_meta("switch_disabled", false))
-	for button in item_buttons:
-		button.disabled = disabled
 	back_button.disabled = disabled
 
 
@@ -845,8 +770,6 @@ func _show_return_button() -> void:
 	skill_grid.visible = false
 	switch_label.visible = false
 	switch_grid.visible = false
-	item_label.visible = false
-	item_list.visible = false
 	back_button.visible = false
 	return_button.visible = true
 

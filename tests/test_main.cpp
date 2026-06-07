@@ -1,6 +1,7 @@
 #include "BattleSession.h"
 #include "PlayerProfileSystem.h"
 #include "RatingSystem.h"
+#include "ScoutSystem.h"
 #include "SimulationData.h"
 #include "TrainerProfile.h"
 
@@ -379,6 +380,19 @@ namespace
         test.ExpectEqual(trainer.GetActivePlayerProfile()->traitId, std::string("lane-bully"), "trainer starter carries its spec trait");
         test.Expect(trainer.GetMutablePlayerProfile(99) == nullptr, "invalid roster index returns nullptr");
 
+        PlayerProfileState bench = profiles.CreateStarter("Bench", Spec::Support);
+        ProfileCommandResult addedBench = trainer.AddPlayerProfile(bench);
+        test.Expect(addedBench.accepted, "can add a bench player before switching active profile");
+        ProfileCommandResult activeSwitch = trainer.SetActivePlayerIndex(1);
+        test.Expect(activeSwitch.accepted, "can set the active player profile");
+        test.ExpectEqual(activeSwitch.oldValue, 0, "active switch reports old index");
+        test.ExpectEqual(activeSwitch.newValue, 1, "active switch reports new index");
+        test.ExpectEqual(trainer.GetActivePlayerProfile()->spec, Spec::Support, "active profile follows the selected index");
+        ProfileCommandResult invalidSwitch = trainer.SetActivePlayerIndex(99);
+        test.Expect(!invalidSwitch.accepted, "cannot set active profile to an invalid index");
+        test.ExpectEqual(invalidSwitch.errorCode, SimulationError::UnknownPlayerProfile, "invalid active profile switch has a stable error code");
+        test.ExpectEqual(trainer.GetState().activePlayerIndex, 1, "invalid active profile switch leaves active index unchanged");
+
         ProfileCommandResult ratingLoss = trainer.AwardRating(-1200);
         test.Expect(ratingLoss.accepted, "rating awards can be negative");
         test.ExpectEqual(ratingLoss.newValue, 0, "rating cannot drop below zero");
@@ -397,7 +411,7 @@ namespace
         test.Expect(!duplicateTrophy.accepted, "duplicate trophy insert is rejected");
         test.ExpectEqual(duplicateTrophy.errorCode, SimulationError::TrophyAlreadyEarned, "duplicate trophy reject has a stable error code");
 
-        for (int index = 1; index < TrainerBalance::MaxPlayerProfiles; ++index)
+        for (int index = 2; index < TrainerBalance::MaxPlayerProfiles; ++index)
         {
             PlayerProfileState extra = profiles.CreateStarter("Bench " + std::to_string(index), Spec::Support);
             ProfileCommandResult added = trainer.AddPlayerProfile(extra);
@@ -440,6 +454,43 @@ namespace
         test.Expect(!invalidLevels.accepted, "zero player level is rejected");
         test.ExpectEqual(invalidLevels.errorCode, SimulationError::LevelsMustBePositive, "invalid rating inputs have a stable error code");
         test.ExpectEqual(invalidLevels.error, std::string("Levels must be positive."), "invalid level error explains the problem");
+    }
+
+    void TestScoutSystem(TestContext& test)
+    {
+        SimulationData data;
+        ScoutSystem scouts(data);
+
+        ScoutOfferView locked = scouts.GetNextOffer(1049, {}, {});
+        test.Expect(!locked.available, "no scout offer appears below the first rating threshold");
+
+        ScoutOfferView first = scouts.GetNextOffer(1050, {}, {});
+        test.Expect(first.available, "first scout offer appears at the first rating threshold");
+        test.ExpectEqual(first.id, std::string("first-scout"), "first scout offer id is stable");
+        test.ExpectEqual(first.requiredRating, 1050, "first scout offer keeps its rating threshold");
+        test.ExpectEqual(first.candidates.size(), static_cast<std::size_t>(3), "first scout offer has three candidates");
+        test.ExpectEqual(first.candidates[0].name, std::string("Mira"), "first scout candidate name is hydrated");
+        test.ExpectEqual(first.candidates[0].spec, Spec::Support, "first scout candidate spec is hydrated");
+        test.ExpectEqual(first.candidates[0].activeSkillIds.size(), static_cast<std::size_t>(4), "scout candidate receives starter skills");
+
+        ScoutOfferView third = scouts.GetNextOffer(1200, { "first-scout" }, { "second-scout" });
+        test.Expect(third.available, "completed and declined offers are skipped");
+        test.ExpectEqual(third.id, std::string("third-scout"), "third offer is next after skipping earlier offers");
+
+        ProfileCommandResult validRecruit = scouts.CanRecruitCandidate(5, TrainerBalance::MaxPlayerProfiles, 2, first);
+        test.Expect(validRecruit.accepted, "can recruit a valid candidate when roster has room");
+
+        ProfileCommandResult rosterFull = scouts.CanRecruitCandidate(6, TrainerBalance::MaxPlayerProfiles, 0, first);
+        test.Expect(!rosterFull.accepted, "cannot recruit when roster is full");
+        test.ExpectEqual(rosterFull.errorCode, SimulationError::RosterFull, "full roster scout reject has a stable error code");
+
+        ProfileCommandResult badCandidate = scouts.CanRecruitCandidate(5, TrainerBalance::MaxPlayerProfiles, 99, first);
+        test.Expect(!badCandidate.accepted, "cannot recruit an unknown scout candidate");
+        test.ExpectEqual(badCandidate.errorCode, SimulationError::UnknownPlayerProfile, "bad scout candidate reject has a stable error code");
+
+        ProfileCommandResult noOffer = scouts.CanRecruitCandidate(5, TrainerBalance::MaxPlayerProfiles, 0, {});
+        test.Expect(!noOffer.accepted, "cannot recruit without a pending scout offer");
+        test.ExpectEqual(noOffer.errorCode, SimulationError::UnknownPlayerProfile, "missing scout offer reject has a stable error code");
     }
 
     void TestBattleSessionSwitchingAndXpShare(TestContext& test)
@@ -547,6 +598,7 @@ int main()
         { "TraitBattleRules", TestTraitBattleRules },
         { "TrainerProfile", TestTrainerProfile },
         { "RatingSystem", TestRatingSystem },
+        { "ScoutSystem", TestScoutSystem },
         { "BattleSession switching and XP sharing", TestBattleSessionSwitchingAndXpShare },
         { "BattleSession seeded replay", TestBattleSessionSeededReplay },
     };
