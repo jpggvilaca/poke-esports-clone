@@ -1,0 +1,90 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://ui/map_ui.gd" id="1_map_ui_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_prompt"]
+bg_color = Color(0.95, 0.92, 0.78, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.18, 0.18, 0.16, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_trainer"]
+bg_color = Color(0.94, 0.91, 0.79, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.18, 0.18, 0.16, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[node name="MapUI" type="CanvasLayer"]
+script = ExtResource("1_map_ui_script")
+
+[node name="PromptPanel" type="PanelContainer" parent="."]
+visible = false
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -128.0
+offset_right = 260.0
+offset_bottom = -68.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_prompt")
+
+[node name="PromptLabel" type="Label" parent="PromptPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TrainerPanel" type="PanelContainer" parent="."]
+visible = false
+anchors_preset = -1
+anchor_left = 0.61
+anchor_top = 0.04
+anchor_right = 0.97
+anchor_bottom = 0.88
+theme_override_styles/panel = SubResource("StyleBoxFlat_trainer")
+
+[node name="Margin" type="MarginContainer" parent="TrainerPanel"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="TrainerText" type="Label" parent="TrainerPanel/Margin/Scroll"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.1, 0.1, 0.09, 1)
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3

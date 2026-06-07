@@ -16,6 +16,7 @@ const LOG_COLOR_FOCUS := "#57d7ff"
 const LOG_COLOR_XP := "#f3d35b"
 
 var bridge: BattleBridge
+@onready var rewards_panel: RewardsPanel = $RewardsPanel
 var opponent_name: Label
 var opponent_meta: Label
 var opponent_hp: ProgressBar
@@ -47,6 +48,7 @@ var deferred_skill_levels: Dictionary = {}
 var battle_event_history: Array = []
 var input_locked := false
 var finished_result: Dictionary = {}
+var rewards_applied := false
 
 
 func _ready() -> void:
@@ -513,8 +515,7 @@ func _on_skill_pressed(skill_id: String) -> void:
 	if result.get("battle_finished", false):
 		finished_result = result
 		_set_message("Battle finished. Winner: %s" % result.get("winner", "none"))
-		_flush_deferred_progress_log()
-		_show_return_button()
+		_show_post_battle_panel(result)
 	else:
 		_refresh_team_switches(result.get("state", bridge.get_battle_state()))
 		_set_message("What will your player do?")
@@ -547,8 +548,7 @@ func _on_switch_pressed(player_index: int) -> void:
 	if result.get("battle_finished", false):
 		finished_result = result
 		_set_message("Battle finished. Winner: %s" % result.get("winner", "none"))
-		_flush_deferred_progress_log()
-		_show_return_button()
+		_show_post_battle_panel(result)
 	else:
 		_set_message("What will your player do?")
 		input_locked = false
@@ -577,7 +577,7 @@ func _on_quit_pressed() -> void:
 	}
 	_set_message("You quit the battle.")
 	_push_log("You quit the battle.")
-	_show_return_button()
+	_show_post_battle_panel(finished_result)
 
 
 func _play_events(events: Array) -> void:
@@ -774,6 +774,54 @@ func _show_return_button() -> void:
 	return_button.visible = true
 
 
+func _show_post_battle_panel(result: Dictionary) -> void:
+	var summary := _apply_finished_battle_once(result)
+	var lines := _build_reward_lines(result, summary)
+	_show_return_button()
+	return_button.text = "Return to map"
+	var title := "VICTORY" if String(result.get("winner", "none")) == "player" else "BATTLE OVER"
+	rewards_panel.show_rewards(title, lines)
+
+
+func _apply_finished_battle_once(result: Dictionary) -> Dictionary:
+	if rewards_applied:
+		return GameState.get_trainer_state().get("last_battle_summary", {}).duplicate(true)
+
+	var complete_result := result.duplicate(true)
+	complete_result["events"] = battle_event_history.duplicate(true)
+	rewards_applied = true
+	return GameState.complete_battle(complete_result)
+
+
+func _build_reward_lines(result: Dictionary, summary: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	var summary_text := String(summary.get("text", "Battle complete."))
+	if not summary_text.is_empty():
+		lines.push_back("[center]%s[/center]" % summary_text)
+
+	var reward: Dictionary = result.get("reward", {})
+	if bool(reward.get("awarded", false)):
+		lines.push_back("[color=%s]+%s team XP[/color]" % [LOG_COLOR_XP, reward.get("total_xp", 0)])
+		lines.push_back("Split across %s participant(s): %s XP each." % [
+			reward.get("participant_player_indices", []).size(),
+			reward.get("xp_per_participant", 0),
+		])
+
+	for message in _collect_deferred_progress_lines():
+		lines.push_back("[color=%s]%s[/color]" % [LOG_COLOR_XP, message])
+
+	for message in summary.get("level_up_messages", []):
+		var text := String(message)
+		if text.begins_with("LEVEL UP"):
+			lines.push_back("[font_size=34][color=%s]%s[/color][/font_size]" % [LOG_COLOR_XP, text])
+		else:
+			lines.push_back("[color=%s]%s[/color]" % [LOG_COLOR_XP, text])
+
+	if lines.size() == 1:
+		lines.push_back("No progression rewards.")
+	return lines
+
+
 func _record_result_events(result: Dictionary) -> void:
 	for event in result.get("events", []):
 		if event is Dictionary:
@@ -792,13 +840,15 @@ func _defer_progress_event(event: Dictionary) -> void:
 			deferred_skill_levels[skill_name] = int(event.get("new_level", 1))
 
 
-func _flush_deferred_progress_log() -> void:
+func _collect_deferred_progress_lines() -> Array[String]:
+	var lines: Array[String] = []
 	for skill_name in deferred_skill_xp.keys():
-		_push_log("%s gained %s skill XP." % [skill_name, deferred_skill_xp[skill_name]])
+		lines.push_back("%s gained %s skill XP." % [skill_name, deferred_skill_xp[skill_name]])
 	for skill_name in deferred_skill_levels.keys():
-		_push_log("LEVEL UP: %s reached Lv%s." % [skill_name, deferred_skill_levels[skill_name]])
+		lines.push_back("LEVEL UP: %s reached Lv%s." % [skill_name, deferred_skill_levels[skill_name]])
 	deferred_skill_xp.clear()
 	deferred_skill_levels.clear()
+	return lines
 
 
 func _format_skill_id(skill_id: String) -> String:
@@ -810,7 +860,7 @@ func _format_skill_id(skill_id: String) -> String:
 
 
 func _on_return_pressed() -> void:
-	if not finished_result.is_empty():
+	if not rewards_applied and bool(finished_result.get("battle_finished", false)):
 		var complete_result := finished_result.duplicate(true)
 		complete_result["events"] = battle_event_history.duplicate(true)
 		GameState.complete_battle(complete_result)

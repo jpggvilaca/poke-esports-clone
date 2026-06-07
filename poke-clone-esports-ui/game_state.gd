@@ -193,7 +193,7 @@ func build_battle_setup() -> Dictionary:
 	}
 
 
-func complete_battle(result: Dictionary) -> void:
+func complete_battle(result: Dictionary) -> Dictionary:
 	_ensure_started()
 	var bridge := _ensure_profile_bridge()
 	var completion := bridge.complete_trainer_battle(get_trainer_state(), pending_battle, result)
@@ -205,7 +205,7 @@ func complete_battle(result: Dictionary) -> void:
 			"level_up_messages": [],
 		}
 		pending_battle.clear()
-		return
+		return last_battle_summary.duplicate(true)
 
 	var trainer_state: Dictionary = completion.get("trainer_state", {})
 	trainer_name = String(trainer_state.get("trainer_name", trainer_name))
@@ -235,6 +235,7 @@ func complete_battle(result: Dictionary) -> void:
 	_refresh_pending_scout_offer()
 
 	pending_battle.clear()
+	return last_battle_summary.duplicate(true)
 
 
 func get_trainer_state() -> Dictionary:

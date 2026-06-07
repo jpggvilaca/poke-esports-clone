@@ -10,6 +10,7 @@ const BUILDING_INTERACT_DISTANCE := 190.0
 @onready var npc_root: Node2D = $NPCs
 @onready var lan_cafe: Node2D = $Buildings/LanCafe
 @onready var major_hall: Node2D = $Buildings/MajorHall
+@onready var map_ui: MapUI = $MapUI
 
 var player_frame_timer := 0.0
 var npc_frame_timer := 0.0
@@ -17,16 +18,11 @@ var battle_triggered := false
 var nearest_battle_npc: Node2D
 var nearest_interaction := {}
 var npc_base_rows: Dictionary = {}
-var prompt_panel: PanelContainer
-var prompt_label: Label
-var trainer_panel: PanelContainer
-var trainer_text: Label
 
 
 func _ready() -> void:
 	player_body.global_position = GameState.saved_map_position
 	_cache_npc_directions()
-	_build_map_ui()
 	_refresh_npc_states()
 	_refresh_trainer_menu()
 
@@ -37,7 +33,7 @@ func _physics_process(delta: float) -> void:
 
 	_animate_npcs(delta)
 
-	if trainer_panel.visible:
+	if map_ui.is_trainer_visible():
 		player_body.velocity = Vector2.ZERO
 		_animate_player(Vector2.ZERO, delta)
 		return
@@ -53,11 +49,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept") and not nearest_interaction.is_empty() and not trainer_panel.visible:
+	if event.is_action_pressed("ui_accept") and not nearest_interaction.is_empty() and not map_ui.is_trainer_visible():
 		_use_nearest_interaction()
 		return
 
-	if event is InputEventKey and event.pressed and not event.echo and trainer_panel.visible:
+	if event is InputEventKey and event.pressed and not event.echo and map_ui.is_trainer_visible():
 		if event.keycode == KEY_1 or event.keycode == KEY_KP_1:
 			_handle_scout_candidate_choice(0)
 			return
@@ -134,77 +130,6 @@ func _direction_row(direction: Vector2) -> int:
 	return 0
 
 
-func _build_map_ui() -> void:
-	var canvas := CanvasLayer.new()
-	canvas.name = "MapUI"
-	add_child(canvas)
-
-	prompt_panel = PanelContainer.new()
-	prompt_panel.visible = false
-	prompt_panel.anchor_left = 0.5
-	prompt_panel.anchor_top = 1.0
-	prompt_panel.anchor_right = 0.5
-	prompt_panel.anchor_bottom = 1.0
-	prompt_panel.offset_left = -260
-	prompt_panel.offset_top = -128
-	prompt_panel.offset_right = 260
-	prompt_panel.offset_bottom = -68
-	prompt_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.95, 0.92, 0.78), Color(0.18, 0.18, 0.16), 8))
-	canvas.add_child(prompt_panel)
-
-	prompt_label = Label.new()
-	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	prompt_label.add_theme_font_size_override("font_size", 24)
-	prompt_panel.add_child(prompt_label)
-
-	trainer_panel = PanelContainer.new()
-	trainer_panel.visible = false
-	trainer_panel.anchor_left = 0.61
-	trainer_panel.anchor_top = 0.04
-	trainer_panel.anchor_right = 0.97
-	trainer_panel.anchor_bottom = 0.88
-	trainer_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.94, 0.91, 0.79), Color(0.18, 0.18, 0.16), 8))
-	canvas.add_child(trainer_panel)
-
-	var margin := MarginContainer.new()
-	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	trainer_panel.add_child(margin)
-
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
-
-	trainer_text = Label.new()
-	trainer_text.custom_minimum_size = Vector2(560, 0)
-	trainer_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	trainer_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	trainer_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	trainer_text.add_theme_font_size_override("font_size", 20)
-	trainer_text.modulate = Color(0.10, 0.10, 0.09)
-	scroll.add_child(trainer_text)
-
-
-func _panel_style(color: Color, border: Color, radius: int) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = color
-	style.border_color = border
-	style.set_border_width_all(4)
-	style.set_corner_radius_all(radius)
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	return style
-
-
 func _update_nearest_battle_npc() -> void:
 	nearest_battle_npc = null
 	nearest_interaction.clear()
@@ -232,11 +157,10 @@ func _update_nearest_battle_npc() -> void:
 		nearest_interaction = {"type": "tournament", "label": GameState.get_tournament_prompt()}
 
 	if nearest_interaction.is_empty():
-		prompt_panel.visible = false
+		map_ui.hide_prompt()
 		return
 
-	prompt_label.text = String(nearest_interaction.get("label", "Press Enter"))
-	prompt_panel.visible = true
+	map_ui.show_prompt(String(nearest_interaction.get("label", "Press Enter")))
 
 
 func _use_nearest_interaction() -> void:
@@ -246,14 +170,14 @@ func _use_nearest_interaction() -> void:
 			if npc is Node2D:
 				_start_npc_battle(npc)
 		"recovery":
-			prompt_label.text = GameState.recover_roster()
+			map_ui.show_prompt(GameState.recover_roster())
 			_refresh_trainer_menu()
 		"tournament":
 			battle_triggered = true
 			if GameState.prepare_tournament_battle(player_body.global_position):
 				get_tree().change_scene_to_file("res://battle.tscn")
 			else:
-				prompt_label.text = GameState.get_tournament_locked_message()
+				map_ui.show_prompt(GameState.get_tournament_locked_message())
 				battle_triggered = false
 
 
@@ -285,13 +209,12 @@ func _refresh_npc_states() -> void:
 
 
 func _toggle_trainer_menu() -> void:
-	trainer_panel.visible = not trainer_panel.visible
-	prompt_panel.visible = false if trainer_panel.visible else prompt_panel.visible
+	map_ui.toggle_trainer()
 	_refresh_trainer_menu()
 
 
 func _refresh_trainer_menu() -> void:
-	trainer_text.text = _format_trainer_text()
+	map_ui.set_trainer_text(_format_trainer_text())
 
 
 func _handle_scout_candidate_choice(candidate_index: int) -> void:

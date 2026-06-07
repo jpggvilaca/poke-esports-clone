@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c7to1owlpac77"]
 
 [ext_resource type="Script" uid="uid://s2syun0fhcqy" path="res://map.gd" id="1_map"]
+[ext_resource type="PackedScene" path="res://ui/map_ui.tscn" id="2_map_ui"]
 [ext_resource type="Texture2D" uid="uid://8u6ore52f26k" path="res://assets/buildings/Building6.png" id="2_lancafe"]
 [ext_resource type="Texture2D" uid="uid://b4ug8h2yoc1jf" path="res://assets/buildings/Building5.png" id="3_majorhall"]
 [ext_resource type="Texture2D" uid="uid://ceokx4h6plwia" path="res://assets/objects/Tree3.png" id="4_tree"]
@@ -47,6 +48,8 @@ radius = 15.0
 
 [node name="TownMap" type="Node2D" unique_id=1633915375]
 script = ExtResource("1_map")
+
+[node name="MapUI" parent="." instance=ExtResource("2_map_ui")]
 
 [node name="Ground" type="Node2D" parent="." unique_id=1284534122]
 
