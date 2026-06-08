@@ -195,30 +195,30 @@ SimulationData::SimulationData()
     // ID, name, mana cost, mana gain, cooldown, hidden power, accuracy,
     // optional effect, target, effect value, duration, mark bonus.
     skills_ = {
-        MakeSkill("top-basic", "Top Basic", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("top-hold-line", "Top Hold Line", 35, 0, 2, 0, 1.00, SkillEffectType::Rooted, SkillEffectTarget::Opponent, 0, 1),
-        MakeSkill("top-sunder", "Top Sunder", 45, 0, 2, 28, 0.95, SkillEffectType::AttackPenetrationModifier, SkillEffectTarget::Self, 35, 2),
-        MakeSkill("top-gamebreaker", "Top Gamebreaker", 100, 0, 5, 58, 0.90, SkillEffectType::AttackModifier, SkillEffectTarget::Self, 30, 2),
+        MakeSkill("top-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
+        MakeSkill("top-hold-line", "Stomp", 35, 0, 2, 0, 1.00, SkillEffectType::Rooted, SkillEffectTarget::Opponent, 0, 1),
+        MakeSkill("top-sunder", "Purge", 45, 0, 2, 28, 0.95, SkillEffectType::AttackPenetrationModifier, SkillEffectTarget::Self, 35, 2),
+        MakeSkill("top-gamebreaker", "Unbreakable", 100, 0, 5, 58, 0.90, SkillEffectType::AttackModifier, SkillEffectTarget::Self, 30, 2),
 
-        MakeSkill("jungle-basic", "Jungle Basic", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("jungle-gank", "Jungle Gank", 35, 0, 2, 14, 0.95, SkillEffectType::Stunned, SkillEffectTarget::Opponent, 0, 1),
-        MakeSkill("jungle-invade", "Jungle Invade", 45, 0, 2, 30, 0.95, SkillEffectType::CooldownModifier, SkillEffectTarget::Opponent, 50, 2),
-        MakeSkill("jungle-smite-fight", "Jungle Smite Fight", 100, 0, 5, 62, 0.90, SkillEffectType::Mark, SkillEffectTarget::Opponent, 0, 2, 28),
+        MakeSkill("jungle-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
+        MakeSkill("jungle-gank", "Gank", 35, 0, 2, 14, 0.95, SkillEffectType::Stunned, SkillEffectTarget::Opponent, 0, 1),
+        MakeSkill("jungle-invade", "Invade", 45, 0, 2, 30, 0.95, SkillEffectType::CooldownModifier, SkillEffectTarget::Opponent, 50, 2),
+        MakeSkill("jungle-smite-fight", "Decimate", 100, 0, 5, 62, 0.90, SkillEffectType::Mark, SkillEffectTarget::Opponent, 0, 2, 28),
 
-        MakeSkill("mid-basic", "Mid Basic", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("mid-silence", "Mid Silence", 35, 0, 2, 12, 0.95, SkillEffectType::Silenced, SkillEffectTarget::Opponent, 0, 1),
-        MakeSkill("mid-burst", "Mid Burst", 45, 0, 2, 34, 0.92, SkillEffectType::HealingReceivedModifier, SkillEffectTarget::Opponent, -40, 2),
-        MakeSkill("mid-ultimate", "Mid Ultimate", 100, 0, 5, 65, 0.88, SkillEffectType::CooldownModifier, SkillEffectTarget::Self, -50, 2),
+        MakeSkill("mid-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
+        MakeSkill("mid-silence", "Light binding", 35, 0, 2, 12, 0.95, SkillEffectType::Silenced, SkillEffectTarget::Opponent, 0, 1),
+        MakeSkill("mid-burst", "Spark", 45, 0, 2, 34, 0.92, SkillEffectType::HealingReceivedModifier, SkillEffectTarget::Opponent, -40, 2),
+        MakeSkill("mid-ultimate", "Sonic wave", 100, 0, 5, 65, 0.88, SkillEffectType::CooldownModifier, SkillEffectTarget::Self, -50, 2),
 
         MakeSkill("adc-basic", "Basic Attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
         MakeSkill("adc-trap", "Place Trap", 35, 0, 2, 8, 1.00, SkillEffectType::Stunned, SkillEffectTarget::Opponent, 0, 2),
         MakeSkill("adc-multi-strike", "Multi Strike", 45, 0, 2, 36, 0.94),
         MakeSkill("adc-bullet-time", "Bullet Time", 100, 0, 5, 72, 0.88),
 
-        MakeSkill("support-basic", "Support Basic", 0, Balance::BasicManaGain, 0, 14, 0.95),
-        MakeSkill("support-peel", "Support Peel", 35, 0, 2, 0, 1.00, SkillEffectType::DefenseModifier, SkillEffectTarget::Self, 35, 2),
-        MakeSkill("support-exhaust", "Support Exhaust", 45, 0, 2, 18, 0.95, SkillEffectType::AttackModifier, SkillEffectTarget::Opponent, -35, 2),
-        MakeSkill("support-teamfight", "Support Teamfight", 100, 0, 5, 0, 1.00, SkillEffectType::Heal, SkillEffectTarget::Self, 55, 0)
+        MakeSkill("support-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 14, 0.95),
+        MakeSkill("support-peel", "Peel", 35, 0, 2, 0, 1.00, SkillEffectType::DefenseModifier, SkillEffectTarget::Self, 35, 2),
+        MakeSkill("support-exhaust", "Ehxaust", 45, 0, 2, 18, 0.95, SkillEffectType::AttackModifier, SkillEffectTarget::Opponent, -35, 2),
+        MakeSkill("support-teamfight", "Mega shield", 100, 0, 5, 0, 1.00, SkillEffectType::Heal, SkillEffectTarget::Self, 55, 0)
     };
     FillSkillMetadata(skills_);
 
