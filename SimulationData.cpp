@@ -279,67 +279,87 @@ SimulationData::SimulationData()
     // Edit counteredSpec values to change the matchup cycle.
     // Current rule: Top > Jungle > Mid > ADC > Support > Top.
     specs_ = {
-        { Spec::Top, "Top", { "top-basic", "top-hold-line", "top-sunder", "top-gamebreaker" }, Spec::Jungle, "clutch-player" },
-        { Spec::Jungle, "Jungle", { "jungle-basic", "jungle-gank", "jungle-invade", "jungle-smite-fight" }, Spec::Mid, "shotcaller" },
-        { Spec::Mid, "Mid", { "mid-basic", "mid-silence", "mid-burst", "mid-ultimate" }, Spec::Adc, "lane-bully" },
-        { Spec::Adc, "ADC", { "adc-basic", "adc-trap", "adc-multi-strike", "adc-bullet-time" }, Spec::Support, "precision-carry" },
-        { Spec::Support, "Support", { "support-basic", "support-peel", "support-shotcall", "support-teamfight" }, Spec::Top, "stabilizer" }
+        { Spec::Top, "Top", { "top-basic", "top-hold-line", "top-sunder", "top-gamebreaker" }, Spec::Jungle, "clutch-player", 4, 0.20 },
+        { Spec::Jungle, "Jungle", { "jungle-basic", "jungle-gank", "jungle-invade", "jungle-smite-fight" }, Spec::Mid, "shotcaller", 2, 0.35 },
+        { Spec::Mid, "Mid", { "mid-basic", "mid-silence", "mid-burst", "mid-ultimate" }, Spec::Adc, "lane-bully", 1, 0.45 },
+        { Spec::Adc, "ADC", { "adc-basic", "adc-trap", "adc-multi-strike", "adc-bullet-time" }, Spec::Support, "precision-carry", 1, 0.50 },
+        { Spec::Support, "Support", { "support-basic", "support-peel", "support-shotcall", "support-teamfight" }, Spec::Top, "stabilizer", 3, 0.25 }
     };
+    BuildIndexes();
 }
 
 const Skill* SimulationData::FindSkill(const std::string& id) const
 {
-    for (const Skill& skill : skills_)
+    const auto found = skillIndexById_.find(id);
+    if (found == skillIndexById_.end())
     {
-        if (skill.id == id)
-        {
-            return &skill;
-        }
+        return nullptr;
     }
 
-    return nullptr;
+    return &skills_[found->second];
 }
 
 const DrillDefinition* SimulationData::FindDrill(GameType gameType) const
 {
-    for (const DrillDefinition& drill : drills_)
+    const auto found = drillIndexByGameType_.find(static_cast<int>(gameType));
+    if (found == drillIndexByGameType_.end())
     {
-        if (drill.gameType == gameType)
-        {
-            return &drill;
-        }
+        return nullptr;
     }
 
-    return nullptr;
+    return &drills_[found->second];
 }
 
 const TraitDefinition* SimulationData::FindTrait(const std::string& id) const
 {
-    for (const TraitDefinition& trait : traits_)
+    const auto found = traitIndexById_.find(id);
+    if (found == traitIndexById_.end())
     {
-        if (trait.id == id)
-        {
-            return &trait;
-        }
+        return nullptr;
     }
 
-    return nullptr;
+    return &traits_[found->second];
 }
 
 const SpecData* SimulationData::FindSpec(Spec spec) const
 {
-    for (const SpecData& data : specs_)
+    const auto found = specIndexBySpec_.find(static_cast<int>(spec));
+    if (found == specIndexBySpec_.end())
     {
-        if (data.spec == spec)
-        {
-            return &data;
-        }
+        return nullptr;
     }
 
-    return nullptr;
+    return &specs_[found->second];
 }
 
 const std::vector<SpecData>& SimulationData::GetSpecs() const
 {
     return specs_;
+}
+
+void SimulationData::BuildIndexes()
+{
+    skillIndexById_.clear();
+    for (std::size_t index = 0; index < skills_.size(); ++index)
+    {
+        skillIndexById_[skills_[index].id] = index;
+    }
+
+    drillIndexByGameType_.clear();
+    for (std::size_t index = 0; index < drills_.size(); ++index)
+    {
+        drillIndexByGameType_[static_cast<int>(drills_[index].gameType)] = index;
+    }
+
+    traitIndexById_.clear();
+    for (std::size_t index = 0; index < traits_.size(); ++index)
+    {
+        traitIndexById_[traits_[index].id] = index;
+    }
+
+    specIndexBySpec_.clear();
+    for (std::size_t index = 0; index < specs_.size(); ++index)
+    {
+        specIndexBySpec_[static_cast<int>(specs_[index].spec)] = index;
+    }
 }

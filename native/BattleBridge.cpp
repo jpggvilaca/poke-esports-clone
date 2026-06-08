@@ -927,7 +927,7 @@ PlayerProfileState BattleBridge::player_profile_from_dictionary(const Dictionary
 
     PlayerProfileSystem profiles(data_);
     player_profile.rank = profiles.GetRankForLevel(player_profile.level);
-    player_profile.passiveBonuses = profiles.GetPassiveBonusesForLevel(player_profile.level);
+    player_profile.passiveBonuses = profiles.GetPassiveBonusesForLevel(player_profile.level, player_profile.spec);
     if (data_.FindTrait(player_profile.traitId) == nullptr)
     {
         const SpecData* spec_data = data_.FindSpec(player_profile.spec);

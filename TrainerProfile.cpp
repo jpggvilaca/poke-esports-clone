@@ -1,16 +1,12 @@
 #include "TrainerProfile.h"
 
+#include "CollectionUtils.h"
 #include "PlayerProfileSystem.h"
 
 #include <algorithm>
 
 namespace
 {
-    bool Contains(const std::vector<std::string>& values, const std::string& value)
-    {
-        return std::find(values.begin(), values.end(), value) != values.end();
-    }
-
     ProfileCommandResult Accept()
     {
         ProfileCommandResult result;
@@ -128,7 +124,7 @@ ProfileCommandResult TrainerProfile::SetActivePlayerIndex(int playerIndex)
 
 ProfileCommandResult TrainerProfile::AddTrophy(const std::string& trophyId)
 {
-    if (Contains(state_.trophyIds, trophyId))
+    if (ContainsValue(state_.trophyIds, trophyId))
     {
         return Reject(SimulationError::TrophyAlreadyEarned, "Trophy already earned.");
     }

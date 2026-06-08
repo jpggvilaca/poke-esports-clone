@@ -254,6 +254,8 @@ struct SpecData
     std::vector<std::string> skillIds;
     Spec counteredSpec;
     std::string defaultTraitId;
+    int maxHpGainPerLevel = 2;
+    double basePowerGainPerLevel = 1.0 / 3.0;
 };
 
 struct TraitDefinition

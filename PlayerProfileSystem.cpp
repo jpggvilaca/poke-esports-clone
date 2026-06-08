@@ -1,16 +1,12 @@
 #include "PlayerProfileSystem.h"
 
+#include "CollectionUtils.h"
 #include "SimulationData.h"
 
 #include <algorithm>
 
 namespace
 {
-    bool Contains(const std::vector<std::string>& values, const std::string& value)
-    {
-        return std::find(values.begin(), values.end(), value) != values.end();
-    }
-
     ProfileCommandResult Accept()
     {
         ProfileCommandResult result;
@@ -74,14 +70,14 @@ bool PlayerProfileSystem::HasLearnedSkill(
     const PlayerProfileState& playerProfile,
     const std::string& skillId) const
 {
-    return Contains(playerProfile.learnedSkillIds, skillId);
+    return ContainsValue(playerProfile.learnedSkillIds, skillId);
 }
 
 bool PlayerProfileSystem::HasActiveSkill(
     const PlayerProfileState& playerProfile,
     const std::string& skillId) const
 {
-    return Contains(playerProfile.activeSkillIds, skillId);
+    return ContainsValue(playerProfile.activeSkillIds, skillId);
 }
 
 ProfileCommandResult PlayerProfileSystem::LearnSkill(
@@ -233,10 +229,23 @@ PassiveBonuses PlayerProfileSystem::GetPassiveBonusesForRank(CareerRank rank) co
 
 PassiveBonuses PlayerProfileSystem::GetPassiveBonusesForLevel(int level) const
 {
+    return GetPassiveBonusesForLevel(level, Spec::Top);
+}
+
+PassiveBonuses PlayerProfileSystem::GetPassiveBonusesForLevel(int level, Spec spec) const
+{
     const int safeLevel = std::max(1, level);
     PassiveBonuses bonuses = GetPassiveBonusesForRank(GetRankForLevel(safeLevel));
-    bonuses.maxHpBonus += (safeLevel - 1) * PlayerProfileBalance::MaxHpBonusPerLevel;
-    bonuses.basePowerBonus += (safeLevel - 1) / PlayerProfileBalance::BasePowerBonusLevelInterval;
+    const SpecData* specData = data_.FindSpec(spec);
+    if (specData == nullptr)
+    {
+        bonuses.maxHpBonus += (safeLevel - 1) * PlayerProfileBalance::MaxHpBonusPerLevel;
+        bonuses.basePowerBonus += (safeLevel - 1) / PlayerProfileBalance::BasePowerBonusLevelInterval;
+        return bonuses;
+    }
+
+    bonuses.maxHpBonus += (safeLevel - 1) * specData->maxHpGainPerLevel;
+    bonuses.basePowerBonus += static_cast<int>((safeLevel - 1) * specData->basePowerGainPerLevel);
     return bonuses;
 }
 
@@ -248,5 +257,5 @@ void PlayerProfileSystem::RefreshXpRequirement(PlayerProfileState& playerProfile
 void PlayerProfileSystem::RefreshRank(PlayerProfileState& playerProfile) const
 {
     playerProfile.rank = GetRankForLevel(playerProfile.level);
-    playerProfile.passiveBonuses = GetPassiveBonusesForLevel(playerProfile.level);
+    playerProfile.passiveBonuses = GetPassiveBonusesForLevel(playerProfile.level, playerProfile.spec);
 }

@@ -46,8 +46,6 @@ public:
         const ScoutOfferView& offer) const;
 
 private:
-    bool Contains(const std::vector<std::string>& values, const std::string& value) const;
-
     const SimulationData& data_;
     std::vector<ScoutOfferDefinition> offers_;
 };

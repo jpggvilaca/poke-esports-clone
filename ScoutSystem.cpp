@@ -1,9 +1,8 @@
 #include "ScoutSystem.h"
 
+#include "CollectionUtils.h"
 #include "PlayerProfileSystem.h"
 #include "TrainerProfile.h"
-
-#include <algorithm>
 
 ScoutSystem::ScoutSystem(const SimulationData& data)
     : data_(data)
@@ -51,8 +50,8 @@ ScoutOfferView ScoutSystem::GetNextOffer(
     for (const ScoutOfferDefinition& offer : offers_)
     {
         if (rating < offer.requiredRating
-            || Contains(completedOfferIds, offer.id)
-            || Contains(declinedOfferIds, offer.id))
+            || ContainsValue(completedOfferIds, offer.id)
+            || ContainsValue(declinedOfferIds, offer.id))
         {
             continue;
         }
@@ -102,9 +101,4 @@ ProfileCommandResult ScoutSystem::CanRecruitCandidate(
 
     result.accepted = true;
     return result;
-}
-
-bool ScoutSystem::Contains(const std::vector<std::string>& values, const std::string& value) const
-{
-    return std::find(values.begin(), values.end(), value) != values.end();
 }

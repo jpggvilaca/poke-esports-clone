@@ -2,7 +2,9 @@
 
 #include "Models.h"
 
+#include <cstddef>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // Edit these values first when rebalancing combat.
@@ -45,8 +47,14 @@ public:
     const std::vector<SpecData>& GetSpecs() const;
 
 private:
+    void BuildIndexes();
+
     std::vector<Skill> skills_;
     std::vector<DrillDefinition> drills_;
     std::vector<TraitDefinition> traits_;
     std::vector<SpecData> specs_;
+    std::unordered_map<std::string, std::size_t> skillIndexById_;
+    std::unordered_map<int, std::size_t> drillIndexByGameType_;
+    std::unordered_map<std::string, std::size_t> traitIndexById_;
+    std::unordered_map<int, std::size_t> specIndexBySpec_;
 };

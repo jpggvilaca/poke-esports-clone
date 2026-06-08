@@ -84,7 +84,10 @@ var trainer_name := "Human Trainer"
 var rating := 1000
 var money := 0
 var active_player_index := 0
+var active_player_id := ""
 var lineup_indices: Array[int] = []
+var lineup_player_ids: Array[String] = []
+var next_player_id := 1
 var roster: Array = []
 var trophies: Array[String] = []
 var defeated_npcs: Dictionary = {}
@@ -225,6 +228,7 @@ func complete_battle(result: Dictionary) -> Dictionary:
 	active_player_index = int(trainer_state.get("active_player_index", active_player_index))
 	roster = trainer_state.get("roster", []).duplicate(true)
 	_sanitize_lineup_indices()
+	active_player_id = String(roster[active_player_index].get("player_id", active_player_id))
 
 	trophies.clear()
 	for trophy_id in trainer_state.get("trophies", []):
@@ -259,7 +263,9 @@ func get_trainer_state() -> Dictionary:
 		"money": money,
 		"max_roster_size": MAX_ROSTER_SIZE,
 		"active_player_index": active_player_index,
+		"active_player_id": active_player_id,
 		"lineup_indices": lineup_indices.duplicate(),
+		"lineup_player_ids": lineup_player_ids.duplicate(),
 		"roster": roster.duplicate(true),
 		"trophies": trophies.duplicate(),
 		"defeated_npcs": defeated_npcs.duplicate(),
@@ -350,21 +356,26 @@ func toggle_lineup_member(roster_index: int) -> String:
 		return "No player in that roster slot."
 
 	_sanitize_lineup_indices()
-	var existing_index := lineup_indices.find(roster_index)
+	var player_id := String(roster[roster_index].get("player_id", ""))
+	var existing_index := lineup_player_ids.find(player_id)
 	if existing_index >= 0:
-		if lineup_indices.size() <= 1:
+		if lineup_player_ids.size() <= 1:
 			return "Lineup needs at least one player."
-		lineup_indices.remove_at(existing_index)
-		if active_player_index == roster_index:
-			active_player_index = int(lineup_indices[0])
+		lineup_player_ids.remove_at(existing_index)
+		if active_player_id == player_id:
+			active_player_id = String(lineup_player_ids[0])
+			active_player_index = _find_roster_index_by_player_id(active_player_id)
+		_sanitize_lineup_indices()
 		return "%s left the battle lineup." % roster[roster_index].get("name", "Player")
 
-	if lineup_indices.size() >= MAX_LINEUP_SIZE:
+	if lineup_player_ids.size() >= MAX_LINEUP_SIZE:
 		return "Lineup is full. Remove someone first."
 
-	lineup_indices.push_back(roster_index)
-	if lineup_indices.size() == 1:
+	lineup_player_ids.push_back(player_id)
+	if lineup_player_ids.size() == 1:
+		active_player_id = player_id
 		active_player_index = roster_index
+	_sanitize_lineup_indices()
 	return "%s joined the battle lineup." % roster[roster_index].get("name", "Player")
 
 
@@ -394,6 +405,7 @@ func _ensure_started() -> void:
 		added_initial_support = true
 	for index in range(roster.size()):
 		var player: Dictionary = roster[index]
+		player = _ensure_player_id(player)
 		player = _ensure_player_identity_fields(player)
 		if not player.has("passive_bonuses"):
 			player["passive_bonuses"] = {}
@@ -409,16 +421,19 @@ func _ensure_started() -> void:
 	_sanitize_lineup_indices()
 	if added_initial_support and lineup_indices.size() < MAX_LINEUP_SIZE:
 		for index in range(roster.size()):
-			if lineup_indices.has(index):
+			var player_id := String(roster[index].get("player_id", ""))
+			if lineup_player_ids.has(player_id):
 				continue
-			lineup_indices.push_back(index)
-			if lineup_indices.size() >= MAX_LINEUP_SIZE:
+			lineup_player_ids.push_back(player_id)
+			if lineup_player_ids.size() >= MAX_LINEUP_SIZE:
 				break
+	_sanitize_lineup_indices()
 
 
 func _create_player(player_name: String, spec: String) -> Dictionary:
 	var bridge := _ensure_profile_bridge()
 	var player: Dictionary = bridge.create_player_profile(player_name, spec)
+	player["player_id"] = _allocate_player_id()
 	player["current_hp"] = int(player.get("max_hp", 100))
 	player["current_mana"] = STARTING_MANA
 
@@ -448,6 +463,45 @@ func _ensure_player_identity_fields(player: Dictionary) -> Dictionary:
 	return player
 
 
+func _ensure_player_id(player: Dictionary) -> Dictionary:
+	var player_id := String(player.get("player_id", ""))
+	if player_id.is_empty():
+		player_id = _allocate_player_id()
+		player["player_id"] = player_id
+	else:
+		_reserve_player_id(player_id)
+	return player
+
+
+func _allocate_player_id() -> String:
+	var player_id := "player-%s" % next_player_id
+	next_player_id += 1
+	return player_id
+
+
+func _reserve_player_id(player_id: String) -> void:
+	if not player_id.begins_with("player-"):
+		return
+
+	var number_text := player_id.substr("player-".length())
+	if not number_text.is_valid_int():
+		return
+
+	next_player_id = max(next_player_id, int(number_text) + 1)
+
+
+func _find_roster_index_by_player_id(player_id: String) -> int:
+	if player_id.is_empty():
+		return -1
+
+	for index in range(roster.size()):
+		var player: Dictionary = roster[index]
+		if String(player.get("player_id", "")) == player_id:
+			return index
+
+	return -1
+
+
 func _first_playable_player_index() -> int:
 	if active_player_index >= 0 and active_player_index < roster.size():
 		var active_player: Dictionary = roster[active_player_index]
@@ -464,26 +518,84 @@ func _first_playable_player_index() -> int:
 
 
 func _sanitize_lineup_indices() -> void:
-	var sanitized: Array[int] = []
-	for value in lineup_indices:
-		var index := int(value)
-		if index < 0 or index >= roster.size():
-			continue
-		if sanitized.has(index):
-			continue
-		sanitized.push_back(index)
-		if sanitized.size() >= MAX_LINEUP_SIZE:
-			break
+	for index in range(roster.size()):
+		var player: Dictionary = roster[index]
+		roster[index] = _ensure_player_id(player)
 
-	if sanitized.is_empty():
-		for index in range(roster.size()):
-			sanitized.push_back(index)
-			if sanitized.size() >= min(MAX_LINEUP_SIZE, roster.size()):
+	var sanitized_ids: Array[String] = []
+	if lineup_player_ids.is_empty():
+		for value in lineup_indices:
+			var index := int(value)
+			if index < 0 or index >= roster.size():
+				continue
+			var player: Dictionary = roster[index]
+			var player_id := String(player.get("player_id", ""))
+			if player_id.is_empty() or sanitized_ids.has(player_id):
+				continue
+			sanitized_ids.push_back(player_id)
+			if sanitized_ids.size() >= MAX_LINEUP_SIZE:
+				break
+	else:
+		for value in lineup_player_ids:
+			var player_id := String(value)
+			if _find_roster_index_by_player_id(player_id) < 0:
+				continue
+			if sanitized_ids.has(player_id):
+				continue
+			sanitized_ids.push_back(player_id)
+			if sanitized_ids.size() >= MAX_LINEUP_SIZE:
 				break
 
-	lineup_indices = sanitized
-	if not lineup_indices.has(active_player_index):
+	if sanitized_ids.is_empty():
+		for index in range(roster.size()):
+			var player: Dictionary = roster[index]
+			var player_id := String(player.get("player_id", ""))
+			if player_id.is_empty():
+				continue
+			sanitized_ids.push_back(player_id)
+			if sanitized_ids.size() >= min(MAX_LINEUP_SIZE, roster.size()):
+				break
+
+	lineup_player_ids = sanitized_ids
+	lineup_indices.clear()
+	for player_id in lineup_player_ids:
+		var roster_index := _find_roster_index_by_player_id(player_id)
+		if roster_index >= 0:
+			lineup_indices.push_back(roster_index)
+
+	if active_player_id.is_empty() and active_player_index >= 0 and active_player_index < roster.size():
+		active_player_id = String(roster[active_player_index].get("player_id", ""))
+
+	if not lineup_player_ids.has(active_player_id):
+		active_player_id = String(lineup_player_ids[0])
+
+	var resolved_active_index := _find_roster_index_by_player_id(active_player_id)
+	if resolved_active_index >= 0:
+		active_player_index = resolved_active_index
+	else:
 		active_player_index = int(lineup_indices[0])
+		active_player_id = String(roster[active_player_index].get("player_id", ""))
+
+
+func _lineup_has_roster_index(roster_index: int) -> bool:
+	if roster_index < 0 or roster_index >= roster.size():
+		return false
+	return lineup_player_ids.has(String(roster[roster_index].get("player_id", "")))
+
+
+func _replace_lineup_with_single_roster_index(roster_index: int) -> void:
+	if roster_index < 0 or roster_index >= roster.size():
+		return
+
+	var player_id := String(roster[roster_index].get("player_id", ""))
+	if player_id.is_empty():
+		return
+
+	lineup_player_ids.clear()
+	lineup_player_ids.push_back(player_id)
+	active_player_id = player_id
+	active_player_index = roster_index
+	_sanitize_lineup_indices()
 
 
 func _battle_lineup_indices() -> Array[int]:
@@ -498,12 +610,12 @@ func _battle_lineup_indices() -> Array[int]:
 	if battle_lineup.is_empty():
 		var fallback := _first_playable_player_index()
 		battle_lineup.push_back(fallback)
-		if not lineup_indices.has(fallback):
-			lineup_indices.clear()
-			lineup_indices.push_back(fallback)
+		if not _lineup_has_roster_index(fallback):
+			_replace_lineup_with_single_roster_index(fallback)
 
 	if not battle_lineup.has(active_player_index):
 		active_player_index = int(battle_lineup[0])
+		active_player_id = String(roster[active_player_index].get("player_id", ""))
 
 	return battle_lineup
 

@@ -45,6 +45,7 @@ public:
     CareerRank GetRankForLevel(int level) const;
     PassiveBonuses GetPassiveBonusesForRank(CareerRank rank) const;
     PassiveBonuses GetPassiveBonusesForLevel(int level) const;
+    PassiveBonuses GetPassiveBonusesForLevel(int level, Spec spec) const;
 
 private:
     void RefreshXpRequirement(PlayerProfileState& playerProfile) const;
