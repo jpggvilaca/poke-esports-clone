@@ -17,7 +17,7 @@ using godot::String;
 void BattleBridge::_bind_methods()
 {
     godot::ClassDB::bind_method(godot::D_METHOD("start_battle", "setup"), &BattleBridge::start_battle);
-    godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id"), &BattleBridge::use_skill);
+    godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id", "target_player_index"), &BattleBridge::use_skill);
     godot::ClassDB::bind_method(godot::D_METHOD("use_drill", "result_quality"), &BattleBridge::use_drill);
     godot::ClassDB::bind_method(godot::D_METHOD("pass_turn"), &BattleBridge::pass_turn);
     godot::ClassDB::bind_method(godot::D_METHOD("switch_player", "player_index"), &BattleBridge::switch_player);
@@ -44,7 +44,7 @@ Dictionary BattleBridge::start_battle(const Dictionary& setup_dictionary)
     return result_to_dictionary(last_result_);
 }
 
-Dictionary BattleBridge::use_skill(const String& skill_id)
+Dictionary BattleBridge::use_skill(const String& skill_id, int target_player_index)
 {
     if (session_ == nullptr)
     {
@@ -52,7 +52,7 @@ Dictionary BattleBridge::use_skill(const String& skill_id)
         return result_to_dictionary(last_result_);
     }
 
-    last_result_ = session_->UsePlayerSkill(std::string(skill_id.utf8().get_data()));
+    last_result_ = session_->UsePlayerSkill(std::string(skill_id.utf8().get_data()), target_player_index);
     return result_to_dictionary(last_result_);
 }
 
@@ -307,9 +307,15 @@ void BattleBridge::apply_battle_vitals(
     Array& roster,
     const Dictionary& battle_state) const
 {
-    if (battle_state.has("active_player_index"))
+    if (battle_state.has("active_player_index") && battle_state.has("player_team"))
     {
-        trainer.SetActivePlayerIndex(std::max(0, static_cast<int>(battle_state["active_player_index"])));
+        const int battle_active_index = std::max(0, static_cast<int>(battle_state["active_player_index"]));
+        Array player_team = battle_state["player_team"];
+        if (battle_active_index >= 0 && battle_active_index < player_team.size())
+        {
+            Dictionary active_player = player_team[battle_active_index];
+            trainer.SetActivePlayerIndex(std::max(0, static_cast<int>(active_player.get("profile_index", battle_active_index))));
+        }
     }
 
     if (!battle_state.has("player_team"))
@@ -356,9 +362,10 @@ void BattleBridge::apply_skill_progress(
         const String event_type = event.has("type") ? String(event["type"]) : String("none");
         if (event_type == "battle_started" || event_type == "player_switched")
         {
-            current_profile_index = event.has("new_player_index")
-                ? static_cast<int>(event["new_player_index"])
-                : current_profile_index;
+            if (event.has("profile_index") && static_cast<int>(event["profile_index"]) >= 0)
+            {
+                current_profile_index = static_cast<int>(event["profile_index"]);
+            }
         }
 
         if (!event.has("actor") || String(event["actor"]) != "player")
@@ -728,6 +735,7 @@ Dictionary BattleBridge::skill_to_dictionary(const SkillView& skill) const
     dictionary["level"] = skill.level;
     dictionary["xp"] = skill.xp;
     dictionary["effect"] = effect_to_string(skill.effectType);
+    dictionary["effect_target"] = target_to_string(skill.effectTarget);
     dictionary["effect_value"] = skill.effectValue;
     dictionary["duration_turns"] = skill.durationTurns;
     dictionary["mark_bonus_damage"] = skill.markBonusDamage;
@@ -755,6 +763,12 @@ Dictionary BattleBridge::event_to_dictionary(const BattleEvent& event) const
     dictionary["actor"] = actor_to_string(event.actor);
     dictionary["target"] = actor_to_string(event.target);
     dictionary["skill_id"] = String(event.skillId.c_str());
+    dictionary["actor_player_index"] = event.actorPlayerIndex;
+    dictionary["target_player_index"] = event.targetPlayerIndex;
+    dictionary["profile_index"] = event.profileIndex;
+    dictionary["target_profile_index"] = event.targetProfileIndex;
+    dictionary["actor_name"] = String(event.actorName.c_str());
+    dictionary["target_name"] = String(event.targetName.c_str());
     dictionary["old_player_index"] = event.oldPlayerIndex;
     dictionary["new_player_index"] = event.newPlayerIndex;
     dictionary["player_name"] = String(event.playerName.c_str());
@@ -1172,6 +1186,7 @@ String BattleBridge::event_type_to_string(BattleEventType type) const
     case BattleEventType::MarkApplied: return "mark_applied";
     case BattleEventType::MarkTriggered: return "mark_triggered";
     case BattleEventType::MarkExpired: return "mark_expired";
+    case BattleEventType::FarmingTriggered: return "farming_triggered";
     case BattleEventType::SkillXpGained: return "skill_xp_gained";
     case BattleEventType::SkillLeveledUp: return "skill_leveled_up";
     case BattleEventType::BattleFinished: return "battle_finished";
@@ -1213,6 +1228,7 @@ String BattleBridge::error_to_string(SimulationError error) const
     case SimulationError::NegativeXpAward: return "negative_xp_award";
     case SimulationError::TrophyAlreadyEarned: return "trophy_already_earned";
     case SimulationError::RosterFull: return "roster_full";
+    case SimulationError::InvalidSkillTarget: return "invalid_skill_target";
     }
 
     return "unknown";
@@ -1263,4 +1279,18 @@ String BattleBridge::effect_to_string(SkillEffectType effect) const
     }
 
     return "none";
+}
+
+String BattleBridge::target_to_string(SkillEffectTarget target) const
+{
+    switch (target)
+    {
+    case SkillEffectTarget::Self: return "self";
+    case SkillEffectTarget::Ally: return "ally";
+    case SkillEffectTarget::Enemy: return "enemy";
+    case SkillEffectTarget::PlayerLineup: return "player_lineup";
+    case SkillEffectTarget::Opponent: return "enemy";
+    }
+
+    return "self";
 }

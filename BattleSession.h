@@ -22,7 +22,7 @@ public:
     BattleSession(const SimulationData& data, std::uint32_t seed);
 
     BattleActionResult StartBattle(const BattleSetup& setup);
-    BattleActionResult UsePlayerSkill(const std::string& skillId);
+    BattleActionResult UsePlayerSkill(const std::string& skillId, int targetPlayerIndex = -1);
     BattleActionResult UsePlayerDrill(DrillResultQuality quality);
     BattleActionResult PassPlayerTurn();
     BattleActionResult SwitchPlayer(int playerIndex);
@@ -47,6 +47,10 @@ private:
     const BattleStatus& ActivePlayerStatus() const;
     void MarkParticipant(int playerIndex);
     bool IsKnownPlayerIndex(int playerIndex) const;
+    bool IsLivingPlayerIndex(int playerIndex) const;
+    bool HasLivingPlayer() const;
+    int FirstLivingPlayerIndex() const;
+    int NextLivingPlayerIndex(int fromPlayerIndex) const;
     bool IsBasicAbility(const Skill& definition) const;
     AbilityRuntimeState& EnsureAbilityState(Competitor& competitor, const std::string& skillId) const;
     int GetCooldownRemaining(const Competitor& competitor, const std::string& skillId) const;
@@ -78,6 +82,15 @@ private:
         const std::string& skillId,
         const std::string& reason) const;
     void ResolveOpponentTurn(BattleActionResult& result);
+    void RegisterPlayerAction(BattleActionResult& result);
+    void ResolveAfterPlayerAction(BattleActionResult& result);
+    void AdvanceToNextPlayer(BattleActionResult& result);
+    void ResolveTimedFarming(BattleActionResult& result);
+    void ApplyLineupEffect(
+        const Skill& definition,
+        const SkillProgress& progress,
+        Competitor& actor,
+        BattleActionResult& result);
     CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;
     void FinishBattleIfNeeded(BattleActionResult& result);
     void AttachRewardIfNeeded(BattleActionResult& result) const;
@@ -92,6 +105,7 @@ private:
     bool finished_ = false;
     BattleWinner winner_ = BattleWinner::None;
     int activePlayerIndex_ = 0;
+    int playerActionCount_ = 0;
     std::vector<Competitor> playerTeam_;
     std::vector<BattleStatus> playerStatuses_;
     std::vector<int> participatingPlayerIndices_;

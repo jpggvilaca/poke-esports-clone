@@ -38,6 +38,9 @@ enum class SkillEffectType
 enum class SkillEffectTarget
 {
     Self,
+    Ally,
+    Enemy,
+    PlayerLineup,
     Opponent
 };
 
@@ -133,7 +136,8 @@ enum class SimulationError
     SkillNotActive,
     NegativeXpAward,
     TrophyAlreadyEarned,
-    RosterFull
+    RosterFull,
+    InvalidSkillTarget
 };
 
 enum class BattleEventType
@@ -157,6 +161,7 @@ enum class BattleEventType
     MarkApplied,
     MarkTriggered,
     MarkExpired,
+    FarmingTriggered,
     SkillXpGained,
     SkillLeveledUp,
     BattleFinished,
@@ -514,6 +519,12 @@ struct BattleEvent
     BattleActor actor = BattleActor::None;
     BattleActor target = BattleActor::None;
     std::string skillId;
+    int actorPlayerIndex = -1;
+    int targetPlayerIndex = -1;
+    int profileIndex = -1;
+    int targetProfileIndex = -1;
+    std::string actorName;
+    std::string targetName;
     int oldPlayerIndex = 0;
     int newPlayerIndex = 0;
     std::string playerName;

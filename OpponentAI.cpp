@@ -67,12 +67,18 @@ bool OpponentAI::IsUsefulSkill(
         return true;
     }
 
+    if (definition.effectTarget == SkillEffectTarget::PlayerLineup)
+    {
+        return false;
+    }
+
     if (definition.effectType == SkillEffectType::Heal)
     {
         return opponent.hp < opponent.maxHp;
     }
 
-    const BattleStatus& targetStatus = definition.effectTarget == SkillEffectTarget::Self
+    const BattleStatus& targetStatus = (definition.effectTarget == SkillEffectTarget::Self
+            || definition.effectTarget == SkillEffectTarget::Ally)
         ? opponentStatus
         : playerStatus;
 

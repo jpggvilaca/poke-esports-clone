@@ -31,6 +31,7 @@ var bridge: BattleBridge
 @onready var skill_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/SkillGrid
 @onready var switch_label: Label = $BottomPanel/BottomSplit/ActionBox/SwitchLabel
 @onready var switch_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/SwitchGrid
+@onready var action_box: VBoxContainer = $BottomPanel/BottomSplit/ActionBox
 @onready var fight_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/FightButton
 @onready var drill_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/DrillButton
 @onready var player_list_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/PlayerListButton
@@ -40,6 +41,8 @@ var bridge: BattleBridge
 var main_menu_buttons: Array[Button] = []
 var skill_buttons: Array[Button] = []
 var switch_buttons: Array[Button] = []
+var target_buttons: Array[Button] = []
+var lineup_buttons: Array[Button] = []
 var log_entries: Array[String] = []
 var deferred_skill_xp: Dictionary = {}
 var deferred_skill_levels: Dictionary = {}
@@ -47,23 +50,30 @@ var battle_event_history: Array = []
 var input_locked := false
 var finished_result: Dictionary = {}
 var rewards_applied := false
+var current_state: Dictionary = {}
+var target_label: Label
+var target_grid: GridContainer
+var lineup_panel: PanelContainer
+var lineup_grid: GridContainer
+var pending_skill: Dictionary = {}
 
 
 func _ready() -> void:
 	main_menu_buttons.clear()
 	main_menu_buttons.push_back(fight_button)
-	main_menu_buttons.push_back(drill_button)
-	main_menu_buttons.push_back(player_list_button)
 	main_menu_buttons.push_back(quit_button)
 	fight_button.pressed.connect(_on_fight_menu_pressed)
 	drill_button.pressed.connect(_on_drill_pressed)
-	player_list_button.pressed.connect(_on_player_list_menu_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	back_button.pressed.connect(_show_main_menu)
 	return_button.pressed.connect(_on_return_pressed)
 	rewards_panel.return_requested.connect(_on_return_pressed)
 	drill_minigame.drill_finished.connect(_on_drill_minigame_finished)
 	drill_minigame.drill_cancelled.connect(_on_drill_minigame_cancelled)
+	drill_button.visible = false
+	player_list_button.visible = false
+	_create_lineup_strip()
+	_create_target_controls()
 	bridge = BattleBridge.new()
 	add_child(bridge)
 
@@ -84,7 +94,7 @@ func _ready() -> void:
 	_show_main_menu()
 	_record_result_events(result)
 	await _play_events(result.get("events", []))
-	_set_message("What will your player do?")
+	_set_turn_prompt()
 	await _maybe_auto_pass_stunned_turn()
 
 
@@ -93,6 +103,8 @@ func _show_main_menu() -> void:
 	skill_grid.visible = false
 	switch_label.visible = false
 	switch_grid.visible = false
+	target_label.visible = false
+	target_grid.visible = false
 	back_button.visible = false
 	return_button.visible = false
 	_set_buttons_disabled(input_locked)
@@ -105,6 +117,8 @@ func _show_fight_menu() -> void:
 	skill_grid.visible = true
 	switch_label.visible = false
 	switch_grid.visible = false
+	target_label.visible = false
+	target_grid.visible = false
 	back_button.visible = true
 
 
@@ -114,6 +128,65 @@ func _show_player_list_menu() -> void:
 	skill_grid.visible = false
 	switch_label.visible = true
 	switch_grid.visible = true
+	target_label.visible = false
+	target_grid.visible = false
+	back_button.visible = true
+
+
+func _create_lineup_strip() -> void:
+	lineup_panel = PanelContainer.new()
+	lineup_panel.name = "LineupPanel"
+	lineup_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	lineup_panel.anchor_left = 0.42
+	lineup_panel.anchor_top = 0.55
+	lineup_panel.anchor_right = 0.94
+	lineup_panel.anchor_bottom = 0.71
+	lineup_panel.offset_left = 0.0
+	lineup_panel.offset_top = 0.0
+	lineup_panel.offset_right = 0.0
+	lineup_panel.offset_bottom = 0.0
+	lineup_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	lineup_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(lineup_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	lineup_panel.add_child(margin)
+
+	lineup_grid = GridContainer.new()
+	lineup_grid.columns = 3
+	lineup_grid.add_theme_constant_override("h_separation", 10)
+	lineup_grid.add_theme_constant_override("v_separation", 8)
+	margin.add_child(lineup_grid)
+
+
+func _create_target_controls() -> void:
+	target_label = Label.new()
+	target_label.text = "Choose target"
+	target_label.add_theme_font_size_override("font_size", 18)
+	target_label.visible = false
+	action_box.add_child(target_label)
+
+	target_grid = GridContainer.new()
+	target_grid.columns = 2
+	target_grid.add_theme_constant_override("h_separation", 10)
+	target_grid.add_theme_constant_override("v_separation", 10)
+	target_grid.visible = false
+	action_box.add_child(target_grid)
+
+
+func _show_target_menu(skill: Dictionary) -> void:
+	pending_skill = skill.duplicate(true)
+	_refresh_target_buttons()
+	main_menu_grid.visible = false
+	skill_grid.visible = false
+	switch_label.visible = false
+	switch_grid.visible = false
+	target_label.visible = true
+	target_grid.visible = true
 	back_button.visible = true
 
 
@@ -164,7 +237,7 @@ func _on_drill_minigame_finished(quality: String) -> void:
 		_refresh_skills()
 		_refresh_team_switches(state)
 		_refresh_drill_action()
-		_set_message("What will your player do?")
+		_set_turn_prompt()
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
@@ -175,7 +248,7 @@ func _on_drill_minigame_cancelled() -> void:
 	input_locked = false
 	_set_buttons_disabled(false)
 	_refresh_drill_action()
-	_set_message("What will your player do?")
+	_set_turn_prompt()
 	_show_main_menu()
 
 
@@ -218,7 +291,7 @@ func _maybe_auto_pass_stunned_turn() -> void:
 		_refresh_skills()
 		_refresh_team_switches(state)
 		_refresh_drill_action()
-		_set_message("What will your player do?")
+		_set_turn_prompt()
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
@@ -246,7 +319,7 @@ func _refresh_skills() -> void:
 		button.text = _format_skill_button(skill)
 		button.custom_minimum_size = Vector2(270, 112)
 		button.disabled = input_locked or not bool(skill.get("can_use", true))
-		button.pressed.connect(_on_skill_pressed.bind(skill.get("id", "")))
+		button.pressed.connect(_on_skill_pressed.bind(skill.duplicate(true)))
 		skill_grid.add_child(button)
 		skill_buttons.push_back(button)
 
@@ -312,13 +385,133 @@ func _refresh_team_switches(state: Dictionary = {}) -> void:
 		switch_buttons.push_back(button)
 
 
-func _on_skill_pressed(skill_id: String) -> void:
+func _refresh_lineup_strip(state: Dictionary = {}) -> void:
+	if lineup_grid == null:
+		return
+	if state.is_empty():
+		state = current_state
+
+	for child in lineup_grid.get_children():
+		child.queue_free()
+	lineup_buttons.clear()
+
+	var active_index := int(state.get("active_player_index", 0))
+	var player_team: Array = state.get("player_team", [])
+	for index in range(player_team.size()):
+		var player: Dictionary = player_team[index]
+		var hp := int(player.get("hp", 0))
+		var max_hp := int(player.get("max_hp", 1))
+		var mana := int(player.get("mana", 0))
+		var max_mana := int(player.get("max_mana", 1))
+		var status_text := _compact_status_indicator(player.get("status", {}))
+		var state_text := "TURN" if index == active_index else "WAITING"
+		if hp <= 0:
+			state_text = "DOWN"
+
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(190, 118)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.text = "%s\n%s | %s\nHP %s/%s\nMana %s/%s%s" % [
+			state_text,
+			player.get("name", "Player"),
+			player.get("spec", "Spec"),
+			hp,
+			max_hp,
+			mana,
+			max_mana,
+			"\n%s" % status_text if not status_text.is_empty() else "",
+		]
+		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.focus_mode = Control.FOCUS_NONE
+		if hp <= 0:
+			_apply_lineup_card_style(button, false, true)
+			button.tooltip_text = "Down"
+		elif index == active_index:
+			_apply_lineup_card_style(button, true, false)
+			button.tooltip_text = "Current party turn"
+		else:
+			_apply_lineup_card_style(button, false, false)
+			button.tooltip_text = "Waiting in party order"
+		lineup_grid.add_child(button)
+		lineup_buttons.push_back(button)
+
+
+func _apply_lineup_card_style(button: Button, is_active: bool, is_down: bool) -> void:
+	var style := StyleBoxFlat.new()
+	style.set_corner_radius_all(6)
+	if is_down:
+		style.bg_color = Color(0.10, 0.10, 0.12, 0.82)
+		style.border_color = Color(0.32, 0.32, 0.36, 0.95)
+		style.set_border_width_all(1)
+		button.add_theme_color_override("font_color", Color(0.62, 0.62, 0.66, 1.0))
+	elif is_active:
+		style.bg_color = Color(0.15, 0.20, 0.32, 0.96)
+		style.border_color = Color(0.95, 0.77, 0.23, 1.0)
+		style.set_border_width_all(4)
+		button.add_theme_color_override("font_color", Color(1.0, 0.95, 0.76, 1.0))
+	else:
+		style.bg_color = Color(0.08, 0.11, 0.18, 0.84)
+		style.border_color = Color(0.28, 0.42, 0.67, 0.72)
+		style.set_border_width_all(1)
+		button.add_theme_color_override("font_color", Color(0.82, 0.88, 1.0, 1.0))
+
+	for state_name in ["normal", "hover", "pressed", "focus"]:
+		button.add_theme_stylebox_override(state_name, style)
+
+
+func _refresh_target_buttons() -> void:
+	for child in target_grid.get_children():
+		child.queue_free()
+	target_buttons.clear()
+
+	var state := bridge.get_battle_state()
+	var player_team: Array = state.get("player_team", [])
+	for index in range(player_team.size()):
+		var player: Dictionary = player_team[index]
+		var hp := int(player.get("hp", 0))
+		var max_hp := int(player.get("max_hp", 1))
+		var mana := int(player.get("mana", 0))
+		var max_mana := int(player.get("max_mana", 1))
+		var button := Button.new()
+		button.text = "%s\nHP %s/%s | Mana %s/%s" % [
+			player.get("name", "Player"),
+			hp,
+			max_hp,
+			mana,
+			max_mana,
+		]
+		button.custom_minimum_size = Vector2(270, 72)
+		button.disabled = input_locked or hp <= 0
+		button.pressed.connect(_on_target_pressed.bind(index))
+		target_grid.add_child(button)
+		target_buttons.push_back(button)
+
+
+func _on_skill_pressed(skill: Dictionary) -> void:
 	if input_locked:
 		return
 
+	var target_scope := String(skill.get("effect_target", "enemy"))
+	if target_scope == "ally":
+		_show_target_menu(skill)
+		return
+
+	var target_index := -1
+	if target_scope == "self" or target_scope == "player_lineup":
+		target_index = int(bridge.get_battle_state().get("active_player_index", 0))
+	await _use_skill(String(skill.get("id", "")), target_index)
+
+
+func _on_target_pressed(target_index: int) -> void:
+	if input_locked:
+		return
+	await _use_skill(String(pending_skill.get("id", "")), target_index)
+
+
+func _use_skill(skill_id: String, target_index: int) -> void:
 	input_locked = true
 	_set_buttons_disabled(true)
-	var result := bridge.use_skill(skill_id)
+	var result := bridge.use_skill(skill_id, target_index)
 	if not result.get("accepted", false):
 		_set_message(result.get("error", "That action failed."))
 		input_locked = false
@@ -335,7 +528,7 @@ func _on_skill_pressed(skill_id: String) -> void:
 		_show_post_battle_panel(result)
 	else:
 		_refresh_team_switches(result.get("state", bridge.get_battle_state()))
-		_set_message("What will your player do?")
+		_set_turn_prompt()
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
@@ -368,7 +561,7 @@ func _on_switch_pressed(player_index: int) -> void:
 		_set_message("Battle finished. Winner: %s" % result.get("winner", "none"))
 		_show_post_battle_panel(result)
 	else:
-		_set_message("What will your player do?")
+		_set_turn_prompt()
 		input_locked = false
 		_set_buttons_disabled(false)
 		_show_main_menu()
@@ -412,10 +605,13 @@ func _apply_event(event: Dictionary) -> void:
 			_push_log("Battle start!")
 			_set_message("%s wants to battle." % opponent_name.text)
 		"player_switched":
-			_set_message("Switched to %s." % event.get("player_name", "player"))
+			if String(event.get("reason", "")) == "turn":
+				_set_message("Next up: %s." % event.get("player_name", "player"))
+			else:
+				_set_message("Switched to %s." % event.get("player_name", "player"))
 			_push_log(message_label.text)
 		"skill_started":
-			var actor := _display_actor(event.get("actor", "none"))
+			var actor := _display_event_actor(event)
 			_set_message("%s used %s." % [actor, _format_skill_id(String(event.get("skill_id", "a skill")))])
 			_push_log(message_label.text)
 		"drill_started":
@@ -431,8 +627,8 @@ func _apply_event(event: Dictionary) -> void:
 				event.get("amount", 0),
 			])
 		"mana_changed":
-			_animate_mana(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0))
-			_push_log("%s mana %s -> %s." % [_display_actor(event.get("actor", "none")), event.get("old_value", 0), event.get("new_value", 0)])
+			_animate_mana(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0), int(event.get("actor_player_index", -1)))
+			_push_log("%s mana %s -> %s." % [_display_event_actor(event), event.get("old_value", 0), event.get("new_value", 0)])
 		"cooldown_started":
 			_push_log("%s cooldown: %s turn(s)." % [_format_skill_id(String(event.get("skill_id", ""))), event.get("new_value", 0)])
 		"cooldown_ready":
@@ -443,21 +639,23 @@ func _apply_event(event: Dictionary) -> void:
 			_set_message("It missed.")
 			_push_log("The play missed.")
 		"damage_applied":
-			_animate_hp(event.get("target", "none"), event.get("old_value", 0), event.get("new_value", 0))
-			_push_log("%s took %s damage." % [_display_actor(event.get("target", "none")), event.get("amount", 0)])
+			_animate_hp(event.get("target", "none"), event.get("old_value", 0), event.get("new_value", 0), int(event.get("target_player_index", -1)))
+			_push_log("%s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
 		"healing_applied":
-			_animate_hp(event.get("actor", "none"), event.get("old_value", 0), event.get("new_value", 0))
-			_push_log("%s recovered %s HP." % [_display_actor(event.get("actor", "none")), event.get("amount", 0)])
+			_animate_hp(event.get("target", "none"), event.get("old_value", 0), event.get("new_value", 0), int(event.get("target_player_index", -1)))
+			_push_log("%s recovered %s HP." % [_display_event_target(event), event.get("amount", 0)])
 		"status_applied":
 			_push_log(_format_status_log(event))
 		"status_expired":
-			_push_log("%s status expired." % _display_actor(event.get("target", "none")))
+			_push_log("%s status expired." % _display_event_target(event))
 		"mark_applied":
-			_push_log("%s was marked." % _display_actor(event.get("target", "none")))
+			_push_log("%s was marked." % _display_event_target(event))
 		"mark_triggered":
 			_push_log("Mark triggered for %s bonus damage." % event.get("amount", 0))
 		"mark_expired":
-			_push_log("%s mark expired." % _display_actor(event.get("target", "none")))
+			_push_log("%s mark expired." % _display_event_target(event))
+		"farming_triggered":
+			_push_log("%s: lineup gained up to %s mana." % [event.get("reason", "Farm secured"), event.get("amount", 0)])
 		"skill_xp_gained":
 			_defer_progress_event(event)
 		"skill_leveled_up":
@@ -471,10 +669,12 @@ func _apply_event(event: Dictionary) -> void:
 
 
 func _update_state(state: Dictionary) -> void:
+	current_state = state.duplicate(true)
 	var player = state.get("player", {})
 	var opponent = state.get("opponent", {})
 	_update_status(player_name, player_meta, player_hp, player_hp_value, player_mana, player_mana_value, player_status, player, "Your Player")
 	_update_status(opponent_name, opponent_meta, opponent_hp, opponent_hp_value, opponent_mana, opponent_mana_value, opponent_status, opponent, "Opponent")
+	_refresh_lineup_strip(state)
 
 
 func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, hp_value: Label, mana_bar: ProgressBar, mana_value: Label, status_label: Label, data: Dictionary, fallback_name: String) -> void:
@@ -502,7 +702,9 @@ func _update_status(name_label: Label, meta_label: Label, hp_bar: ProgressBar, h
 	status_label.text = _format_status_indicator(data.get("status", {}))
 
 
-func _animate_hp(actor: String, old_value: int, new_value: int) -> void:
+func _animate_hp(actor: String, old_value: int, new_value: int, player_index: int = -1) -> void:
+	if actor == "player" and player_index != int(current_state.get("active_player_index", 0)):
+		return
 	var bar := opponent_hp if actor == "opponent" else player_hp
 	var value_label := opponent_hp_value if actor == "opponent" else player_hp_value
 	bar.value = old_value
@@ -510,7 +712,9 @@ func _animate_hp(actor: String, old_value: int, new_value: int) -> void:
 	create_tween().tween_property(bar, "value", new_value, 0.30)
 
 
-func _animate_mana(actor: String, old_value: int, new_value: int) -> void:
+func _animate_mana(actor: String, old_value: int, new_value: int, player_index: int = -1) -> void:
+	if actor == "player" and player_index != int(current_state.get("active_player_index", 0)):
+		return
 	var bar := opponent_mana if actor == "opponent" else player_mana
 	var value_label := opponent_mana_value if actor == "opponent" else player_mana_value
 	bar.value = old_value
@@ -520,6 +724,12 @@ func _animate_mana(actor: String, old_value: int, new_value: int) -> void:
 
 func _set_message(text: String) -> void:
 	message_label.text = text
+
+
+func _set_turn_prompt() -> void:
+	var player: Dictionary = current_state.get("player", {})
+	var player_display_name := String(player.get("name", "your player"))
+	_set_message("What will %s do?" % player_display_name)
 
 
 func _push_log(text: String) -> void:
@@ -556,9 +766,23 @@ func _display_actor(actor: String) -> String:
 	return "Someone"
 
 
+func _display_event_actor(event: Dictionary) -> String:
+	var actor_name := String(event.get("actor_name", ""))
+	if not actor_name.is_empty():
+		return actor_name
+	return _display_actor(String(event.get("actor", "none")))
+
+
+func _display_event_target(event: Dictionary) -> String:
+	var target_name := String(event.get("target_name", ""))
+	if not target_name.is_empty():
+		return target_name
+	return _display_actor(String(event.get("target", "none")))
+
+
 func _format_status_log(event: Dictionary) -> String:
-	var actor := _display_actor(String(event.get("actor", "none")))
-	var target := _display_actor(String(event.get("target", "none")))
+	var actor := _display_event_actor(event)
+	var target := _display_event_target(event)
 	var amount := int(event.get("amount", 0))
 	match String(event.get("effect", "none")):
 		"attack_modifier":
@@ -622,6 +846,13 @@ func _format_status_indicator(status: Dictionary) -> String:
 	return _join_strings(entries, "  ")
 
 
+func _compact_status_indicator(status: Dictionary) -> String:
+	var full_status := _format_status_indicator(status)
+	if full_status == "Status: none":
+		return ""
+	return full_status
+
+
 func _status_marker(value: int) -> String:
 	if value > 0:
 		return "BUFF"
@@ -641,6 +872,8 @@ func _set_buttons_disabled(disabled: bool) -> void:
 		button.disabled = disabled
 	for button in switch_buttons:
 		button.disabled = disabled or bool(button.get_meta("switch_disabled", false))
+	for button in target_buttons:
+		button.disabled = disabled
 	back_button.disabled = disabled
 
 
@@ -651,6 +884,8 @@ func _show_return_button() -> void:
 	skill_grid.visible = false
 	switch_label.visible = false
 	switch_grid.visible = false
+	target_label.visible = false
+	target_grid.visible = false
 	back_button.visible = false
 	return_button.visible = true
 

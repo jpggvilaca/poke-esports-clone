@@ -116,9 +116,19 @@ namespace
 
         if (skill.effectType == SkillEffectType::AttackModifier)
         {
-            return skill.effectTarget == SkillEffectTarget::Self
-                ? "Set up a stronger follow-up play."
-                : "Disrupt the opponent's next attacks.";
+            if (skill.effectValue >= 0)
+            {
+                if (skill.effectTarget == SkillEffectTarget::PlayerLineup)
+                {
+                    return "Boost the lineup's attacks for a short window.";
+                }
+                if (skill.effectTarget == SkillEffectTarget::Ally)
+                {
+                    return "Boost an ally's attacks for a short window.";
+                }
+                return "Set up a stronger follow-up play.";
+            }
+            return "Disrupt the opponent's next attacks.";
         }
 
         if (skill.effectType == SkillEffectType::AttackPenetrationModifier)
@@ -196,29 +206,29 @@ SimulationData::SimulationData()
     // optional effect, target, effect value, duration, mark bonus.
     skills_ = {
         MakeSkill("top-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("top-hold-line", "Stomp", 35, 0, 2, 0, 1.00, SkillEffectType::Rooted, SkillEffectTarget::Opponent, 0, 1),
+        MakeSkill("top-hold-line", "Stomp", 35, 0, 2, 0, 1.00, SkillEffectType::Rooted, SkillEffectTarget::Enemy, 0, 1),
         MakeSkill("top-sunder", "Purge", 45, 0, 2, 28, 0.95, SkillEffectType::AttackPenetrationModifier, SkillEffectTarget::Self, 35, 2),
-        MakeSkill("top-gamebreaker", "Unbreakable", 100, 0, 5, 58, 0.90, SkillEffectType::AttackModifier, SkillEffectTarget::Self, 30, 2),
+        MakeSkill("top-gamebreaker", "Unbreakable", 100, 0, 5, 28, 0.90, SkillEffectType::DefenseModifier, SkillEffectTarget::Self, 30, 2),
 
         MakeSkill("jungle-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("jungle-gank", "Gank", 35, 0, 2, 14, 0.95, SkillEffectType::Stunned, SkillEffectTarget::Opponent, 0, 1),
-        MakeSkill("jungle-invade", "Invade", 45, 0, 2, 30, 0.95, SkillEffectType::CooldownModifier, SkillEffectTarget::Opponent, 50, 2),
-        MakeSkill("jungle-smite-fight", "Decimate", 100, 0, 5, 62, 0.90, SkillEffectType::Mark, SkillEffectTarget::Opponent, 0, 2, 28),
+        MakeSkill("jungle-gank", "Gank", 35, 0, 2, 14, 0.95, SkillEffectType::Stunned, SkillEffectTarget::Enemy, 0, 1),
+        MakeSkill("jungle-invade", "Invade", 45, 0, 2, 30, 0.95, SkillEffectType::CooldownModifier, SkillEffectTarget::Enemy, 50, 2),
+        MakeSkill("jungle-smite-fight", "Decimate", 100, 0, 5, 62, 0.90, SkillEffectType::Mark, SkillEffectTarget::Enemy, 0, 2, 28),
 
         MakeSkill("mid-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("mid-silence", "Light binding", 35, 0, 2, 12, 0.95, SkillEffectType::Silenced, SkillEffectTarget::Opponent, 0, 1),
-        MakeSkill("mid-burst", "Spark", 45, 0, 2, 34, 0.92, SkillEffectType::HealingReceivedModifier, SkillEffectTarget::Opponent, -40, 2),
-        MakeSkill("mid-ultimate", "Sonic wave", 100, 0, 5, 65, 0.88, SkillEffectType::CooldownModifier, SkillEffectTarget::Self, -50, 2),
+        MakeSkill("mid-silence", "Light binding", 35, 0, 2, 12, 0.95, SkillEffectType::Silenced, SkillEffectTarget::Enemy, 0, 1),
+        MakeSkill("mid-burst", "Spark", 45, 0, 2, 34, 0.92, SkillEffectType::AttackModifier, SkillEffectTarget::Enemy, -30, 2),
+        MakeSkill("mid-ultimate", "Sonic wave", 100, 0, 5, 65, 0.88, SkillEffectType::CooldownModifier, SkillEffectTarget::Self, -30, 2),
 
         MakeSkill("adc-basic", "Basic Attack", 0, Balance::BasicManaGain, 0, 16, 0.95),
-        MakeSkill("adc-trap", "Place Trap", 35, 0, 2, 8, 1.00, SkillEffectType::Stunned, SkillEffectTarget::Opponent, 0, 2),
+        MakeSkill("adc-trap", "Place Trap", 35, 0, 2, 8, 1.00, SkillEffectType::Stunned, SkillEffectTarget::Enemy, 0, 2),
         MakeSkill("adc-multi-strike", "Multi Strike", 45, 0, 2, 36, 0.94),
         MakeSkill("adc-bullet-time", "Bullet Time", 100, 0, 5, 72, 0.88),
 
         MakeSkill("support-basic", "Basic attack", 0, Balance::BasicManaGain, 0, 14, 0.95),
-        MakeSkill("support-peel", "Peel", 35, 0, 2, 0, 1.00, SkillEffectType::DefenseModifier, SkillEffectTarget::Self, 35, 2),
-        MakeSkill("support-exhaust", "Ehxaust", 45, 0, 2, 18, 0.95, SkillEffectType::AttackModifier, SkillEffectTarget::Opponent, -35, 2),
-        MakeSkill("support-teamfight", "Mega shield", 100, 0, 5, 0, 1.00, SkillEffectType::Heal, SkillEffectTarget::Self, 55, 0)
+        MakeSkill("support-peel", "Peel", 35, 0, 2, 0, 1.00, SkillEffectType::Heal, SkillEffectTarget::Ally, 40, 0),
+        MakeSkill("support-shotcall", "Shotcall", 45, 0, 2, 0, 1.00, SkillEffectType::AttackModifier, SkillEffectTarget::Ally, 25, 2),
+        MakeSkill("support-teamfight", "Teamfight plan", 100, 0, 5, 0, 1.00, SkillEffectType::AttackModifier, SkillEffectTarget::PlayerLineup, 10, 2)
     };
     FillSkillMetadata(skills_);
 
@@ -273,7 +283,7 @@ SimulationData::SimulationData()
         { Spec::Jungle, "Jungle", { "jungle-basic", "jungle-gank", "jungle-invade", "jungle-smite-fight" }, Spec::Mid, "shotcaller" },
         { Spec::Mid, "Mid", { "mid-basic", "mid-silence", "mid-burst", "mid-ultimate" }, Spec::Adc, "lane-bully" },
         { Spec::Adc, "ADC", { "adc-basic", "adc-trap", "adc-multi-strike", "adc-bullet-time" }, Spec::Support, "precision-carry" },
-        { Spec::Support, "Support", { "support-basic", "support-peel", "support-exhaust", "support-teamfight" }, Spec::Top, "stabilizer" }
+        { Spec::Support, "Support", { "support-basic", "support-peel", "support-shotcall", "support-teamfight" }, Spec::Top, "stabilizer" }
     };
 }
 

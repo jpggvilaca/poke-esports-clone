@@ -26,9 +26,12 @@ public:
         BattleActor actor,
         Competitor& attacker,
         BattleStatus& attackerStatus,
-        Competitor& defender,
-        BattleStatus& defenderStatus,
+        BattleActor targetActor,
+        Competitor& target,
+        BattleStatus& targetStatus,
         SkillProgress& progress,
+        int actorPlayerIndex,
+        int targetPlayerIndex,
         std::mt19937& randomEngine) const;
 
 private:
@@ -36,12 +39,15 @@ private:
     bool Chance(double probability, std::mt19937& randomEngine) const;
     SecondaryEffectResult ApplySecondaryEffect(
         BattleActor actor,
-        BattleActor target,
+        BattleActor targetActor,
         const Skill& definition,
         const SkillProgress& progress,
         Competitor& attacker,
         BattleStatus& attackerStatus,
-        BattleStatus& defenderStatus) const;
+        Competitor& targetCompetitor,
+        BattleStatus& targetBattleStatus,
+        int actorPlayerIndex,
+        int targetPlayerIndex) const;
 
     const SimulationData& data_;
     const BattleRules& rules_;

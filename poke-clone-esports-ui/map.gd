@@ -58,14 +58,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo and map_ui.is_trainer_visible():
-		if event.keycode == KEY_1 or event.keycode == KEY_KP_1:
-			_handle_scout_candidate_choice(0)
-			return
-		if event.keycode == KEY_2 or event.keycode == KEY_KP_2:
-			_handle_scout_candidate_choice(1)
-			return
-		if event.keycode == KEY_3 or event.keycode == KEY_KP_3:
-			_handle_scout_candidate_choice(2)
+		var number_key := _number_key_to_index(event)
+		if number_key >= 0:
+			_handle_trainer_number_key(number_key)
 			return
 		if event.keycode == KEY_D:
 			GameState.decline_scout_offer()
@@ -228,6 +223,34 @@ func _handle_scout_candidate_choice(candidate_index: int) -> void:
 	_refresh_trainer_menu()
 
 
+func _handle_trainer_number_key(number_index: int) -> void:
+	var state := GameState.get_trainer_state()
+	var scout_offer: Dictionary = state.get("pending_scout_offer", {})
+	if not scout_offer.is_empty() and number_index >= 0 and number_index < 3:
+		_handle_scout_candidate_choice(number_index)
+		return
+
+	map_ui.show_prompt(GameState.toggle_lineup_member(number_index))
+	_refresh_trainer_menu()
+
+
+func _number_key_to_index(event: InputEventKey) -> int:
+	match event.keycode:
+		KEY_1, KEY_KP_1:
+			return 0
+		KEY_2, KEY_KP_2:
+			return 1
+		KEY_3, KEY_KP_3:
+			return 2
+		KEY_4, KEY_KP_4:
+			return 3
+		KEY_5, KEY_KP_5:
+			return 4
+		KEY_6, KEY_KP_6:
+			return 5
+	return -1
+
+
 func _format_trainer_text() -> String:
 	var state := GameState.get_trainer_state()
 	var lines: Array[String] = []
@@ -243,18 +266,28 @@ func _format_trainer_text() -> String:
 		lines.push_back("%s" % message)
 	lines.push_back("")
 	_append_scout_lines(lines, state)
+	_append_lineup_lines(lines, state)
 	lines.push_back("Roster:")
 
 	var active_index := int(state.get("active_player_index", 0))
+	var lineup_indices: Array = state.get("lineup_indices", [])
 	var roster: Array = state.get("roster", [])
 	for index in range(roster.size()):
 		var player: Dictionary = roster[index]
-		var marker := ">" if index == active_index else " "
-		lines.push_back("%s %s - %s %s" % [
-			marker,
+		var lineup_slot := lineup_indices.find(index)
+		var lineup_marker := "   "
+		if lineup_slot >= 0:
+			lineup_marker = "[%s]" % (lineup_slot + 1)
+		var first_turn_marker := ""
+		if index == active_index and lineup_slot == 0:
+			first_turn_marker = " first turn"
+		lines.push_back("%s %s. %s - %s %s%s" % [
+			lineup_marker,
+			index + 1,
 			player.get("name", "Player"),
 			player.get("spec", "Spec"),
 			player.get("rank", "Rookie"),
+			first_turn_marker,
 		])
 		var identity_name := String(player.get("trait_name", ""))
 		if not identity_name.is_empty():
@@ -294,6 +327,29 @@ func _format_trainer_text() -> String:
 	return _join_strings(lines, "\n")
 
 
+func _append_lineup_lines(lines: Array[String], state: Dictionary) -> void:
+	var roster: Array = state.get("roster", [])
+	var lineup_indices: Array = state.get("lineup_indices", [])
+	lines.push_back("Battle lineup:")
+	if lineup_indices.is_empty():
+		lines.push_back("None selected.")
+	else:
+		var names: Array[String] = []
+		for value in lineup_indices:
+			var index := int(value)
+			if index >= 0 and index < roster.size():
+				var player: Dictionary = roster[index]
+				names.push_back("%s. %s (%s)" % [
+					index + 1,
+					player.get("name", "Player"),
+					player.get("spec", "Spec"),
+				])
+		lines.push_back(_join_strings(names, " | "))
+	lines.push_back("Press 1-6 to toggle roster slots into the lineup (max 3).")
+	lines.push_back("[1]-[3] = party turn order")
+	lines.push_back("")
+
+
 func _append_scout_lines(lines: Array[String], state: Dictionary) -> void:
 	var scout_message := String(state.get("last_scout_message", ""))
 	var scout_offer: Dictionary = state.get("pending_scout_offer", {})
@@ -330,6 +386,7 @@ func _append_scout_lines(lines: Array[String], state: Dictionary) -> void:
 			lines.push_back("Roster full. Free space before choosing.")
 		else:
 			lines.push_back("Press 1-3 to recruit. Press D to dismiss.")
+			lines.push_back("Dismiss scout to edit lineup slots 1-3.")
 
 	lines.push_back("")
 

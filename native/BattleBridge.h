@@ -23,7 +23,7 @@ class BattleBridge : public godot::Node
 
 public:
     godot::Dictionary start_battle(const godot::Dictionary& setup);
-    godot::Dictionary use_skill(const godot::String& skill_id);
+    godot::Dictionary use_skill(const godot::String& skill_id, int target_player_index);
     godot::Dictionary use_drill(const godot::String& result_quality);
     godot::Dictionary pass_turn();
     godot::Dictionary switch_player(int player_index);
@@ -99,6 +99,7 @@ private:
     godot::String event_type_to_string(BattleEventType type) const;
     godot::String error_to_string(SimulationError error) const;
     godot::String effect_to_string(SkillEffectType effect) const;
+    godot::String target_to_string(SkillEffectTarget target) const;
     DrillResultQuality drill_quality_from_string(const godot::String& value) const;
     godot::String drill_quality_to_string(DrillResultQuality quality) const;
 

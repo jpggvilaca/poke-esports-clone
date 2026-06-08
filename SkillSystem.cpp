@@ -65,21 +65,24 @@ SkillUseResult SkillSystem::UseSkill(
     BattleActor actor,
     Competitor& attacker,
     BattleStatus& attackerStatus,
-    Competitor& defender,
-    BattleStatus& defenderStatus,
+    BattleActor targetActor,
+    Competitor& target,
+    BattleStatus& targetStatus,
     SkillProgress& progress,
+    int actorPlayerIndex,
+    int targetPlayerIndex,
     std::mt19937& randomEngine) const
 {
     SkillUseResult result;
     result.actor = actor;
-    result.target = Opposite(actor);
+    result.target = targetActor;
     result.skillId = progress.skillId;
     result.oldMana = attacker.mana;
     result.newMana = attacker.mana;
     result.oldActorHp = attacker.hp;
     result.newActorHp = attacker.hp;
-    result.oldTargetHp = defender.hp;
-    result.newTargetHp = defender.hp;
+    result.oldTargetHp = target.hp;
+    result.newTargetHp = target.hp;
 
     const Skill* definition = data_.FindSkill(progress.skillId);
     if (definition == nullptr)
@@ -99,6 +102,12 @@ SkillUseResult SkillSystem::UseSkill(
     skillStarted.type = BattleEventType::SkillStarted;
     skillStarted.actor = actor;
     skillStarted.target = result.target;
+    skillStarted.actorPlayerIndex = actorPlayerIndex;
+    skillStarted.targetPlayerIndex = targetPlayerIndex;
+    skillStarted.profileIndex = attacker.profileIndex;
+    skillStarted.targetProfileIndex = target.profileIndex;
+    skillStarted.actorName = attacker.name;
+    skillStarted.targetName = target.name;
     skillStarted.skillId = definition->id;
     result.events.push_back(skillStarted);
 
@@ -107,6 +116,9 @@ SkillUseResult SkillSystem::UseSkill(
         BattleEvent manaChanged;
         manaChanged.type = BattleEventType::ManaChanged;
         manaChanged.actor = actor;
+        manaChanged.actorPlayerIndex = actorPlayerIndex;
+        manaChanged.profileIndex = attacker.profileIndex;
+        manaChanged.actorName = attacker.name;
         manaChanged.skillId = definition->id;
         manaChanged.oldValue = result.oldMana;
         manaChanged.newValue = result.newMana;
@@ -121,6 +133,12 @@ SkillUseResult SkillSystem::UseSkill(
         missed.type = BattleEventType::AttackMissed;
         missed.actor = actor;
         missed.target = result.target;
+        missed.actorPlayerIndex = actorPlayerIndex;
+        missed.targetPlayerIndex = targetPlayerIndex;
+        missed.profileIndex = attacker.profileIndex;
+        missed.targetProfileIndex = target.profileIndex;
+        missed.actorName = attacker.name;
+        missed.targetName = target.name;
         missed.skillId = definition->id;
         result.events.push_back(missed);
 
@@ -130,6 +148,9 @@ SkillUseResult SkillSystem::UseSkill(
             BattleEvent xpGained;
             xpGained.type = BattleEventType::SkillXpGained;
             xpGained.actor = actor;
+            xpGained.actorPlayerIndex = actorPlayerIndex;
+            xpGained.profileIndex = attacker.profileIndex;
+            xpGained.actorName = attacker.name;
             xpGained.skillId = definition->id;
             xpGained.oldValue = result.xp.oldXp;
             xpGained.newValue = result.xp.newXp;
@@ -143,6 +164,9 @@ SkillUseResult SkillSystem::UseSkill(
             BattleEvent leveledUp;
             leveledUp.type = BattleEventType::SkillLeveledUp;
             leveledUp.actor = actor;
+            leveledUp.actorPlayerIndex = actorPlayerIndex;
+            leveledUp.profileIndex = attacker.profileIndex;
+            leveledUp.actorName = attacker.name;
             leveledUp.skillId = definition->id;
             leveledUp.oldLevel = result.xp.oldLevel;
             leveledUp.newLevel = result.xp.newLevel;
@@ -159,15 +183,21 @@ SkillUseResult SkillSystem::UseSkill(
             progress,
             attacker,
             attackerStatus,
-            defender,
-            defenderStatus);
-        defender.hp = std::max(0, defender.hp - result.damage.amount);
-        result.newTargetHp = defender.hp;
+            target,
+            targetStatus);
+        target.hp = std::max(0, target.hp - result.damage.amount);
+        result.newTargetHp = target.hp;
 
         BattleEvent damageApplied;
         damageApplied.type = BattleEventType::DamageApplied;
         damageApplied.actor = actor;
         damageApplied.target = result.target;
+        damageApplied.actorPlayerIndex = actorPlayerIndex;
+        damageApplied.targetPlayerIndex = targetPlayerIndex;
+        damageApplied.profileIndex = attacker.profileIndex;
+        damageApplied.targetProfileIndex = target.profileIndex;
+        damageApplied.actorName = attacker.name;
+        damageApplied.targetName = target.name;
         damageApplied.skillId = definition->id;
         damageApplied.oldValue = result.oldTargetHp;
         damageApplied.newValue = result.newTargetHp;
@@ -181,12 +211,18 @@ SkillUseResult SkillSystem::UseSkill(
             markTriggered.type = BattleEventType::MarkTriggered;
             markTriggered.actor = actor;
             markTriggered.target = result.target;
+            markTriggered.actorPlayerIndex = actorPlayerIndex;
+            markTriggered.targetPlayerIndex = targetPlayerIndex;
+            markTriggered.profileIndex = attacker.profileIndex;
+            markTriggered.targetProfileIndex = target.profileIndex;
+            markTriggered.actorName = attacker.name;
+            markTriggered.targetName = target.name;
             markTriggered.skillId = definition->id;
             markTriggered.amount = result.damage.markBonusDamage;
             result.events.push_back(markTriggered);
-            defenderStatus.markTurns = 0;
-            defenderStatus.markBonusDamage = 0;
-            defenderStatus.markSource = BattleActor::None;
+            targetStatus.markTurns = 0;
+            targetStatus.markBonusDamage = 0;
+            targetStatus.markSource = BattleActor::None;
         }
     }
 
@@ -197,22 +233,32 @@ SkillUseResult SkillSystem::UseSkill(
         progress,
         attacker,
         attackerStatus,
-        defenderStatus);
+        target,
+        targetStatus,
+        actorPlayerIndex,
+        targetPlayerIndex);
     result.newActorHp = attacker.hp;
-    result.newTargetHp = defender.hp;
+    result.newTargetHp = target.hp;
     if (result.effect.applied)
     {
+        const bool effectOnActor = definition->effectTarget == SkillEffectTarget::Self;
         BattleEvent effectApplied;
         effectApplied.actor = actor;
         effectApplied.target = result.effect.target;
+        effectApplied.actorPlayerIndex = actorPlayerIndex;
+        effectApplied.targetPlayerIndex = effectOnActor ? actorPlayerIndex : targetPlayerIndex;
+        effectApplied.profileIndex = attacker.profileIndex;
+        effectApplied.targetProfileIndex = effectOnActor ? attacker.profileIndex : target.profileIndex;
+        effectApplied.actorName = attacker.name;
+        effectApplied.targetName = effectOnActor ? attacker.name : target.name;
         effectApplied.skillId = definition->id;
         effectApplied.effect = result.effect;
 
         if (result.effect.type == SkillEffectType::Heal)
         {
             effectApplied.type = BattleEventType::HealingApplied;
-            effectApplied.oldValue = result.oldActorHp;
-            effectApplied.newValue = result.newActorHp;
+            effectApplied.oldValue = effectOnActor ? result.oldActorHp : result.oldTargetHp;
+            effectApplied.newValue = effectOnActor ? result.newActorHp : result.newTargetHp;
             effectApplied.amount = result.effect.healingAmount;
         }
         else if (result.effect.type == SkillEffectType::Mark)
@@ -235,6 +281,9 @@ SkillUseResult SkillSystem::UseSkill(
         BattleEvent xpGained;
         xpGained.type = BattleEventType::SkillXpGained;
         xpGained.actor = actor;
+        xpGained.actorPlayerIndex = actorPlayerIndex;
+        xpGained.profileIndex = attacker.profileIndex;
+        xpGained.actorName = attacker.name;
         xpGained.skillId = definition->id;
         xpGained.oldValue = result.xp.oldXp;
         xpGained.newValue = result.xp.newXp;
@@ -248,6 +297,9 @@ SkillUseResult SkillSystem::UseSkill(
         BattleEvent leveledUp;
         leveledUp.type = BattleEventType::SkillLeveledUp;
         leveledUp.actor = actor;
+        leveledUp.actorPlayerIndex = actorPlayerIndex;
+        leveledUp.profileIndex = attacker.profileIndex;
+        leveledUp.actorName = attacker.name;
         leveledUp.skillId = definition->id;
         leveledUp.oldLevel = result.xp.oldLevel;
         leveledUp.newLevel = result.xp.newLevel;
@@ -270,26 +322,35 @@ bool SkillSystem::Chance(double probability, std::mt19937& randomEngine) const
 
 SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     BattleActor actor,
-    BattleActor target,
+    BattleActor targetActor,
     const Skill& definition,
     const SkillProgress& progress,
     Competitor& attacker,
     BattleStatus& attackerStatus,
-    BattleStatus& defenderStatus) const
+    Competitor& targetCompetitor,
+    BattleStatus& targetBattleStatus,
+    int actorPlayerIndex,
+    int targetPlayerIndex) const
 {
+    (void)actorPlayerIndex;
+    (void)targetPlayerIndex;
     SecondaryEffectResult result;
-    if (definition.effectType == SkillEffectType::None)
+    if (definition.effectType == SkillEffectType::None
+        || definition.effectTarget == SkillEffectTarget::PlayerLineup)
     {
         return result;
     }
 
     const int effectValue = rules_.GetEffectValue(definition, progress, attacker);
-    BattleStatus& targetStatus = definition.effectTarget == SkillEffectTarget::Self
+    BattleStatus& effectStatus = definition.effectTarget == SkillEffectTarget::Self
         ? attackerStatus
-        : defenderStatus;
+        : targetBattleStatus;
+    Competitor& effectTargetCompetitor = definition.effectTarget == SkillEffectTarget::Self
+        ? attacker
+        : targetCompetitor;
     const BattleActor effectTarget = definition.effectTarget == SkillEffectTarget::Self
         ? actor
-        : target;
+        : targetActor;
 
     result.applied = true;
     result.type = definition.effectType;
@@ -299,59 +360,59 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
 
     if (definition.effectType == SkillEffectType::Heal)
     {
-        const int oldHp = attacker.hp;
+        const int oldHp = effectTargetCompetitor.hp;
         int healing = effectValue;
-        if (attackerStatus.healingReceivedModifierTurns > 0)
+        if (effectStatus.healingReceivedModifierTurns > 0)
         {
-            healing = healing * (100 + attackerStatus.healingReceivedModifierPercent) / 100;
+            healing = healing * (100 + effectStatus.healingReceivedModifierPercent) / 100;
         }
-        attacker.hp = std::min(attacker.maxHp, attacker.hp + healing);
-        result.healingAmount = attacker.hp - oldHp;
+        effectTargetCompetitor.hp = std::min(effectTargetCompetitor.maxHp, effectTargetCompetitor.hp + healing);
+        result.healingAmount = effectTargetCompetitor.hp - oldHp;
         return result;
     }
 
     if (definition.effectType == SkillEffectType::AttackModifier)
     {
-        targetStatus.attackModifierPercent = effectValue;
-        targetStatus.attackModifierTurns = definition.durationTurns;
+        effectStatus.attackModifierPercent = effectValue;
+        effectStatus.attackModifierTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::DefenseModifier)
     {
-        targetStatus.defenseModifierPercent = effectValue;
-        targetStatus.defenseModifierTurns = definition.durationTurns;
+        effectStatus.defenseModifierPercent = effectValue;
+        effectStatus.defenseModifierTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::AttackPenetrationModifier)
     {
-        targetStatus.attackPenetrationPercent = effectValue;
-        targetStatus.attackPenetrationTurns = definition.durationTurns;
+        effectStatus.attackPenetrationPercent = effectValue;
+        effectStatus.attackPenetrationTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::CooldownModifier)
     {
-        targetStatus.cooldownModifierPercent = effectValue;
-        targetStatus.cooldownModifierTurns = definition.durationTurns;
+        effectStatus.cooldownModifierPercent = effectValue;
+        effectStatus.cooldownModifierTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::HealingReceivedModifier)
     {
-        targetStatus.healingReceivedModifierPercent = effectValue;
-        targetStatus.healingReceivedModifierTurns = definition.durationTurns;
+        effectStatus.healingReceivedModifierPercent = effectValue;
+        effectStatus.healingReceivedModifierTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::Stunned)
     {
-        targetStatus.stunnedTurns = definition.durationTurns;
+        effectStatus.stunnedTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::Silenced)
     {
-        targetStatus.silencedTurns = definition.durationTurns;
+        effectStatus.silencedTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::Rooted)
     {
-        targetStatus.rootedTurns = definition.durationTurns;
+        effectStatus.rootedTurns = definition.durationTurns;
     }
     else if (definition.effectType == SkillEffectType::Mark)
     {
-        targetStatus.markTurns = definition.durationTurns;
-        targetStatus.markBonusDamage = definition.markBonusDamage;
-        targetStatus.markSource = actor;
+        effectStatus.markTurns = definition.durationTurns;
+        effectStatus.markBonusDamage = definition.markBonusDamage;
+        effectStatus.markSource = actor;
         result.markBonusDamage = definition.markBonusDamage;
     }
 
