@@ -3,6 +3,7 @@
 #include "SimulationData.h"
 
 #include <algorithm>
+#include <vector>
 
 SkillSystem::SkillSystem(
     const SimulationData& data,
@@ -37,6 +38,27 @@ SkillView SkillSystem::CreateSkillView(
     view.effectValue = rules_.GetEffectValue(definition, progress, user);
     view.durationTurns = definition.durationTurns;
     view.markBonusDamage = definition.markBonusDamage;
+    view.effects = definition.effects;
+    if (view.effects.empty() && definition.effectType != SkillEffectType::None)
+    {
+        view.effects.push_back({
+            definition.effectType,
+            definition.effectTarget,
+            definition.effectValue,
+            definition.durationTurns,
+            definition.markBonusDamage,
+        });
+    }
+    for (SkillEffectDefinition& effect : view.effects)
+    {
+        Skill effectDefinition = definition;
+        effectDefinition.effectType = effect.type;
+        effectDefinition.effectTarget = effect.target;
+        effectDefinition.effectValue = effect.value;
+        effectDefinition.durationTurns = effect.durationTurns;
+        effectDefinition.markBonusDamage = effect.markBonusDamage;
+        effect.value = rules_.GetEffectValue(effectDefinition, progress, user);
+    }
     view.canUse = true;
     if (userStatus.stunnedTurns > 0)
     {
@@ -226,25 +248,51 @@ SkillUseResult SkillSystem::UseSkill(
         }
     }
 
-    result.effect = ApplySecondaryEffect(
-        actor,
-        result.target,
-        *definition,
-        progress,
-        attacker,
-        attackerStatus,
-        target,
-        targetStatus,
-        actorPlayerIndex,
-        targetPlayerIndex);
-    result.newActorHp = attacker.hp;
-    result.newTargetHp = target.hp;
-    if (result.effect.applied)
+    std::vector<SkillEffectDefinition> effects = definition->effects;
+    if (effects.empty() && definition->effectType != SkillEffectType::None)
     {
-        const bool effectOnActor = definition->effectTarget == SkillEffectTarget::Self;
+        effects.push_back({
+            definition->effectType,
+            definition->effectTarget,
+            definition->effectValue,
+            definition->durationTurns,
+            definition->markBonusDamage,
+        });
+    }
+
+    for (const SkillEffectDefinition& effect : effects)
+    {
+        const int oldActorHp = attacker.hp;
+        const int oldTargetHp = target.hp;
+        SecondaryEffectResult appliedEffect = ApplySecondaryEffect(
+            actor,
+            result.target,
+            *definition,
+            effect,
+            progress,
+            attacker,
+            attackerStatus,
+            target,
+            targetStatus,
+            actorPlayerIndex,
+            targetPlayerIndex);
+        result.newActorHp = attacker.hp;
+        result.newTargetHp = target.hp;
+        if (!appliedEffect.applied)
+        {
+            continue;
+        }
+
+        if (!result.effect.applied)
+        {
+            result.effect = appliedEffect;
+        }
+        result.effects.push_back(appliedEffect);
+
+        const bool effectOnActor = effect.target == SkillEffectTarget::Self;
         BattleEvent effectApplied;
         effectApplied.actor = actor;
-        effectApplied.target = result.effect.target;
+        effectApplied.target = appliedEffect.target;
         effectApplied.actorPlayerIndex = actorPlayerIndex;
         effectApplied.targetPlayerIndex = effectOnActor ? actorPlayerIndex : targetPlayerIndex;
         effectApplied.profileIndex = attacker.profileIndex;
@@ -252,24 +300,24 @@ SkillUseResult SkillSystem::UseSkill(
         effectApplied.actorName = attacker.name;
         effectApplied.targetName = effectOnActor ? attacker.name : target.name;
         effectApplied.skillId = definition->id;
-        effectApplied.effect = result.effect;
+        effectApplied.effect = appliedEffect;
 
-        if (result.effect.type == SkillEffectType::Heal)
+        if (appliedEffect.type == SkillEffectType::Heal)
         {
             effectApplied.type = BattleEventType::HealingApplied;
-            effectApplied.oldValue = effectOnActor ? result.oldActorHp : result.oldTargetHp;
+            effectApplied.oldValue = effectOnActor ? oldActorHp : oldTargetHp;
             effectApplied.newValue = effectOnActor ? result.newActorHp : result.newTargetHp;
-            effectApplied.amount = result.effect.healingAmount;
+            effectApplied.amount = appliedEffect.healingAmount;
         }
-        else if (result.effect.type == SkillEffectType::Mark)
+        else if (appliedEffect.type == SkillEffectType::Mark)
         {
             effectApplied.type = BattleEventType::MarkApplied;
-            effectApplied.amount = result.effect.markBonusDamage;
+            effectApplied.amount = appliedEffect.markBonusDamage;
         }
         else
         {
             effectApplied.type = BattleEventType::StatusApplied;
-            effectApplied.amount = result.effect.value;
+            effectApplied.amount = appliedEffect.value;
         }
 
         result.events.push_back(effectApplied);
@@ -324,6 +372,7 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     BattleActor actor,
     BattleActor targetActor,
     const Skill& definition,
+    const SkillEffectDefinition& effect,
     const SkillProgress& progress,
     Competitor& attacker,
     BattleStatus& attackerStatus,
@@ -335,30 +384,37 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     (void)actorPlayerIndex;
     (void)targetPlayerIndex;
     SecondaryEffectResult result;
-    if (definition.effectType == SkillEffectType::None
-        || definition.effectTarget == SkillEffectTarget::PlayerLineup)
+    if (effect.type == SkillEffectType::None
+        || effect.target == SkillEffectTarget::PlayerLineup)
     {
         return result;
     }
 
-    const int effectValue = rules_.GetEffectValue(definition, progress, attacker);
-    BattleStatus& effectStatus = definition.effectTarget == SkillEffectTarget::Self
+    Skill effectDefinition = definition;
+    effectDefinition.effectType = effect.type;
+    effectDefinition.effectTarget = effect.target;
+    effectDefinition.effectValue = effect.value;
+    effectDefinition.durationTurns = effect.durationTurns;
+    effectDefinition.markBonusDamage = effect.markBonusDamage;
+
+    const int effectValue = rules_.GetEffectValue(effectDefinition, progress, attacker);
+    BattleStatus& effectStatus = effect.target == SkillEffectTarget::Self
         ? attackerStatus
         : targetBattleStatus;
-    Competitor& effectTargetCompetitor = definition.effectTarget == SkillEffectTarget::Self
+    Competitor& effectTargetCompetitor = effect.target == SkillEffectTarget::Self
         ? attacker
         : targetCompetitor;
-    const BattleActor effectTarget = definition.effectTarget == SkillEffectTarget::Self
+    const BattleActor effectTarget = effect.target == SkillEffectTarget::Self
         ? actor
         : targetActor;
 
     result.applied = true;
-    result.type = definition.effectType;
+    result.type = effect.type;
     result.target = effectTarget;
     result.value = effectValue;
-    result.duration = definition.durationTurns;
+    result.duration = effect.durationTurns;
 
-    if (definition.effectType == SkillEffectType::Heal)
+    if (effect.type == SkillEffectType::Heal)
     {
         const int oldHp = effectTargetCompetitor.hp;
         int healing = effectValue;
@@ -371,49 +427,49 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
         return result;
     }
 
-    if (definition.effectType == SkillEffectType::AttackModifier)
+    if (effect.type == SkillEffectType::AttackModifier)
     {
         effectStatus.attackModifierPercent = effectValue;
-        effectStatus.attackModifierTurns = definition.durationTurns;
+        effectStatus.attackModifierTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::DefenseModifier)
+    else if (effect.type == SkillEffectType::DefenseModifier)
     {
         effectStatus.defenseModifierPercent = effectValue;
-        effectStatus.defenseModifierTurns = definition.durationTurns;
+        effectStatus.defenseModifierTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::AttackPenetrationModifier)
+    else if (effect.type == SkillEffectType::AttackPenetrationModifier)
     {
         effectStatus.attackPenetrationPercent = effectValue;
-        effectStatus.attackPenetrationTurns = definition.durationTurns;
+        effectStatus.attackPenetrationTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::CooldownModifier)
+    else if (effect.type == SkillEffectType::CooldownModifier)
     {
         effectStatus.cooldownModifierPercent = effectValue;
-        effectStatus.cooldownModifierTurns = definition.durationTurns;
+        effectStatus.cooldownModifierTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::HealingReceivedModifier)
+    else if (effect.type == SkillEffectType::HealingReceivedModifier)
     {
         effectStatus.healingReceivedModifierPercent = effectValue;
-        effectStatus.healingReceivedModifierTurns = definition.durationTurns;
+        effectStatus.healingReceivedModifierTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::Stunned)
+    else if (effect.type == SkillEffectType::Stunned)
     {
-        effectStatus.stunnedTurns = definition.durationTurns;
+        effectStatus.stunnedTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::Silenced)
+    else if (effect.type == SkillEffectType::Silenced)
     {
-        effectStatus.silencedTurns = definition.durationTurns;
+        effectStatus.silencedTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::Rooted)
+    else if (effect.type == SkillEffectType::Rooted)
     {
-        effectStatus.rootedTurns = definition.durationTurns;
+        effectStatus.rootedTurns = effect.durationTurns;
     }
-    else if (definition.effectType == SkillEffectType::Mark)
+    else if (effect.type == SkillEffectType::Mark)
     {
-        effectStatus.markTurns = definition.durationTurns;
-        effectStatus.markBonusDamage = definition.markBonusDamage;
+        effectStatus.markTurns = effect.durationTurns;
+        effectStatus.markBonusDamage = effect.markBonusDamage;
         effectStatus.markSource = actor;
-        result.markBonusDamage = definition.markBonusDamage;
+        result.markBonusDamage = effect.markBonusDamage;
     }
 
     return result;

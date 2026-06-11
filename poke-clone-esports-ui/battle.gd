@@ -29,32 +29,26 @@ var bridge: BattleBridge
 @onready var log_label: RichTextLabel = $BottomPanel/BottomSplit/TextBox/Log
 @onready var main_menu_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid
 @onready var skill_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/SkillGrid
-@onready var switch_label: Label = $BottomPanel/BottomSplit/ActionBox/SwitchLabel
-@onready var switch_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/SwitchGrid
-@onready var action_box: VBoxContainer = $BottomPanel/BottomSplit/ActionBox
+@onready var target_label: Label = $BottomPanel/BottomSplit/ActionBox/TargetLabel
+@onready var target_grid: GridContainer = $BottomPanel/BottomSplit/ActionBox/TargetGrid
 @onready var fight_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/FightButton
 @onready var drill_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/DrillButton
-@onready var player_list_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/PlayerListButton
 @onready var quit_button: Button = $BottomPanel/BottomSplit/ActionBox/MainMenuGrid/QuitButton
 @onready var back_button: Button = $BottomPanel/BottomSplit/ActionBox/BackButton
 @onready var return_button: Button = $BottomPanel/BottomSplit/ActionBox/ReturnButton
+@onready var lineup_grid: GridContainer = $LineupPanel/Margin/LineupGrid
 var main_menu_buttons: Array[Button] = []
 var skill_buttons: Array[Button] = []
-var switch_buttons: Array[Button] = []
 var target_buttons: Array[Button] = []
 var lineup_buttons: Array[Button] = []
 var log_entries: Array[String] = []
 var deferred_skill_xp: Dictionary = {}
 var deferred_skill_levels: Dictionary = {}
-var battle_event_history: Array = []
+var battle_event_history: Array[Dictionary] = []
 var input_locked := false
 var finished_result: Dictionary = {}
 var rewards_applied := false
 var current_state: Dictionary = {}
-var target_label: Label
-var target_grid: GridContainer
-var lineup_panel: PanelContainer
-var lineup_grid: GridContainer
 var pending_skill: Dictionary = {}
 
 
@@ -71,9 +65,6 @@ func _ready() -> void:
 	drill_minigame.drill_finished.connect(_on_drill_minigame_finished)
 	drill_minigame.drill_cancelled.connect(_on_drill_minigame_cancelled)
 	drill_button.visible = false
-	player_list_button.visible = false
-	_create_lineup_strip()
-	_create_target_controls()
 	bridge = BattleBridge.new()
 	add_child(bridge)
 
@@ -90,7 +81,6 @@ func _ready() -> void:
 	var state: Dictionary = result.get("state", bridge.get_battle_state())
 	_update_state(state)
 	_refresh_skills()
-	_refresh_team_switches(state)
 	_show_main_menu()
 	_record_result_events(result)
 	await _play_events(result.get("events", []))
@@ -101,8 +91,6 @@ func _ready() -> void:
 func _show_main_menu() -> void:
 	main_menu_grid.visible = true
 	skill_grid.visible = false
-	switch_label.visible = false
-	switch_grid.visible = false
 	target_label.visible = false
 	target_grid.visible = false
 	back_button.visible = false
@@ -115,67 +103,9 @@ func _show_fight_menu() -> void:
 	_refresh_skills()
 	main_menu_grid.visible = false
 	skill_grid.visible = true
-	switch_label.visible = false
-	switch_grid.visible = false
 	target_label.visible = false
 	target_grid.visible = false
 	back_button.visible = true
-
-
-func _show_player_list_menu() -> void:
-	_refresh_team_switches()
-	main_menu_grid.visible = false
-	skill_grid.visible = false
-	switch_label.visible = true
-	switch_grid.visible = true
-	target_label.visible = false
-	target_grid.visible = false
-	back_button.visible = true
-
-
-func _create_lineup_strip() -> void:
-	lineup_panel = PanelContainer.new()
-	lineup_panel.name = "LineupPanel"
-	lineup_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	lineup_panel.anchor_left = 0.42
-	lineup_panel.anchor_top = 0.55
-	lineup_panel.anchor_right = 0.94
-	lineup_panel.anchor_bottom = 0.71
-	lineup_panel.offset_left = 0.0
-	lineup_panel.offset_top = 0.0
-	lineup_panel.offset_right = 0.0
-	lineup_panel.offset_bottom = 0.0
-	lineup_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	lineup_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	add_child(lineup_panel)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	lineup_panel.add_child(margin)
-
-	lineup_grid = GridContainer.new()
-	lineup_grid.columns = 3
-	lineup_grid.add_theme_constant_override("h_separation", 10)
-	lineup_grid.add_theme_constant_override("v_separation", 8)
-	margin.add_child(lineup_grid)
-
-
-func _create_target_controls() -> void:
-	target_label = Label.new()
-	target_label.text = "Choose target"
-	target_label.add_theme_font_size_override("font_size", 18)
-	target_label.visible = false
-	action_box.add_child(target_label)
-
-	target_grid = GridContainer.new()
-	target_grid.columns = 2
-	target_grid.add_theme_constant_override("h_separation", 10)
-	target_grid.add_theme_constant_override("v_separation", 10)
-	target_grid.visible = false
-	action_box.add_child(target_grid)
 
 
 func _show_target_menu(skill: Dictionary) -> void:
@@ -183,8 +113,6 @@ func _show_target_menu(skill: Dictionary) -> void:
 	_refresh_target_buttons()
 	main_menu_grid.visible = false
 	skill_grid.visible = false
-	switch_label.visible = false
-	switch_grid.visible = false
 	target_label.visible = true
 	target_grid.visible = true
 	back_button.visible = true
@@ -194,12 +122,6 @@ func _on_fight_menu_pressed() -> void:
 	if input_locked:
 		return
 	_show_fight_menu()
-
-
-func _on_player_list_menu_pressed() -> void:
-	if input_locked:
-		return
-	_show_player_list_menu()
 
 
 func _on_drill_pressed() -> void:
@@ -235,7 +157,6 @@ func _on_drill_minigame_finished(quality: String) -> void:
 		_show_post_battle_panel(result)
 	else:
 		_refresh_skills()
-		_refresh_team_switches(state)
 		_refresh_drill_action()
 		_set_turn_prompt()
 		input_locked = false
@@ -289,7 +210,6 @@ func _maybe_auto_pass_stunned_turn() -> void:
 		_show_post_battle_panel(result)
 	else:
 		_refresh_skills()
-		_refresh_team_switches(state)
 		_refresh_drill_action()
 		_set_turn_prompt()
 		input_locked = false
@@ -345,44 +265,6 @@ func _format_skill_button(skill: Dictionary) -> String:
 		cooldown_text,
 		description,
 	]
-
-
-func _refresh_team_switches(state: Dictionary = {}) -> void:
-	if state.is_empty():
-		state = bridge.get_battle_state()
-
-	for child in switch_grid.get_children():
-		child.queue_free()
-	switch_buttons.clear()
-
-	var active_index := int(state.get("active_player_index", 0))
-	var player_team: Array = state.get("player_team", [])
-	for index in range(player_team.size()):
-		var player: Dictionary = player_team[index]
-		var hp := int(player.get("hp", 0))
-		var max_hp := int(player.get("max_hp", 1))
-		var mana := int(player.get("mana", 0))
-		var max_mana := int(player.get("max_mana", 1))
-		var identity_name := String(player.get("trait_name", ""))
-		var identity_suffix := ""
-		if not identity_name.is_empty():
-			identity_suffix = " | %s" % identity_name
-		var button := Button.new()
-		button.text = "%s%s\nHP %s/%s | Mana %s/%s" % [
-			player.get("name", "Player"),
-			identity_suffix,
-			hp,
-			max_hp,
-			mana,
-			max_mana,
-		]
-		button.custom_minimum_size = Vector2(270, 72)
-		var switch_disabled := index == active_index or hp <= 0
-		button.set_meta("switch_disabled", switch_disabled)
-		button.disabled = input_locked or switch_disabled
-		button.pressed.connect(_on_switch_pressed.bind(index))
-		switch_grid.add_child(button)
-		switch_buttons.push_back(button)
 
 
 func _refresh_lineup_strip(state: Dictionary = {}) -> void:
@@ -521,40 +403,6 @@ func _use_skill(skill_id: String, target_index: int) -> void:
 	_record_result_events(result)
 	await _play_events(result.get("events", []))
 	_update_state(result.get("state", bridge.get_battle_state()))
-
-	if result.get("battle_finished", false):
-		finished_result = result
-		_set_message("Battle finished. Winner: %s" % result.get("winner", "none"))
-		_show_post_battle_panel(result)
-	else:
-		_refresh_team_switches(result.get("state", bridge.get_battle_state()))
-		_set_turn_prompt()
-		input_locked = false
-		_set_buttons_disabled(false)
-		_show_main_menu()
-		await _maybe_auto_pass_stunned_turn()
-
-
-func _on_switch_pressed(player_index: int) -> void:
-	if input_locked:
-		return
-
-	input_locked = true
-	_set_buttons_disabled(true)
-	var result := bridge.switch_player(player_index)
-	if not result.get("accepted", false):
-		_set_message(result.get("error", "That switch failed."))
-		input_locked = false
-		_set_buttons_disabled(false)
-		return
-
-	_record_result_events(result)
-	var state: Dictionary = result.get("state", bridge.get_battle_state())
-	_update_state(state)
-	_refresh_team_switches(state)
-	await _play_events(result.get("events", []))
-	_update_state(state)
-	_refresh_skills()
 
 	if result.get("battle_finished", false):
 		finished_result = result
@@ -870,8 +718,6 @@ func _set_buttons_disabled(disabled: bool) -> void:
 		button.disabled = disabled
 	for button in skill_buttons:
 		button.disabled = disabled
-	for button in switch_buttons:
-		button.disabled = disabled or bool(button.get_meta("switch_disabled", false))
 	for button in target_buttons:
 		button.disabled = disabled
 	back_button.disabled = disabled
@@ -882,8 +728,6 @@ func _show_return_button() -> void:
 	_set_buttons_disabled(true)
 	main_menu_grid.visible = false
 	skill_grid.visible = false
-	switch_label.visible = false
-	switch_grid.visible = false
 	target_label.visible = false
 	target_grid.visible = false
 	back_button.visible = false

@@ -331,6 +331,51 @@ namespace
         test.ExpectEqual(player.passiveBonuses.basePowerBonus, 1, "level 5 grants one base power bonus");
     }
 
+    void TestSimulationDataReferences(TestContext& test)
+    {
+        SimulationData data;
+
+        for (const SpecData& spec : data.GetSpecs())
+        {
+            test.ExpectEqual(
+                spec.skillIds.size(),
+                static_cast<std::size_t>(Balance::StarterSkillsPerSpec),
+                ToString(spec.spec) + " has the expected starter skill count");
+            test.Expect(
+                data.FindTrait(spec.defaultTraitId) != nullptr,
+                ToString(spec.spec) + " default trait exists");
+
+            for (const std::string& skillId : spec.skillIds)
+            {
+                test.Expect(
+                    data.FindSkill(skillId) != nullptr,
+                ToString(spec.spec) + " starter skill exists: " + skillId);
+            }
+        }
+
+        for (const SpecData& spec : data.GetSpecs())
+        {
+            for (const std::string& skillId : spec.skillIds)
+            {
+                const Skill* skill = data.FindSkill(skillId);
+                if (skill == nullptr || skill->effectType == SkillEffectType::None)
+                {
+                    continue;
+                }
+
+                test.Expect(!skill->effects.empty(), skillId + " exposes composable effects");
+                if (!skill->effects.empty())
+                {
+                    test.Expect(skill->effects[0].type == skill->effectType, skillId + " primary effect type is mirrored");
+                    test.Expect(skill->effects[0].target == skill->effectTarget, skillId + " primary effect target is mirrored");
+                    test.ExpectEqual(skill->effects[0].value, skill->effectValue, skillId + " primary effect value is mirrored");
+                    test.ExpectEqual(skill->effects[0].durationTurns, skill->durationTurns, skillId + " primary effect duration is mirrored");
+                    test.ExpectEqual(skill->effects[0].markBonusDamage, skill->markBonusDamage, skillId + " primary mark bonus is mirrored");
+                }
+            }
+        }
+    }
+
     void TestTraitBattleRules(TestContext& test)
     {
         SimulationData data;
@@ -815,6 +860,7 @@ int main()
 {
     const std::vector<TestCase> tests = {
         { "PlayerProfileSystem", TestPlayerProfileSystem },
+        { "SimulationData references", TestSimulationDataReferences },
         { "TraitBattleRules", TestTraitBattleRules },
         { "TrainerProfile", TestTrainerProfile },
         { "RatingSystem", TestRatingSystem },

@@ -400,6 +400,29 @@ theme_override_colors/font_color = Color(0.93, 0.82, 0.45, 1)
 theme_override_font_sizes/font_size = 15
 text = "Status: none"
 
+[node name="LineupPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.42
+anchor_top = 0.55
+anchor_right = 0.94
+anchor_bottom = 0.71
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="LineupPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="LineupGrid" type="GridContainer" parent="LineupPanel/Margin"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 3
+
 [node name="BottomPanel" type="PanelContainer" parent="." unique_id=2061451147]
 layout_mode = 1
 anchors_preset = -1
@@ -456,11 +479,6 @@ custom_minimum_size = Vector2(270, 76)
 layout_mode = 2
 text = "Drill"
 
-[node name="PlayerListButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox/MainMenuGrid" unique_id=320679015]
-custom_minimum_size = Vector2(270, 76)
-layout_mode = 2
-text = "Player list"
-
 [node name="QuitButton" type="Button" parent="BottomPanel/BottomSplit/ActionBox/MainMenuGrid" unique_id=1978210413]
 custom_minimum_size = Vector2(270, 76)
 layout_mode = 2
@@ -472,12 +490,14 @@ theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10
 columns = 2
 
-[node name="SwitchLabel" type="Label" parent="BottomPanel/BottomSplit/ActionBox" unique_id=347229382]
+[node name="TargetLabel" type="Label" parent="BottomPanel/BottomSplit/ActionBox"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "Switch Player"
+text = "Choose target"
 
-[node name="SwitchGrid" type="GridContainer" parent="BottomPanel/BottomSplit/ActionBox" unique_id=1083516256]
+[node name="TargetGrid" type="GridContainer" parent="BottomPanel/BottomSplit/ActionBox"]
+visible = false
 layout_mode = 2
 theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10

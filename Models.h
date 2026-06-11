@@ -220,8 +220,18 @@ inline std::string ToString(CareerRank rank)
     return "Unknown";
 }
 
+struct SkillEffectDefinition
+{
+    SkillEffectType type = SkillEffectType::None;
+    SkillEffectTarget target = SkillEffectTarget::Self;
+    int value = 0;
+    int durationTurns = 0;
+    int markBonusDamage = 0;
+};
+
 // Skill stores rules shared by every competitor. SkillProgress below stores
-// personal growth.
+// personal growth. Legacy primary effect fields mirror effects[0] for current
+// bridge/UI compatibility.
 struct Skill
 {
     std::string id;
@@ -238,6 +248,7 @@ struct Skill
     int effectValue = 0;
     int durationTurns = 0;
     int markBonusDamage = 0;
+    std::vector<SkillEffectDefinition> effects;
 };
 
 struct SkillProgress
@@ -471,6 +482,7 @@ struct SkillView
     int effectValue = 0;
     int durationTurns = 0;
     int markBonusDamage = 0;
+    std::vector<SkillEffectDefinition> effects;
 };
 
 struct DrillView
@@ -558,6 +570,7 @@ struct SkillUseResult
     int newTargetHp = 0;
     DamageResult damage;
     SecondaryEffectResult effect;
+    std::vector<SecondaryEffectResult> effects;
     SkillXpResult xp;
     std::vector<BattleEvent> events;
 };

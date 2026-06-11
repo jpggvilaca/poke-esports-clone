@@ -41,6 +41,7 @@ private:
         BattleActor actor,
         BattleActor targetActor,
         const Skill& definition,
+        const SkillEffectDefinition& effect,
         const SkillProgress& progress,
         Competitor& attacker,
         BattleStatus& attackerStatus,

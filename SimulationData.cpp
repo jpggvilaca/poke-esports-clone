@@ -29,6 +29,10 @@ namespace
         skill.effectValue = effectValue;
         skill.durationTurns = durationTurns;
         skill.markBonusDamage = markBonusDamage;
+        if (effectType != SkillEffectType::None)
+        {
+            skill.effects.push_back({ effectType, effectTarget, effectValue, durationTurns, markBonusDamage });
+        }
         return skill;
     }
 

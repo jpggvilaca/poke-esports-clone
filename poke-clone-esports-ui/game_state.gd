@@ -88,7 +88,7 @@ var active_player_id := ""
 var lineup_indices: Array[int] = []
 var lineup_player_ids: Array[String] = []
 var next_player_id := 1
-var roster: Array = []
+var roster: Array[Dictionary] = []
 var trophies: Array[String] = []
 var defeated_npcs: Dictionary = {}
 var completed_scout_offers: Dictionary = {}
@@ -102,7 +102,8 @@ var last_battle_summary := {
 	"winner": "none",
 	"npc_id": "",
 }
-var profile_bridge: BattleBridge
+var profile_bridge: ProfileBridge
+var scout_bridge: ScoutBridge
 
 
 func _ready() -> void:
@@ -161,7 +162,7 @@ func build_battle_setup() -> Dictionary:
 			"seed": 20260606,
 		}
 
-	var player_team: Array = []
+	var player_team: Array[Dictionary] = []
 	var battle_lineup := _battle_lineup_indices()
 	var setup_active_index := 0
 	for index in range(battle_lineup.size()):
@@ -172,7 +173,7 @@ func build_battle_setup() -> Dictionary:
 	for roster_index in battle_lineup:
 		var index := int(roster_index)
 		var player: Dictionary = roster[index]
-		var skills: Array = []
+		var skills: Array[Dictionary] = []
 		for skill_id in player.get("active_skill_ids", []):
 			var progress: Dictionary = player.get("skill_progress", {}).get(skill_id, {})
 			skills.push_back({
@@ -209,8 +210,7 @@ func build_battle_setup() -> Dictionary:
 
 func complete_battle(result: Dictionary) -> Dictionary:
 	_ensure_started()
-	var bridge := _ensure_profile_bridge()
-	var completion := bridge.complete_trainer_battle(get_trainer_state(), pending_battle, result)
+	var completion := _ensure_profile_bridge().complete_trainer_battle(get_trainer_state(), pending_battle, result)
 	if not completion.get("accepted", false):
 		last_battle_summary = {
 			"text": "Battle rewards could not be applied.",
@@ -226,7 +226,7 @@ func complete_battle(result: Dictionary) -> Dictionary:
 	rating = int(trainer_state.get("rating", rating))
 	money = int(trainer_state.get("money", money))
 	active_player_index = int(trainer_state.get("active_player_index", active_player_index))
-	roster = trainer_state.get("roster", []).duplicate(true)
+	roster = _dictionary_array_from(trainer_state.get("roster", []))
 	_sanitize_lineup_indices()
 	active_player_id = String(roster[active_player_index].get("player_id", active_player_id))
 
@@ -309,12 +309,12 @@ func accept_scout_candidate(candidate_index: int) -> String:
 	if pending_scout_offer.is_empty():
 		return "No scout offer is pending."
 
-	var result = _ensure_profile_bridge().accept_scout_candidate(roster.duplicate(true), pending_scout_offer, candidate_index)
+	var result = _ensure_scout_bridge().accept_scout_candidate(roster.duplicate(true), pending_scout_offer, candidate_index)
 	last_scout_message = String(result.get("message", result.get("error", "Scout choice failed.")))
 	if not result.get("accepted", false):
 		return last_scout_message
 
-	roster = result.get("roster", []).duplicate(true)
+	roster = _dictionary_array_from(result.get("roster", []))
 	_sanitize_lineup_indices()
 
 	var offer_id := String(result.get("offer_id", pending_scout_offer.get("id", "")))
@@ -344,6 +344,14 @@ func format_skill_name(skill_id: String) -> String:
 	for index in range(parts.size()):
 		formatted.push_back(String(parts[index]).capitalize())
 	return _join_strings(formatted, " ")
+
+
+func _dictionary_array_from(values: Array) -> Array[Dictionary]:
+	var dictionaries: Array[Dictionary] = []
+	for value in values:
+		if value is Dictionary:
+			dictionaries.push_back((value as Dictionary).duplicate(true))
+	return dictionaries
 
 
 func get_skill_progress_summary(player: Dictionary, skill_id: String, progress: Dictionary) -> Dictionary:
@@ -383,7 +391,7 @@ func _refresh_pending_scout_offer() -> void:
 	if not pending_scout_offer.is_empty():
 		return
 
-	var offer = _ensure_profile_bridge().get_pending_scout_offer(
+	var offer = _ensure_scout_bridge().get_pending_scout_offer(
 		rating,
 		completed_scout_offers.keys(),
 		declined_scout_offers.keys())
@@ -620,12 +628,20 @@ func _battle_lineup_indices() -> Array[int]:
 	return battle_lineup
 
 
-func _ensure_profile_bridge() -> BattleBridge:
+func _ensure_profile_bridge() -> ProfileBridge:
 	if not is_instance_valid(profile_bridge):
-		profile_bridge = BattleBridge.new()
+		profile_bridge = ProfileBridge.new()
 		profile_bridge.name = "ProfileBridge"
 		add_child(profile_bridge)
 	return profile_bridge
+
+
+func _ensure_scout_bridge() -> ScoutBridge:
+	if not is_instance_valid(scout_bridge):
+		scout_bridge = ScoutBridge.new()
+		scout_bridge.name = "ScoutBridge"
+		add_child(scout_bridge)
+	return scout_bridge
 
 
 func _join_strings(values: Array[String], separator: String) -> String:

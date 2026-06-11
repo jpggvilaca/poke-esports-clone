@@ -1,6 +1,8 @@
 #include "register_types.h"
 
 #include "BattleBridge.h"
+#include "ProfileBridge.h"
+#include "ScoutBridge.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/godot.hpp>
@@ -13,6 +15,8 @@ void initialize_poke_esports_module(godot::ModuleInitializationLevel level)
     }
 
     GDREGISTER_CLASS(BattleBridge);
+    GDREGISTER_CLASS(ProfileBridge);
+    GDREGISTER_CLASS(ScoutBridge);
 }
 
 void uninitialize_poke_esports_module(godot::ModuleInitializationLevel level)
