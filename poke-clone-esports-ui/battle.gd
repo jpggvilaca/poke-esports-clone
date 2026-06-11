@@ -453,7 +453,9 @@ func _apply_event(event: Dictionary) -> void:
 			_push_log("Battle start!")
 			_set_message("%s wants to battle." % opponent_name.text)
 		"player_switched":
-			if String(event.get("reason", "")) == "turn":
+			if String(event.get("actor", "")) == "opponent":
+				_set_message("Opponent sends out %s." % event.get("player_name", "opponent"))
+			elif String(event.get("reason", "")) == "turn":
 				_set_message("Next up: %s." % event.get("player_name", "player"))
 			else:
 				_set_message("Switched to %s." % event.get("player_name", "player"))

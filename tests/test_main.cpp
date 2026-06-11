@@ -252,6 +252,22 @@ namespace
         return slot;
     }
 
+    BattleSetup::OpponentSlot MakeOpponentSlot(
+        const std::string& name,
+        Spec spec,
+        int hp,
+        int basePowerBonus = 0)
+    {
+        BattleSetup::OpponentSlot slot;
+        slot.name = name;
+        slot.spec = spec;
+        slot.maxHp = hp;
+        slot.currentHp = hp;
+        slot.maxMana = Balance::StartingMaxMana;
+        slot.basePowerBonus = basePowerBonus;
+        return slot;
+    }
+
     void TestPlayerProfileSystem(TestContext& test)
     {
         SimulationData data;
@@ -652,6 +668,61 @@ namespace
         test.Expect(ContainsInt(finalAction.reward.participantPlayerIndices, 202), "switched-in player receives shared XP");
     }
 
+    void TestBattleSessionOpponentTeam3v3(TestContext& test)
+    {
+        SimulationData data;
+        BattleSession session(data, 2026);
+
+        BattleSetup setup;
+        setup.gameType = GameType::LeagueOfLegends;
+        for (int index = 0; index < 3; ++index)
+        {
+            BattleSetup::PlayerSlot slot = MakeBattleSlot(300 + index, "Player " + std::to_string(index + 1), Spec::Top, "adc-trap");
+            slot.currentMana = 100;
+            slot.skills[0].level = 80;
+            setup.playerTeam.push_back(slot);
+        }
+        setup.activePlayerIndex = 0;
+        setup.opponentTeam.push_back(MakeOpponentSlot("Rival Top", Spec::Top, 80));
+        setup.opponentTeam.push_back(MakeOpponentSlot("Rival Jungle", Spec::Jungle, 80));
+        setup.opponentTeam.push_back(MakeOpponentSlot("Rival Support", Spec::Support, 80));
+
+        BattleActionResult start = session.StartBattle(setup);
+        test.Expect(start.accepted, "3v3 battle starts");
+        BattleState startState = session.GetState();
+        test.ExpectEqual(startState.playerTeam.size(), static_cast<std::size_t>(3), "3v3 state exposes three player slots");
+        test.ExpectEqual(startState.opponentTeam.size(), static_cast<std::size_t>(3), "3v3 state exposes three opponent slots");
+        test.ExpectEqual(startState.activeOpponentIndex, 0, "first rival member starts active");
+
+        BattleActionResult firstKo = session.UsePlayerSkill("adc-trap");
+        test.Expect(firstKo.accepted, "player can attack the first rival member");
+        test.Expect(!firstKo.battleFinished, "defeating one rival member does not finish a 3v3 battle");
+        BattleState afterFirstKo = session.GetState();
+        test.ExpectEqual(afterFirstKo.activeOpponentIndex, 1, "battle advances to the second rival member");
+        test.ExpectEqual(afterFirstKo.opponent.name, std::string("Rival Jungle"), "active opponent snapshot follows the second rival member");
+
+        BattleActionResult finalAction = firstKo;
+        for (int attempt = 0; attempt < 8 && !session.GetState().finished; ++attempt)
+        {
+            finalAction = session.UsePlayerSkill("adc-trap");
+            test.Expect(finalAction.accepted, "next player can keep fighting the rival lineup");
+            if (!finalAction.accepted)
+            {
+                break;
+            }
+        }
+
+        BattleState finalState = session.GetState();
+        test.Expect(finalState.finished, "3v3 battle finishes after all rival members are down");
+        test.ExpectEqual(finalState.winner, BattleWinner::Player, "player team wins the 3v3 test battle");
+        test.ExpectEqual(finalState.opponentTeam.size(), static_cast<std::size_t>(3), "final state keeps all rival members for UI display");
+        for (const CompetitorView& opponent : finalState.opponentTeam)
+        {
+            test.ExpectEqual(opponent.hp, 0, opponent.name + " is down");
+        }
+        test.Expect(finalAction.reward.awarded, "3v3 win grants the battle reward");
+    }
+
     void TestManaCooldownAndControlMechanics(TestContext& test)
     {
         SimulationData data;
@@ -879,6 +950,7 @@ int main()
         { "RatingSystem", TestRatingSystem },
         { "ScoutSystem", TestScoutSystem },
         { "BattleSession switching and XP sharing", TestBattleSessionSwitchingAndXpShare },
+        { "BattleSession opponent team 3v3", TestBattleSessionOpponentTeam3v3 },
         { "Mana, cooldown, and control mechanics", TestManaCooldownAndControlMechanics },
         { "Marks, modifiers, and opponent AI", TestMarksBuffsDebuffsAndOpponentAI },
         { "BattleSession seeded replay", TestBattleSessionSeededReplay },

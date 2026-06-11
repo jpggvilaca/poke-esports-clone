@@ -47,6 +47,29 @@ const NPC_BATTLES := {
 		"opponent_hp": 105,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 1,
+		"opponent_team": [
+			{
+				"name": "Rival Top",
+				"spec": "Top",
+				"hp": 105,
+				"mana": 100,
+				"base_power_bonus": 1,
+			},
+			{
+				"name": "Rival Jungle",
+				"spec": "Jungle",
+				"hp": 110,
+				"mana": 100,
+				"base_power_bonus": 1,
+			},
+			{
+				"name": "Rival Support",
+				"spec": "Support",
+				"hp": 115,
+				"mana": 100,
+				"base_power_bonus": 1,
+			},
+		],
 	},
 	"Coach": {
 		"id": "Coach",
@@ -194,7 +217,7 @@ func build_battle_setup() -> Dictionary:
 			"skills": skills,
 		})
 
-	return {
+	var setup: Dictionary = {
 		"game_type": "League of Legends",
 		"active_player_index": setup_active_index,
 		"player_team": player_team,
@@ -206,6 +229,9 @@ func build_battle_setup() -> Dictionary:
 		"opponent_base_power_bonus": int(battle.get("opponent_base_power_bonus", 0)),
 		"seed": int(battle.get("seed", 20260606)),
 	}
+	if battle.has("opponent_team"):
+		setup["opponent_team"] = battle.get("opponent_team", [])
+	return setup
 
 
 func complete_battle(result: Dictionary) -> Dictionary:

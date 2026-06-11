@@ -411,9 +411,26 @@ struct BattleSetup
         int currentFocus = -1;
     };
 
+    struct OpponentSlot
+    {
+        int profileIndex = -1;
+        std::string name = "Opponent";
+        Spec spec = Spec::Jungle;
+        std::string traitId;
+        std::vector<SkillProgress> skills;
+        int maxHp = -1;
+        int currentHp = -1;
+        int maxMana = -1;
+        int currentMana = -1;
+        int currentFocus = -1;
+        int basePowerBonus = 0;
+    };
+
     GameType gameType = GameType::LeagueOfLegends;
     std::vector<PlayerSlot> playerTeam;
+    std::vector<OpponentSlot> opponentTeam;
     int activePlayerIndex = 0;
+    int activeOpponentIndex = 0;
     std::string opponentName = "Opponent";
     Spec opponentSpec = Spec::Jungle;
     std::string opponentTraitId;
@@ -456,9 +473,11 @@ struct BattleState
     bool finished = false;
     BattleWinner winner = BattleWinner::None;
     int activePlayerIndex = 0;
+    int activeOpponentIndex = 0;
     CompetitorView player;
     std::vector<CompetitorView> playerTeam;
     CompetitorView opponent;
+    std::vector<CompetitorView> opponentTeam;
 };
 
 struct SkillView

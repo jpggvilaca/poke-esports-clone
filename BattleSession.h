@@ -39,18 +39,28 @@ private:
         Spec spec,
         const PassiveBonuses& bonuses) const;
     Competitor CreateCompetitor(const BattleSetup::PlayerSlot& slot, GameType gameType) const;
+    Competitor CreateCompetitor(const BattleSetup::OpponentSlot& slot, GameType gameType) const;
     BattleActionResult RejectAction(SimulationError errorCode, const std::string& error) const;
     void AppendEvents(BattleActionResult& result, const std::vector<BattleEvent>& events) const;
     Competitor& ActivePlayer();
     const Competitor& ActivePlayer() const;
     BattleStatus& ActivePlayerStatus();
     const BattleStatus& ActivePlayerStatus() const;
+    Competitor& ActiveOpponent();
+    const Competitor& ActiveOpponent() const;
+    BattleStatus& ActiveOpponentStatus();
+    const BattleStatus& ActiveOpponentStatus() const;
     void MarkParticipant(int playerIndex);
     bool IsKnownPlayerIndex(int playerIndex) const;
     bool IsLivingPlayerIndex(int playerIndex) const;
     bool HasLivingPlayer() const;
     int FirstLivingPlayerIndex() const;
     int NextLivingPlayerIndex(int fromPlayerIndex) const;
+    bool IsKnownOpponentIndex(int opponentIndex) const;
+    bool IsLivingOpponentIndex(int opponentIndex) const;
+    bool HasLivingOpponent() const;
+    int FirstLivingOpponentIndex() const;
+    int NextLivingOpponentIndex(int fromOpponentIndex) const;
     bool IsBasicAbility(const Skill& definition) const;
     AbilityRuntimeState& EnsureAbilityState(Competitor& competitor, const std::string& skillId) const;
     int GetCooldownRemaining(const Competitor& competitor, const std::string& skillId) const;
@@ -85,6 +95,7 @@ private:
     void RegisterPlayerAction(BattleActionResult& result);
     void ResolveAfterPlayerAction(BattleActionResult& result);
     void AdvanceToNextPlayer(BattleActionResult& result);
+    void AdvanceToNextOpponent(BattleActionResult& result);
     void ResolveTimedFarming(BattleActionResult& result);
     void ApplyLineupEffect(
         const Skill& definition,
@@ -108,7 +119,8 @@ private:
     int playerActionCount_ = 0;
     std::vector<Competitor> playerTeam_;
     std::vector<BattleStatus> playerStatuses_;
+    std::vector<Competitor> opponentTeam_;
+    std::vector<BattleStatus> opponentStatuses_;
     std::vector<int> participatingPlayerIndices_;
-    Competitor opponent_;
-    BattleStatus opponentStatus_;
+    int activeOpponentIndex_ = 0;
 };

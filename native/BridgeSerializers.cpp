@@ -459,6 +459,7 @@ Dictionary BattleStateToDictionary(const BattleState& state, const SimulationDat
     dictionary["finished"] = state.finished;
     dictionary["winner"] = WinnerToString(state.winner);
     dictionary["active_player_index"] = state.activePlayerIndex;
+    dictionary["active_opponent_index"] = state.activeOpponentIndex;
     dictionary["player"] = CompetitorToDictionary(state.player, data);
     dictionary["opponent"] = CompetitorToDictionary(state.opponent, data);
 
@@ -468,6 +469,13 @@ Dictionary BattleStateToDictionary(const BattleState& state, const SimulationDat
         player_team.push_back(CompetitorToDictionary(player, data));
     }
     dictionary["player_team"] = player_team;
+
+    Array opponent_team;
+    for (const CompetitorView& opponent : state.opponentTeam)
+    {
+        opponent_team.push_back(CompetitorToDictionary(opponent, data));
+    }
+    dictionary["opponent_team"] = opponent_team;
     return dictionary;
 }
 

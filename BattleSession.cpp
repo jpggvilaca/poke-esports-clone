@@ -51,7 +51,8 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         return RejectAction(SimulationError::BattleNeedsPlayerProfile, "A battle needs at least one player profile.");
     }
 
-    if (!IsKnown(setup.opponentSpec) || data_.FindSpec(setup.opponentSpec) == nullptr)
+    if (setup.opponentTeam.empty()
+        && (!IsKnown(setup.opponentSpec) || data_.FindSpec(setup.opponentSpec) == nullptr))
     {
         return RejectAction(SimulationError::UnknownSpec, "Unknown spec.");
     }
@@ -64,6 +65,14 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
         }
     }
 
+    for (const BattleSetup::OpponentSlot& slot : setup.opponentTeam)
+    {
+        if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
+        {
+            return RejectAction(SimulationError::UnknownSpec, "Unknown spec.");
+        }
+    }
+
     if (setup.activePlayerIndex < 0
         || setup.activePlayerIndex >= static_cast<int>(setup.playerTeam.size()))
     {
@@ -72,6 +81,8 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
 
     playerTeam_.clear();
     playerStatuses_.clear();
+    opponentTeam_.clear();
+    opponentStatuses_.clear();
     participatingPlayerIndices_.clear();
     for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
     {
@@ -82,29 +93,33 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
     activePlayerIndex_ = setup.activePlayerIndex;
     MarkParticipant(activePlayerIndex_);
 
-    opponent_ = CreateCompetitor(
-        0,
-        setup.opponentName,
-        setup.gameType,
-        setup.opponentSpec,
-        {});
-    if (!setup.opponentTraitId.empty() && data_.FindTrait(setup.opponentTraitId) != nullptr)
+    if (setup.opponentTeam.empty())
     {
-        opponent_.traitId = setup.opponentTraitId;
+        BattleSetup::OpponentSlot slot;
+        slot.name = setup.opponentName;
+        slot.spec = setup.opponentSpec;
+        slot.traitId = setup.opponentTraitId;
+        slot.maxHp = setup.opponentMaxHp;
+        slot.currentHp = setup.opponentMaxHp;
+        slot.maxMana = setup.opponentMaxMana > 0 ? setup.opponentMaxMana : setup.opponentMaxFocus;
+        slot.basePowerBonus = setup.opponentBasePowerBonus;
+        opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
+        opponentStatuses_.push_back({});
     }
-    if (setup.opponentMaxHp > 0)
+    else
     {
-        opponent_.maxHp = std::max(1, setup.opponentMaxHp);
-        opponent_.hp = opponent_.maxHp;
+        for (const BattleSetup::OpponentSlot& slot : setup.opponentTeam)
+        {
+            opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
+            opponentStatuses_.push_back({});
+        }
     }
-    const int opponentMaxMana = setup.opponentMaxMana > 0 ? setup.opponentMaxMana : setup.opponentMaxFocus;
-    if (opponentMaxMana > 0)
+
+    activeOpponentIndex_ = setup.activeOpponentIndex;
+    if (!IsLivingOpponentIndex(activeOpponentIndex_))
     {
-        opponent_.maxMana = std::max(1, opponentMaxMana);
-        opponent_.mana = std::min(Balance::StartingMana, opponent_.maxMana);
+        activeOpponentIndex_ = FirstLivingOpponentIndex();
     }
-    opponent_.basePower += setup.opponentBasePowerBonus;
-    opponentStatus_ = {};
     started_ = true;
     finished_ = false;
     winner_ = BattleWinner::None;
@@ -176,8 +191,8 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId, int
     }
 
     BattleActor targetActor = BattleActor::Opponent;
-    Competitor* targetCompetitor = &opponent_;
-    BattleStatus* targetStatus = &opponentStatus_;
+    Competitor* targetCompetitor = &ActiveOpponent();
+    BattleStatus* targetStatus = &ActiveOpponentStatus();
     int resolvedTargetPlayerIndex = -1;
 
     if (definition->power <= 0)
@@ -332,6 +347,7 @@ BattleState BattleSession::GetState() const
     state.finished = finished_;
     state.winner = winner_;
     state.activePlayerIndex = activePlayerIndex_;
+    state.activeOpponentIndex = activeOpponentIndex_;
     if (!playerTeam_.empty() && IsKnownPlayerIndex(activePlayerIndex_))
     {
         state.player = CreateCompetitorView(ActivePlayer(), ActivePlayerStatus());
@@ -340,7 +356,14 @@ BattleState BattleSession::GetState() const
     {
         state.playerTeam.push_back(CreateCompetitorView(playerTeam_[index], playerStatuses_[index]));
     }
-    state.opponent = CreateCompetitorView(opponent_, opponentStatus_);
+    if (!opponentTeam_.empty() && IsKnownOpponentIndex(activeOpponentIndex_))
+    {
+        state.opponent = CreateCompetitorView(ActiveOpponent(), ActiveOpponentStatus());
+    }
+    for (int index = 0; index < static_cast<int>(opponentTeam_.size()); ++index)
+    {
+        state.opponentTeam.push_back(CreateCompetitorView(opponentTeam_[index], opponentStatuses_[index]));
+    }
     return state;
 }
 
@@ -460,6 +483,52 @@ Competitor BattleSession::CreateCompetitor(
     return competitor;
 }
 
+Competitor BattleSession::CreateCompetitor(
+    const BattleSetup::OpponentSlot& slot,
+    GameType gameType) const
+{
+    Competitor competitor = CreateCompetitor(
+        slot.profileIndex,
+        slot.name,
+        gameType,
+        slot.spec,
+        {});
+    if (!slot.skills.empty())
+    {
+        competitor.skills = slot.skills;
+        competitor.abilityStates.clear();
+        for (const SkillProgress& progress : competitor.skills)
+        {
+            competitor.abilityStates.push_back({ progress.skillId, 0 });
+        }
+    }
+    if (!slot.traitId.empty() && data_.FindTrait(slot.traitId) != nullptr)
+    {
+        competitor.traitId = slot.traitId;
+    }
+    if (slot.maxHp > 0)
+    {
+        competitor.maxHp = std::max(1, slot.maxHp);
+        competitor.hp = competitor.maxHp;
+    }
+    if (slot.currentHp >= 0)
+    {
+        competitor.hp = std::clamp(slot.currentHp, 0, competitor.maxHp);
+    }
+    if (slot.maxMana > 0)
+    {
+        competitor.maxMana = std::max(1, slot.maxMana);
+        competitor.mana = std::min(competitor.mana, competitor.maxMana);
+    }
+    const int currentMana = slot.currentMana >= 0 ? slot.currentMana : slot.currentFocus;
+    if (currentMana >= 0)
+    {
+        competitor.mana = std::clamp(currentMana, 0, competitor.maxMana);
+    }
+    competitor.basePower += slot.basePowerBonus;
+    return competitor;
+}
+
 BattleActionResult BattleSession::RejectAction(SimulationError errorCode, const std::string& error) const
 {
     BattleActionResult result;
@@ -495,6 +564,26 @@ BattleStatus& BattleSession::ActivePlayerStatus()
 const BattleStatus& BattleSession::ActivePlayerStatus() const
 {
     return playerStatuses_[activePlayerIndex_];
+}
+
+Competitor& BattleSession::ActiveOpponent()
+{
+    return opponentTeam_[activeOpponentIndex_];
+}
+
+const Competitor& BattleSession::ActiveOpponent() const
+{
+    return opponentTeam_[activeOpponentIndex_];
+}
+
+BattleStatus& BattleSession::ActiveOpponentStatus()
+{
+    return opponentStatuses_[activeOpponentIndex_];
+}
+
+const BattleStatus& BattleSession::ActiveOpponentStatus() const
+{
+    return opponentStatuses_[activeOpponentIndex_];
 }
 
 void BattleSession::MarkParticipant(int playerIndex)
@@ -551,6 +640,55 @@ int BattleSession::NextLivingPlayerIndex(int fromPlayerIndex) const
     {
         const int index = (startIndex + offset) % teamSize;
         if (playerTeam_[index].hp > 0)
+        {
+            return index;
+        }
+    }
+
+    return -1;
+}
+
+bool BattleSession::IsKnownOpponentIndex(int opponentIndex) const
+{
+    return opponentIndex >= 0 && opponentIndex < static_cast<int>(opponentTeam_.size());
+}
+
+bool BattleSession::IsLivingOpponentIndex(int opponentIndex) const
+{
+    return IsKnownOpponentIndex(opponentIndex) && opponentTeam_[opponentIndex].hp > 0;
+}
+
+bool BattleSession::HasLivingOpponent() const
+{
+    return FirstLivingOpponentIndex() >= 0;
+}
+
+int BattleSession::FirstLivingOpponentIndex() const
+{
+    for (int index = 0; index < static_cast<int>(opponentTeam_.size()); ++index)
+    {
+        if (opponentTeam_[index].hp > 0)
+        {
+            return index;
+        }
+    }
+
+    return -1;
+}
+
+int BattleSession::NextLivingOpponentIndex(int fromOpponentIndex) const
+{
+    const int teamSize = static_cast<int>(opponentTeam_.size());
+    if (teamSize <= 0)
+    {
+        return -1;
+    }
+
+    const int startIndex = IsKnownOpponentIndex(fromOpponentIndex) ? fromOpponentIndex : -1;
+    for (int offset = 1; offset <= teamSize; ++offset)
+    {
+        const int index = (startIndex + offset) % teamSize;
+        if (opponentTeam_[index].hp > 0)
         {
             return index;
         }
@@ -814,32 +952,35 @@ void BattleSession::AppendActionBlocked(
 
 void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
 {
-    if (opponentStatus_.stunnedTurns > 0)
+    Competitor& opponent = ActiveOpponent();
+    BattleStatus& opponentStatus = ActiveOpponentStatus();
+
+    if (opponentStatus.stunnedTurns > 0)
     {
         AppendActionBlocked(result, BattleActor::Opponent, "", "Stunned");
-        TickCooldowns(BattleActor::Opponent, opponent_, result);
-        FinishActionOpportunity(BattleActor::Opponent, opponent_, opponentStatus_, result);
+        TickCooldowns(BattleActor::Opponent, opponent, result);
+        FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
         return;
     }
 
     SkillProgress* progress = opponentAI_.SelectSkill(
-        opponent_,
-        opponentStatus_,
+        opponent,
+        opponentStatus,
         ActivePlayer(),
         ActivePlayerStatus(),
         randomEngine_);
     if (progress == nullptr)
     {
-        TickCooldowns(BattleActor::Opponent, opponent_, result);
-        FinishActionOpportunity(BattleActor::Opponent, opponent_, opponentStatus_, result);
+        TickCooldowns(BattleActor::Opponent, opponent, result);
+        FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
         return;
     }
 
     const Skill* definition = data_.FindSkill(progress->skillId);
     if (definition == nullptr)
     {
-        TickCooldowns(BattleActor::Opponent, opponent_, result);
-        FinishActionOpportunity(BattleActor::Opponent, opponent_, opponentStatus_, result);
+        TickCooldowns(BattleActor::Opponent, opponent, result);
+        FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
         return;
     }
 
@@ -852,15 +993,15 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
             || definition->effectTarget == SkillEffectTarget::Ally))
     {
         targetActor = BattleActor::Opponent;
-        targetCompetitor = &opponent_;
-        targetStatus = &opponentStatus_;
+        targetCompetitor = &opponent;
+        targetStatus = &opponentStatus;
         targetPlayerIndex = -1;
     }
 
     SkillUseResult skillUse = skills_.UseSkill(
         BattleActor::Opponent,
-        opponent_,
-        opponentStatus_,
+        opponent,
+        opponentStatus,
         targetActor,
         *targetCompetitor,
         *targetStatus,
@@ -870,9 +1011,9 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
         randomEngine_);
     AppendEvents(result, skillUse.events);
     result.skillUses.push_back(skillUse);
-    TickCooldowns(BattleActor::Opponent, opponent_, result);
-    StartCooldown(BattleActor::Opponent, opponent_, opponentStatus_, *definition, result);
-    FinishActionOpportunity(BattleActor::Opponent, opponent_, opponentStatus_, result);
+    TickCooldowns(BattleActor::Opponent, opponent, result);
+    StartCooldown(BattleActor::Opponent, opponent, opponentStatus, *definition, result);
+    FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
 }
 
 void BattleSession::RegisterPlayerAction(BattleActionResult& result)
@@ -885,6 +1026,11 @@ void BattleSession::ResolveAfterPlayerAction(BattleActionResult& result)
 {
     RegisterPlayerAction(result);
     FinishBattleIfNeeded(result);
+
+    if (!finished_)
+    {
+        AdvanceToNextOpponent(result);
+    }
 
     if (!finished_)
     {
@@ -926,6 +1072,35 @@ void BattleSession::AdvanceToNextPlayer(BattleActionResult& result)
     event.playerName = playerTeam_[activePlayerIndex_].name;
     event.actorName = playerTeam_[activePlayerIndex_].name;
     event.reason = "turn";
+    result.events.push_back(event);
+}
+
+void BattleSession::AdvanceToNextOpponent(BattleActionResult& result)
+{
+    if (IsLivingOpponentIndex(activeOpponentIndex_))
+    {
+        return;
+    }
+
+    const int nextOpponentIndex = NextLivingOpponentIndex(activeOpponentIndex_);
+    if (nextOpponentIndex < 0 || nextOpponentIndex == activeOpponentIndex_)
+    {
+        return;
+    }
+
+    const int oldOpponentIndex = activeOpponentIndex_;
+    activeOpponentIndex_ = nextOpponentIndex;
+
+    BattleEvent event;
+    event.type = BattleEventType::PlayerSwitched;
+    event.actor = BattleActor::Opponent;
+    event.oldPlayerIndex = oldOpponentIndex;
+    event.newPlayerIndex = activeOpponentIndex_;
+    event.profileIndex = opponentTeam_[activeOpponentIndex_].profileIndex;
+    event.actorPlayerIndex = activeOpponentIndex_;
+    event.playerName = opponentTeam_[activeOpponentIndex_].name;
+    event.actorName = opponentTeam_[activeOpponentIndex_].name;
+    event.reason = "opponent_down";
     result.events.push_back(event);
 }
 
@@ -1064,13 +1239,13 @@ void BattleSession::FinishBattleIfNeeded(BattleActionResult& result)
         return;
     }
 
-    if (opponent_.hp > 0 && HasLivingPlayer())
+    if (HasLivingOpponent() && HasLivingPlayer())
     {
         return;
     }
 
     finished_ = true;
-    winner_ = opponent_.hp <= 0 ? BattleWinner::Player : BattleWinner::Opponent;
+    winner_ = HasLivingOpponent() ? BattleWinner::Opponent : BattleWinner::Player;
     result.battleFinished = true;
     result.winner = winner_;
     BattleEvent event;

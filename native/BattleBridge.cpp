@@ -162,6 +162,90 @@ BattleSetup BattleBridge::setup_from_dictionary(const Dictionary& setup_dictiona
         setup.opponentBasePowerBonus = get_int_field(setup_dictionary, "opponent_base_power_bonus");
     }
 
+    if (setup_dictionary.has("active_opponent_index"))
+    {
+        setup.activeOpponentIndex = get_min_int_field(setup_dictionary, "active_opponent_index", 0, 0);
+    }
+
+    if (setup_dictionary.has("opponent_team"))
+    {
+        Array opponent_team = setup_dictionary["opponent_team"];
+        for (int index = 0; index < opponent_team.size(); ++index)
+        {
+            Dictionary opponent_dictionary = opponent_team[index];
+            BattleSetup::OpponentSlot slot;
+            slot.profileIndex = get_int_field(opponent_dictionary, "profile_index", -index - 1);
+            slot.name = get_string_field(opponent_dictionary, "name", "Opponent");
+            slot.spec = opponent_dictionary.has("spec")
+                ? bridge_serializers::SpecFromString(String(opponent_dictionary["spec"]))
+                : Spec::Jungle;
+            if (opponent_dictionary.has("trait_id"))
+            {
+                slot.traitId = get_string_field(opponent_dictionary, "trait_id");
+            }
+            if (opponent_dictionary.has("max_hp"))
+            {
+                slot.maxHp = get_min_int_field(opponent_dictionary, "max_hp", 1, slot.maxHp);
+            }
+            else if (opponent_dictionary.has("hp"))
+            {
+                slot.maxHp = get_min_int_field(opponent_dictionary, "hp", 1, slot.maxHp);
+            }
+            if (opponent_dictionary.has("current_hp"))
+            {
+                slot.currentHp = get_min_int_field(opponent_dictionary, "current_hp", 0, slot.currentHp);
+            }
+            else if (slot.maxHp > 0)
+            {
+                slot.currentHp = slot.maxHp;
+            }
+            if (opponent_dictionary.has("max_mana"))
+            {
+                slot.maxMana = get_min_int_field(opponent_dictionary, "max_mana", 1, slot.maxMana);
+            }
+            else if (opponent_dictionary.has("mana"))
+            {
+                slot.maxMana = get_min_int_field(opponent_dictionary, "mana", 1, slot.maxMana);
+            }
+            else if (opponent_dictionary.has("max_focus"))
+            {
+                slot.maxMana = get_min_int_field(opponent_dictionary, "max_focus", 1, slot.maxMana);
+            }
+            if (opponent_dictionary.has("current_mana"))
+            {
+                slot.currentMana = get_int_field(opponent_dictionary, "current_mana");
+            }
+            else if (opponent_dictionary.has("current_focus"))
+            {
+                slot.currentFocus = get_int_field(opponent_dictionary, "current_focus");
+            }
+            slot.basePowerBonus = get_int_field(opponent_dictionary, "base_power_bonus");
+
+            if (opponent_dictionary.has("skills"))
+            {
+                Array skills = opponent_dictionary["skills"];
+                for (int skill_index = 0; skill_index < skills.size(); ++skill_index)
+                {
+                    Dictionary skill_dictionary = skills[skill_index];
+                    SkillProgress progress;
+                    const String skill_id = skill_dictionary.has("id")
+                        ? String(skill_dictionary["id"])
+                        : String(skill_dictionary.get("skill_id", ""));
+                    progress.skillId = to_std_string(skill_id);
+                    progress.level = get_min_int_field(skill_dictionary, "level", 1, 1);
+                    progress.xp = get_min_int_field(skill_dictionary, "xp", 0, 0);
+
+                    if (!progress.skillId.empty())
+                    {
+                        slot.skills.push_back(progress);
+                    }
+                }
+            }
+
+            setup.opponentTeam.push_back(slot);
+        }
+    }
+
     if (!setup_dictionary.has("player_team"))
     {
         return setup;
