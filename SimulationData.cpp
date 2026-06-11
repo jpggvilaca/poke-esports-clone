@@ -1,5 +1,9 @@
 #include "SimulationData.h"
 
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+
 namespace
 {
     Skill MakeSkill(
@@ -70,6 +74,159 @@ namespace
         drill.goodManaGain = goodManaGain;
         drill.perfectManaGain = perfectManaGain;
         return drill;
+    }
+
+    std::string Trim(const std::string& value)
+    {
+        const std::size_t first = value.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos)
+        {
+            return "";
+        }
+
+        const std::size_t last = value.find_last_not_of(" \t\r\n");
+        return value.substr(first, last - first + 1);
+    }
+
+    std::vector<std::string> Split(const std::string& value, char delimiter)
+    {
+        std::vector<std::string> parts;
+        std::stringstream input(value);
+        std::string part;
+        while (std::getline(input, part, delimiter))
+        {
+            parts.push_back(Trim(part));
+        }
+        return parts;
+    }
+
+    std::vector<std::string> ParseCsvRow(const std::string& line)
+    {
+        std::vector<std::string> fields;
+        std::string field;
+        bool in_quotes = false;
+
+        for (char character : line)
+        {
+            if (character == '"')
+            {
+                in_quotes = !in_quotes;
+                continue;
+            }
+
+            if (character == ',' && !in_quotes)
+            {
+                fields.push_back(Trim(field));
+                field.clear();
+                continue;
+            }
+
+            field.push_back(character);
+        }
+
+        fields.push_back(Trim(field));
+        return fields;
+    }
+
+    bool IsHeaderRow(const std::vector<std::string>& fields, const std::string& firstField)
+    {
+        return !fields.empty() && fields[0] == firstField;
+    }
+
+    SkillEffectType SkillEffectTypeFromString(const std::string& value)
+    {
+        if (value == "heal") return SkillEffectType::Heal;
+        if (value == "attack_modifier") return SkillEffectType::AttackModifier;
+        if (value == "defense_modifier") return SkillEffectType::DefenseModifier;
+        if (value == "attack_penetration_modifier") return SkillEffectType::AttackPenetrationModifier;
+        if (value == "cooldown_modifier") return SkillEffectType::CooldownModifier;
+        if (value == "healing_received_modifier") return SkillEffectType::HealingReceivedModifier;
+        if (value == "stunned") return SkillEffectType::Stunned;
+        if (value == "silenced") return SkillEffectType::Silenced;
+        if (value == "rooted") return SkillEffectType::Rooted;
+        if (value == "mark") return SkillEffectType::Mark;
+        if (value == "none" || value.empty()) return SkillEffectType::None;
+        throw std::runtime_error("Unknown skill effect type: " + value);
+    }
+
+    SkillEffectTarget SkillEffectTargetFromString(const std::string& value)
+    {
+        if (value == "self") return SkillEffectTarget::Self;
+        if (value == "ally") return SkillEffectTarget::Ally;
+        if (value == "enemy") return SkillEffectTarget::Enemy;
+        if (value == "player_lineup") return SkillEffectTarget::PlayerLineup;
+        if (value == "opponent") return SkillEffectTarget::Opponent;
+        throw std::runtime_error("Unknown skill effect target: " + value);
+    }
+
+    Spec SpecFromString(const std::string& value)
+    {
+        if (value == "Top" || value == "top") return Spec::Top;
+        if (value == "Jungle" || value == "jungle") return Spec::Jungle;
+        if (value == "Mid" || value == "mid") return Spec::Mid;
+        if (value == "ADC" || value == "Adc" || value == "adc") return Spec::Adc;
+        if (value == "Support" || value == "support") return Spec::Support;
+        throw std::runtime_error("Unknown spec: " + value);
+    }
+
+    GameType GameTypeFromString(const std::string& value)
+    {
+        if (value == "League of Legends" || value == "league_of_legends")
+        {
+            return GameType::LeagueOfLegends;
+        }
+
+        throw std::runtime_error("Unknown game type: " + value);
+    }
+
+    TraitEffectType TraitEffectTypeFromString(const std::string& value)
+    {
+        if (value == "none" || value.empty()) return TraitEffectType::None;
+        if (value == "low_hp_mana_discount_percent") return TraitEffectType::LowHpManaDiscountPercent;
+        if (value == "setup_disrupt_effect_bonus_percent") return TraitEffectType::SetupDisruptEffectBonusPercent;
+        if (value == "super_effective_damage_bonus_percent") return TraitEffectType::SuperEffectiveDamageBonusPercent;
+        if (value == "damaging_accuracy_bonus_percent") return TraitEffectType::DamagingAccuracyBonusPercent;
+        if (value == "positive_effect_bonus_percent") return TraitEffectType::PositiveEffectBonusPercent;
+        throw std::runtime_error("Unknown trait effect type: " + value);
+    }
+
+    std::vector<SkillEffectDefinition> ParseEffects(const std::string& value)
+    {
+        std::vector<SkillEffectDefinition> effects;
+        if (value.empty() || value == "none")
+        {
+            return effects;
+        }
+
+        for (const std::string& effect_text : Split(value, ';'))
+        {
+            if (effect_text.empty())
+            {
+                continue;
+            }
+
+            const std::vector<std::string> fields = Split(effect_text, ':');
+            if (fields.size() != 5)
+            {
+                throw std::runtime_error("Expected effect format type:target:value:duration:mark, got: " + effect_text);
+            }
+
+            effects.push_back({
+                SkillEffectTypeFromString(fields[0]),
+                SkillEffectTargetFromString(fields[1]),
+                std::stoi(fields[2]),
+                std::stoi(fields[3]),
+                std::stoi(fields[4]),
+            });
+        }
+
+        return effects;
+    }
+
+    bool FileExists(const std::string& path)
+    {
+        std::ifstream input(path);
+        return input.good();
     }
 
     SkillTone GetSkillTone(const Skill& skill)
@@ -289,7 +446,9 @@ SimulationData::SimulationData()
         { Spec::Adc, "ADC", { "adc-basic", "adc-trap", "adc-multi-strike", "adc-bullet-time" }, Spec::Support, "precision-carry", 1, 0.50 },
         { Spec::Support, "Support", { "support-basic", "support-peel", "support-shotcall", "support-teamfight" }, Spec::Top, "stabilizer", 3, 0.25 }
     };
+    LoadExternalDataIfAvailable();
     BuildIndexes();
+    ValidateReferences();
 }
 
 const Skill* SimulationData::FindSkill(const std::string& id) const
@@ -341,29 +500,306 @@ const std::vector<SpecData>& SimulationData::GetSpecs() const
     return specs_;
 }
 
+bool SimulationData::LoadedExternalSkills() const
+{
+    return loadedExternalSkills_;
+}
+
+bool SimulationData::LoadedExternalTraits() const
+{
+    return loadedExternalTraits_;
+}
+
+bool SimulationData::LoadedExternalSpecs() const
+{
+    return loadedExternalSpecs_;
+}
+
+bool SimulationData::LoadedExternalDrills() const
+{
+    return loadedExternalDrills_;
+}
+
+void SimulationData::LoadExternalDataIfAvailable()
+{
+    if (FileExists("poke-clone-esports-ui/data/skills.csv")) LoadSkillsFromCsv("poke-clone-esports-ui/data/skills.csv");
+    else if (FileExists("data/skills.csv")) LoadSkillsFromCsv("data/skills.csv");
+
+    if (FileExists("poke-clone-esports-ui/data/traits.csv")) LoadTraitsFromCsv("poke-clone-esports-ui/data/traits.csv");
+    else if (FileExists("data/traits.csv")) LoadTraitsFromCsv("data/traits.csv");
+
+    if (FileExists("poke-clone-esports-ui/data/drills.csv")) LoadDrillsFromCsv("poke-clone-esports-ui/data/drills.csv");
+    else if (FileExists("data/drills.csv")) LoadDrillsFromCsv("data/drills.csv");
+
+    if (FileExists("poke-clone-esports-ui/data/specs.csv")) LoadSpecsFromCsv("poke-clone-esports-ui/data/specs.csv");
+    else if (FileExists("data/specs.csv")) LoadSpecsFromCsv("data/specs.csv");
+}
+
+void SimulationData::LoadSkillsFromCsv(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input.good())
+    {
+        return;
+    }
+
+    std::vector<Skill> loaded_skills;
+    std::string line;
+    int line_number = 0;
+    while (std::getline(input, line))
+    {
+        ++line_number;
+        line = Trim(line);
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+
+        const std::vector<std::string> fields = ParseCsvRow(line);
+        if (IsHeaderRow(fields, "id"))
+        {
+            continue;
+        }
+        if (fields.size() != 8)
+        {
+            throw std::runtime_error("Invalid skill row in " + path + " at line " + std::to_string(line_number));
+        }
+
+        Skill skill = MakeSkill(
+            fields[0],
+            fields[1],
+            std::stoi(fields[2]),
+            std::stoi(fields[3]),
+            std::stoi(fields[4]),
+            std::stoi(fields[5]),
+            std::stod(fields[6]));
+        skill.effects = ParseEffects(fields[7]);
+        if (!skill.effects.empty())
+        {
+            const SkillEffectDefinition& primary_effect = skill.effects[0];
+            skill.effectType = primary_effect.type;
+            skill.effectTarget = primary_effect.target;
+            skill.effectValue = primary_effect.value;
+            skill.durationTurns = primary_effect.durationTurns;
+            skill.markBonusDamage = primary_effect.markBonusDamage;
+        }
+        loaded_skills.push_back(skill);
+    }
+
+    if (loaded_skills.empty())
+    {
+        throw std::runtime_error("No skills loaded from " + path);
+    }
+
+    FillSkillMetadata(loaded_skills);
+    skills_ = loaded_skills;
+    loadedExternalSkills_ = true;
+}
+
+void SimulationData::LoadTraitsFromCsv(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input.good())
+    {
+        return;
+    }
+
+    std::vector<TraitDefinition> loaded_traits;
+    std::string line;
+    int line_number = 0;
+    while (std::getline(input, line))
+    {
+        ++line_number;
+        line = Trim(line);
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+
+        const std::vector<std::string> fields = ParseCsvRow(line);
+        if (IsHeaderRow(fields, "id"))
+        {
+            continue;
+        }
+        if (fields.size() != 5)
+        {
+            throw std::runtime_error("Invalid trait row in " + path + " at line " + std::to_string(line_number));
+        }
+
+        loaded_traits.push_back(MakeTrait(
+            fields[0],
+            fields[1],
+            fields[2],
+            TraitEffectTypeFromString(fields[3]),
+            std::stoi(fields[4])));
+    }
+
+    if (loaded_traits.empty())
+    {
+        throw std::runtime_error("No traits loaded from " + path);
+    }
+
+    traits_ = loaded_traits;
+    loadedExternalTraits_ = true;
+}
+
+void SimulationData::LoadSpecsFromCsv(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input.good())
+    {
+        return;
+    }
+
+    std::vector<SpecData> loaded_specs;
+    std::string line;
+    int line_number = 0;
+    while (std::getline(input, line))
+    {
+        ++line_number;
+        line = Trim(line);
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+
+        const std::vector<std::string> fields = ParseCsvRow(line);
+        if (IsHeaderRow(fields, "spec"))
+        {
+            continue;
+        }
+        if (fields.size() != 7)
+        {
+            throw std::runtime_error("Invalid spec row in " + path + " at line " + std::to_string(line_number));
+        }
+
+        loaded_specs.push_back({
+            SpecFromString(fields[0]),
+            fields[1],
+            Split(fields[2], '|'),
+            SpecFromString(fields[3]),
+            fields[4],
+            std::stoi(fields[5]),
+            std::stod(fields[6]),
+        });
+    }
+
+    if (loaded_specs.empty())
+    {
+        throw std::runtime_error("No specs loaded from " + path);
+    }
+
+    specs_ = loaded_specs;
+    loadedExternalSpecs_ = true;
+}
+
+void SimulationData::LoadDrillsFromCsv(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input.good())
+    {
+        return;
+    }
+
+    std::vector<DrillDefinition> loaded_drills;
+    std::string line;
+    int line_number = 0;
+    while (std::getline(input, line))
+    {
+        ++line_number;
+        line = Trim(line);
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+
+        const std::vector<std::string> fields = ParseCsvRow(line);
+        if (IsHeaderRow(fields, "game_type"))
+        {
+            continue;
+        }
+        if (fields.size() != 7)
+        {
+            throw std::runtime_error("Invalid drill row in " + path + " at line " + std::to_string(line_number));
+        }
+
+        loaded_drills.push_back(MakeDrill(
+            GameTypeFromString(fields[0]),
+            fields[1],
+            fields[2],
+            fields[3],
+            std::stoi(fields[4]),
+            std::stoi(fields[5]),
+            std::stoi(fields[6])));
+    }
+
+    if (loaded_drills.empty())
+    {
+        throw std::runtime_error("No drills loaded from " + path);
+    }
+
+    drills_ = loaded_drills;
+    loadedExternalDrills_ = true;
+}
+
 void SimulationData::BuildIndexes()
 {
     skillIndexById_.clear();
     for (std::size_t index = 0; index < skills_.size(); ++index)
     {
-        skillIndexById_[skills_[index].id] = index;
+        const auto inserted = skillIndexById_.emplace(skills_[index].id, index);
+        if (!inserted.second)
+        {
+            throw std::runtime_error("Duplicate skill id: " + skills_[index].id);
+        }
     }
 
     drillIndexByGameType_.clear();
     for (std::size_t index = 0; index < drills_.size(); ++index)
     {
-        drillIndexByGameType_[static_cast<int>(drills_[index].gameType)] = index;
+        const auto inserted = drillIndexByGameType_.emplace(static_cast<int>(drills_[index].gameType), index);
+        if (!inserted.second)
+        {
+            throw std::runtime_error("Duplicate drill game type: " + ToString(drills_[index].gameType));
+        }
     }
 
     traitIndexById_.clear();
     for (std::size_t index = 0; index < traits_.size(); ++index)
     {
-        traitIndexById_[traits_[index].id] = index;
+        const auto inserted = traitIndexById_.emplace(traits_[index].id, index);
+        if (!inserted.second)
+        {
+            throw std::runtime_error("Duplicate trait id: " + traits_[index].id);
+        }
     }
 
     specIndexBySpec_.clear();
     for (std::size_t index = 0; index < specs_.size(); ++index)
     {
-        specIndexBySpec_[static_cast<int>(specs_[index].spec)] = index;
+        const auto inserted = specIndexBySpec_.emplace(static_cast<int>(specs_[index].spec), index);
+        if (!inserted.second)
+        {
+            throw std::runtime_error("Duplicate spec: " + ToString(specs_[index].spec));
+        }
+    }
+}
+
+void SimulationData::ValidateReferences() const
+{
+    for (const SpecData& spec : specs_)
+    {
+        if (FindTrait(spec.defaultTraitId) == nullptr)
+        {
+            throw std::runtime_error("Spec references missing default trait: " + spec.defaultTraitId);
+        }
+
+        for (const std::string& skill_id : spec.skillIds)
+        {
+            if (FindSkill(skill_id) == nullptr)
+            {
+                throw std::runtime_error("Spec references missing skill: " + skill_id);
+            }
+        }
     }
 }

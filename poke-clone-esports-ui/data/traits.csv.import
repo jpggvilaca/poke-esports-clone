@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dvbtde8lw5mwg"
+
+[deps]
+
+files=["res://data/traits.name.translation", "res://data/traits.description.translation", "res://data/traits.effect.translation", "res://data/traits.effect.translation"]
+
+source_file="res://data/traits.csv"
+dest_files=["res://data/traits.name.translation", "res://data/traits.description.translation", "res://data/traits.effect.translation", "res://data/traits.effect.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

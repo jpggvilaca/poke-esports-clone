@@ -1,0 +1,2 @@
+game_type,id,display_name,description,miss_mana_gain,good_mana_gain,perfect_mana_gain
+league_of_legends,moba-farm,Farm,Take a timing challenge to generate mana instead of attacking.,5,30,50

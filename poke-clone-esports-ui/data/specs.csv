@@ -1,0 +1,6 @@
+spec,name,skill_ids,countered_spec,default_trait_id,max_hp_gain_per_level,base_power_gain_per_level
+Top,Top,top-basic|top-hold-line|top-sunder|top-gamebreaker,Jungle,clutch-player,4,0.20
+Jungle,Jungle,jungle-basic|jungle-gank|jungle-invade|jungle-smite-fight,Mid,shotcaller,2,0.35
+Mid,Mid,mid-basic|mid-silence|mid-burst|mid-ultimate,ADC,lane-bully,1,0.45
+ADC,ADC,adc-basic|adc-trap|adc-multi-strike|adc-bullet-time,Support,precision-carry,1,0.50
+Support,Support,support-basic|support-peel|support-shotcall|support-teamfight,Top,stabilizer,3,0.25

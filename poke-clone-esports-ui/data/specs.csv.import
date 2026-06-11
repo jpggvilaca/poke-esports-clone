@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bh8r4gk0qbjar"
+
+[deps]
+
+files=["res://data/specs.name.translation", "res://data/specs.skill.translation", "res://data/specs.countered.translation", "res://data/specs.default.translation", "res://data/specs.max.translation", "res://data/specs.base.translation"]
+
+source_file="res://data/specs.csv"
+dest_files=["res://data/specs.name.translation", "res://data/specs.skill.translation", "res://data/specs.countered.translation", "res://data/specs.default.translation", "res://data/specs.max.translation", "res://data/specs.base.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

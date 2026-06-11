@@ -23,6 +23,9 @@ PlayerProfileState PlayerProfileFromDictionary(const godot::Dictionary& player_p
 godot::Dictionary PlayerProfileToRosterDictionary(const PlayerProfileState& player_profile, const SimulationData& data);
 Competitor CompetitorFromPlayerProfile(const godot::Dictionary& player_profile, const SimulationData& data);
 godot::Dictionary SkillToDictionary(const SkillView& skill);
+godot::Dictionary DrillToDictionary(const DrillView& drill);
+godot::Dictionary BattleStateToDictionary(const BattleState& state, const SimulationData& data);
+godot::Dictionary BattleResultToDictionary(const BattleActionResult& result, const SimulationData& data);
 godot::Dictionary ScoutOfferToDictionary(const ScoutOfferView& offer, const SimulationData& data);
 ScoutOfferView ScoutOfferFromDictionary(const godot::Dictionary& offer_dictionary, const SimulationData& data);
 }

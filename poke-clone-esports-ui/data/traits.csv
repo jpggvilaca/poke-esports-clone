@@ -1,0 +1,6 @@
+id,name,description,effect_type,effect_value
+clutch-player,Clutch Player,"Below 35% HP, paid abilities cost 25% less mana.",low_hp_mana_discount_percent,25
+shotcaller,Shotcaller,Setup and disruption effects are 20% stronger.,setup_disrupt_effect_bonus_percent,20
+lane-bully,Lane Bully,Super-effective hits deal 15% more damage.,super_effective_damage_bonus_percent,15
+precision-carry,Precision Carry,Damaging skills gain 5% accuracy.,damaging_accuracy_bonus_percent,5
+stabilizer,Stabilizer,Healing and defensive effects are 20% stronger.,positive_effect_bonus_percent,20

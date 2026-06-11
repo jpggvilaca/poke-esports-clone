@@ -45,14 +45,28 @@ public:
     const TraitDefinition* FindTrait(const std::string& id) const;
     const SpecData* FindSpec(Spec spec) const;
     const std::vector<SpecData>& GetSpecs() const;
+    bool LoadedExternalSkills() const;
+    bool LoadedExternalTraits() const;
+    bool LoadedExternalSpecs() const;
+    bool LoadedExternalDrills() const;
 
 private:
     void BuildIndexes();
+    void LoadExternalDataIfAvailable();
+    void LoadSkillsFromCsv(const std::string& path);
+    void LoadTraitsFromCsv(const std::string& path);
+    void LoadSpecsFromCsv(const std::string& path);
+    void LoadDrillsFromCsv(const std::string& path);
+    void ValidateReferences() const;
 
     std::vector<Skill> skills_;
     std::vector<DrillDefinition> drills_;
     std::vector<TraitDefinition> traits_;
     std::vector<SpecData> specs_;
+    bool loadedExternalSkills_ = false;
+    bool loadedExternalTraits_ = false;
+    bool loadedExternalSpecs_ = false;
+    bool loadedExternalDrills_ = false;
     std::unordered_map<std::string, std::size_t> skillIndexById_;
     std::unordered_map<int, std::size_t> drillIndexByGameType_;
     std::unordered_map<std::string, std::size_t> traitIndexById_;

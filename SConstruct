@@ -32,6 +32,8 @@ def RunBackendTests(target, source, env):
     return subprocess.call([source[0].abspath])
 
 test_env = env.Clone()
+if env.get("platform") == "windows":
+    test_env.Append(CXXFLAGS=["/EHsc"])
 test_core_objects = [
     test_env.Object(
         "tests/obj/{}".format(os.path.splitext(os.path.basename(source))[0]),

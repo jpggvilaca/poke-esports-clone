@@ -32,22 +32,8 @@ protected:
 
 private:
     BattleActionResult reject_action(SimulationError error_code, const std::string& error) const;
-    godot::Dictionary competitor_to_dictionary(const CompetitorView& competitor) const;
-    godot::Dictionary state_to_dictionary(const BattleState& state) const;
-    godot::Dictionary skill_to_dictionary(const SkillView& skill) const;
-    godot::Dictionary drill_to_dictionary(const DrillView& drill) const;
-    godot::Dictionary event_to_dictionary(const BattleEvent& event) const;
-    godot::Dictionary result_to_dictionary(const BattleActionResult& result) const;
-    godot::Dictionary reward_to_dictionary(const BattleRewardResult& reward) const;
-    void add_trait_fields(godot::Dictionary& dictionary, const std::string& trait_id) const;
     BattleSetup setup_from_dictionary(const godot::Dictionary& setup) const;
-    godot::String actor_to_string(BattleActor actor) const;
-    godot::String winner_to_string(BattleWinner winner) const;
-    godot::String event_type_to_string(BattleEventType type) const;
-    godot::String error_to_string(SimulationError error) const;
-    godot::String effect_to_string(SkillEffectType effect) const;
     DrillResultQuality drill_quality_from_string(const godot::String& value) const;
-    godot::String drill_quality_to_string(DrillResultQuality quality) const;
 
     SimulationData data_;
     std::unique_ptr<BattleSession> session_;

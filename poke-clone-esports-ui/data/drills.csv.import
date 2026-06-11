@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cr64ita0cq481"
+
+[deps]
+
+files=["res://data/drills.id.translation", "res://data/drills.display.translation", "res://data/drills.description.translation", "res://data/drills.miss.translation", "res://data/drills.good.translation", "res://data/drills.perfect.translation"]
+
+source_file="res://data/drills.csv"
+dest_files=["res://data/drills.id.translation", "res://data/drills.display.translation", "res://data/drills.description.translation", "res://data/drills.miss.translation", "res://data/drills.good.translation", "res://data/drills.perfect.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

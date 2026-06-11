@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cxb4v5dwu5fsg"
+
+[deps]
+
+files=["res://data/skills.name.translation", "res://data/skills.mana.translation", "res://data/skills.mana.translation", "res://data/skills.cooldown.translation", "res://data/skills.power.translation", "res://data/skills.accuracy.translation", "res://data/skills.effects.translation"]
+
+source_file="res://data/skills.csv"
+dest_files=["res://data/skills.name.translation", "res://data/skills.mana.translation", "res://data/skills.mana.translation", "res://data/skills.cooldown.translation", "res://data/skills.power.translation", "res://data/skills.accuracy.translation", "res://data/skills.effects.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

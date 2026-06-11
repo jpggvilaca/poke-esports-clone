@@ -6,6 +6,7 @@
 #include "TrainerProfile.h"
 
 #include <cstddef>
+#include <exception>
 #include <initializer_list>
 #include <iostream>
 #include <random>
@@ -327,13 +328,17 @@ namespace
         test.ExpectEqual(player.xp, 0, "exact level-up XP leaves no remainder");
         test.ExpectEqual(player.xpRequiredForNextLevel, 300, "level 5 next XP requirement is refreshed");
         test.ExpectEqual(player.rank, CareerRank::Ladder, "level 5 promotes to Ladder");
-        test.ExpectEqual(player.passiveBonuses.maxHpBonus, 18, "level 5 combines level HP growth with Ladder HP bonus");
-        test.ExpectEqual(player.passiveBonuses.basePowerBonus, 1, "level 5 grants one base power bonus");
+        test.ExpectEqual(player.passiveBonuses.maxHpBonus, 26, "level 5 combines top HP growth with Ladder HP bonus");
+        test.ExpectEqual(player.passiveBonuses.basePowerBonus, 0, "level 5 applies top base power growth");
     }
 
     void TestSimulationDataReferences(TestContext& test)
     {
         SimulationData data;
+        test.Expect(data.LoadedExternalSkills(), "external skills CSV is loaded from the project data folder");
+        test.Expect(data.LoadedExternalTraits(), "external traits CSV is loaded from the project data folder");
+        test.Expect(data.LoadedExternalSpecs(), "external specs CSV is loaded from the project data folder");
+        test.Expect(data.LoadedExternalDrills(), "external drills CSV is loaded from the project data folder");
 
         for (const SpecData& spec : data.GetSpecs())
         {
@@ -385,8 +390,8 @@ namespace
         const Skill* midBasic = data.FindSkill("mid-basic");
         const Skill* adcAllIn = data.FindSkill("adc-bullet-time");
         const Skill* jungleDisrupt = data.FindSkill("jungle-invade");
-        const Skill* supportRecover = data.FindSkill("support-teamfight");
-        const Skill* supportGuard = data.FindSkill("support-peel");
+        const Skill* supportRecover = data.FindSkill("support-peel");
+        const Skill* supportGuard = data.FindSkill("top-gamebreaker");
         test.Expect(topPressure != nullptr, "top pressure skill exists");
         test.Expect(midBasic != nullptr, "mid basic skill exists");
         test.Expect(adcAllIn != nullptr, "ADC all-in skill exists");
@@ -434,11 +439,11 @@ namespace
         Competitor support = MakeCompetitor(Spec::Support, "stabilizer");
         test.ExpectEqual(
             rules.GetEffectValue(*supportRecover, { supportRecover->id, 1, 0 }, support),
-            66,
+            48,
             "stabilizer strengthens healing effects");
         test.ExpectEqual(
             rules.GetEffectValue(*supportGuard, { supportGuard->id, 1, 0 }, support),
-            42,
+            36,
             "stabilizer strengthens positive defense effects");
     }
 
@@ -583,10 +588,15 @@ namespace
 
         BattleSetup setup;
         setup.gameType = GameType::LeagueOfLegends;
-        setup.playerTeam.push_back(MakeBattleSlot(101, "Starter", Spec::Top, "top-basic"));
-        setup.playerTeam.push_back(MakeBattleSlot(202, "Closer", Spec::Jungle, "jungle-basic"));
+        BattleSetup::PlayerSlot starter = MakeBattleSlot(101, "Starter", Spec::Top, "top-basic");
+        starter.passiveBonuses.basePowerBonus = 0;
+        starter.skills[0].level = 1;
+        BattleSetup::PlayerSlot closer = MakeBattleSlot(202, "Closer", Spec::Jungle, "jungle-basic");
+        setup.playerTeam.push_back(starter);
+        setup.playerTeam.push_back(closer);
         setup.activePlayerIndex = 0;
         setup.opponentSpec = Spec::Mid;
+        setup.opponentMaxHp = 350;
 
         BattleActionResult start = session.StartBattle(setup);
         test.Expect(start.accepted, "battle starts with a two-player team");
@@ -596,19 +606,18 @@ namespace
         test.Expect(start.finalState.started, "start result carries the final state snapshot");
         test.ExpectEqual(session.GetState().activePlayerIndex, 0, "first player starts active");
 
-        BattleActionResult sameSwitch = session.SwitchPlayer(0);
-        test.Expect(!sameSwitch.accepted, "cannot switch to the already-active player");
-        test.ExpectEqual(sameSwitch.errorCode, SimulationError::PlayerProfileAlreadyActive, "same-player switch reject has a stable error code");
+        BattleActionResult manualSwitch = session.SwitchPlayer(1);
+        test.Expect(!manualSwitch.accepted, "manual switching is rejected while party order is fixed");
+        test.ExpectEqual(manualSwitch.errorCode, SimulationError::PlayerProfileCannotPlay, "manual switch reject has a stable error code");
 
-        BattleActionResult switchResult = session.SwitchPlayer(1);
-        test.Expect(switchResult.accepted, "can switch to another available player");
-        test.Expect(switchResult.playerSwitched, "switch result reports playerSwitched");
-        test.ExpectEqual(switchResult.events[0].type, BattleEventType::PlayerSwitched, "switch timeline starts with PlayerSwitched");
-        test.Expect(ContainsEventType(switchResult.events, BattleEventType::SkillStarted), "switch timeline includes opponent response skill");
-        test.ExpectEqual(switchResult.oldPlayerIndex, 0, "switch result tracks old active index");
-        test.ExpectEqual(switchResult.newPlayerIndex, 1, "switch result tracks new active index");
-        test.ExpectEqual(switchResult.newPlayerName, std::string("Closer"), "switch result tracks new player name");
-        test.ExpectEqual(session.GetState().activePlayerIndex, 1, "second player is active after switching");
+        BattleActionResult firstAction = session.UsePlayerSkill("top-basic");
+        test.Expect(firstAction.accepted, "starting player can use their basic skill");
+        test.Expect(firstAction.playerSwitched, "turn flow advances to the next living player");
+        test.Expect(ContainsEventType(firstAction.events, BattleEventType::PlayerSwitched), "turn flow emits PlayerSwitched");
+        test.ExpectEqual(firstAction.oldPlayerIndex, 0, "turn advance tracks old active index");
+        test.ExpectEqual(firstAction.newPlayerIndex, 1, "turn advance tracks new active index");
+        test.ExpectEqual(firstAction.newPlayerName, std::string("Closer"), "turn advance tracks new player name");
+        test.ExpectEqual(session.GetState().activePlayerIndex, 1, "second player is active after automatic turn advance");
 
         BattleActionResult finalAction;
         for (int attempt = 0; attempt < 20 && !session.GetState().finished; ++attempt)
@@ -624,8 +633,12 @@ namespace
         BattleState finalState = session.GetState();
         test.Expect(finalState.finished, "battle finishes after the boosted switched player attacks");
         test.ExpectEqual(finalState.winner, BattleWinner::Player, "player team wins the battle");
-        test.ExpectEqual(finalAction.events[0].type, BattleEventType::SkillStarted, "skill timeline starts with the selected skill");
-        test.ExpectEqual(finalAction.events[0].actor, BattleActor::Player, "first skill event belongs to the player");
+        test.Expect(!finalAction.events.empty(), "winning action includes timeline events");
+        if (!finalAction.events.empty())
+        {
+            test.ExpectEqual(finalAction.events[0].type, BattleEventType::SkillStarted, "skill timeline starts with the selected skill");
+            test.ExpectEqual(finalAction.events[0].actor, BattleActor::Player, "first skill event belongs to the player");
+        }
         test.Expect(ContainsEventType(finalAction.events, BattleEventType::DamageApplied), "winning timeline includes damage");
         test.Expect(ContainsEventType(finalAction.events, BattleEventType::SkillXpGained), "winning timeline includes skill XP");
         test.Expect(ContainsEventType(finalAction.events, BattleEventType::BattleFinished), "winning timeline includes battle finish");
@@ -874,9 +887,16 @@ int main()
     int totalFailures = 0;
     for (const TestCase& testCase : tests)
     {
-        std::cout << "Running " << testCase.name << "...\n";
+        std::cout << "Running " << testCase.name << "..." << std::endl;
         TestContext context;
-        testCase.run(context);
+        try
+        {
+            testCase.run(context);
+        }
+        catch (const std::exception& exception)
+        {
+            context.Expect(false, std::string("unhandled exception: ") + exception.what());
+        }
 
         if (context.failures == 0)
         {

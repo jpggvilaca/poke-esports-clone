@@ -13,6 +13,10 @@ Poke-clo.*/
 *.exe
 *.tlog
 
+# Temporary scratch/probe files
+.tmp*/
+*.tmp
+
 # Repo-local native build tools
 .tools/
 
