@@ -13,9 +13,9 @@ func defer_progress_event(event: Dictionary) -> void:
 
 	var skill_name := format_skill_id(String(event.get("skill_id", "skill")))
 	match String(event.get("type", "none")):
-		"skill_xp_gained":
+		BattleEventTypes.SKILL_XP_GAINED:
 			deferred_skill_xp[skill_name] = int(deferred_skill_xp.get(skill_name, 0)) + int(event.get("amount", 0))
-		"skill_leveled_up":
+		BattleEventTypes.SKILL_LEVELED_UP:
 			deferred_skill_levels[skill_name] = int(event.get("new_level", 1))
 
 

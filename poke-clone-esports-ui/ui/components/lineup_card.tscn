@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://battle_lineup_card.gd" id="1_lineup_card"]
+
+[node name="LineupCard" type="Button"]
+custom_minimum_size = Vector2(190, 118)
+size_flags_horizontal = 3
+script = ExtResource("1_lineup_card")

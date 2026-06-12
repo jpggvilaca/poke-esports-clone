@@ -22,8 +22,8 @@ var pending_skill: Dictionary = {}
 
 func _ready() -> void:
 	_setup_children()
-	bridge = BattleBridge.new()
-	add_child(bridge)
+	if not _setup_bridge():
+		return
 
 	var result := bridge.start_battle(GameState.build_battle_setup())
 	_refresh_drill_action()
@@ -57,6 +57,29 @@ func _setup_children() -> void:
 	drill_minigame.drill_cancelled.connect(_on_drill_minigame_cancelled)
 	add_child(event_player)
 	event_player.setup(message_log, player_status, opponent_status, reward_presenter)
+
+
+func _setup_bridge() -> bool:
+	bridge = BattleBridge.new()
+	if not is_instance_valid(bridge):
+		_show_bridge_error("Battle system failed to load. Check the GDExtension build in res://bin.")
+		return false
+
+	bridge.name = "BattleBridge"
+	add_child(bridge)
+	return true
+
+
+func _show_bridge_error(text: String) -> void:
+	push_error(text)
+	message_log.set_message(text)
+	finished_result = {
+		"accepted": false,
+		"battle_finished": true,
+		"winner": "none",
+		"events": [],
+	}
+	_show_return_button()
 
 
 func _show_main_menu() -> void:

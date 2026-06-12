@@ -33,6 +33,7 @@ func set_status(data: Dictionary, fallback_name: String) -> void:
 	mana_bar.tooltip_text = "Mana %s/%s" % [mana, max_mana]
 	mana_value.text = "%s/%s" % [mana, max_mana]
 	status_label.text = format_status_indicator(data.get("status", {}))
+	status_label.tooltip_text = format_status_tooltip(data.get("status", {}))
 
 
 func animate_hp(old_value: int, new_value: int) -> void:
@@ -72,26 +73,54 @@ static func format_status_indicator(status: Dictionary) -> String:
 	var healing_turns := int(status.get("healing_received_modifier_turns", 0))
 
 	if int(status.get("stunned_turns", 0)) > 0:
-		entries.push_back("STUN %s" % status.get("stunned_turns", 0))
+		entries.push_back("[STUN %s]" % status.get("stunned_turns", 0))
 	if int(status.get("silenced_turns", 0)) > 0:
-		entries.push_back("SILENCE %s" % status.get("silenced_turns", 0))
+		entries.push_back("[SIL %s]" % status.get("silenced_turns", 0))
 	if int(status.get("rooted_turns", 0)) > 0:
-		entries.push_back("ROOT %s" % status.get("rooted_turns", 0))
+		entries.push_back("[ROOT %s]" % status.get("rooted_turns", 0))
 	if int(status.get("mark_turns", 0)) > 0:
-		entries.push_back("MARK %s" % status.get("mark_turns", 0))
+		entries.push_back("[MARK %s]" % status.get("mark_turns", 0))
 	if attack_percent != 0 and attack_turns > 0:
-		entries.push_back("%s ATK %s%% %st" % [_status_marker(attack_percent), _signed_value(attack_percent), attack_turns])
+		entries.push_back("[%s ATK %s%% %st]" % [_status_marker(attack_percent), _signed_value(attack_percent), attack_turns])
 	if defense_percent != 0 and defense_turns > 0:
-		entries.push_back("%s DEF %s%% %st" % [_status_marker(defense_percent), _signed_value(defense_percent), defense_turns])
+		entries.push_back("[%s DEF %s%% %st]" % [_status_marker(defense_percent), _signed_value(defense_percent), defense_turns])
 	if penetration_percent != 0 and penetration_turns > 0:
-		entries.push_back("PEN %s%% %st" % [_signed_value(penetration_percent), penetration_turns])
+		entries.push_back("[PEN %s%% %st]" % [_signed_value(penetration_percent), penetration_turns])
 	if cooldown_percent != 0 and cooldown_turns > 0:
-		entries.push_back("CD %s%% %st" % [_signed_value(cooldown_percent), cooldown_turns])
+		entries.push_back("[CD %s%% %st]" % [_signed_value(cooldown_percent), cooldown_turns])
 	if healing_percent != 0 and healing_turns > 0:
-		entries.push_back("HEAL %s%% %st" % [_signed_value(healing_percent), healing_turns])
+		entries.push_back("[HEAL %s%% %st]" % [_signed_value(healing_percent), healing_turns])
 	if entries.is_empty():
 		return "Status: none"
 	return _join_strings(entries, "  ")
+
+
+static func format_status_tooltip(status: Dictionary) -> String:
+	var lines: Array[String] = []
+	if int(status.get("stunned_turns", 0)) > 0:
+		lines.push_back("Stunned: loses turns remaining: %s." % status.get("stunned_turns", 0))
+	if int(status.get("silenced_turns", 0)) > 0:
+		lines.push_back("Silenced: cannot use skills for %s turn(s)." % status.get("silenced_turns", 0))
+	if int(status.get("rooted_turns", 0)) > 0:
+		lines.push_back("Rooted: restricted by a control effect for %s turn(s)." % status.get("rooted_turns", 0))
+	if int(status.get("mark_turns", 0)) > 0:
+		lines.push_back("Marked: next mark trigger can deal bonus damage for %s turn(s)." % status.get("mark_turns", 0))
+	_append_modifier_tooltip(lines, status, "attack_modifier_percent", "attack_modifier_turns", "Attack pressure")
+	_append_modifier_tooltip(lines, status, "defense_modifier_percent", "defense_modifier_turns", "Incoming damage")
+	_append_modifier_tooltip(lines, status, "attack_penetration_percent", "attack_penetration_turns", "Attack penetration")
+	_append_modifier_tooltip(lines, status, "cooldown_modifier_percent", "cooldown_modifier_turns", "Cooldown speed")
+	_append_modifier_tooltip(lines, status, "healing_received_modifier_percent", "healing_received_modifier_turns", "Healing received")
+	if lines.is_empty():
+		return "No active status effects."
+	return _join_strings(lines, "\n")
+
+
+static func _append_modifier_tooltip(lines: Array[String], status: Dictionary, value_key: String, turns_key: String, label: String) -> void:
+	var value := int(status.get(value_key, 0))
+	var turns := int(status.get(turns_key, 0))
+	if value == 0 or turns <= 0:
+		return
+	lines.push_back("%s: %s%% for %s turn(s)." % [label, _signed_value(value), turns])
 
 
 static func _status_marker(value: int) -> String:

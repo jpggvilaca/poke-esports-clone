@@ -8,14 +8,7 @@ signal skill_selected(skill: Dictionary)
 signal target_selected(target_index: int)
 signal return_requested
 
-const SKILL_COLORS := {
-	"neutral": Color(0.32, 0.34, 0.38, 1.0),
-	"top": Color(0.58, 0.46, 0.28, 1.0),
-	"jungle": Color(0.20, 0.48, 0.30, 1.0),
-	"mid": Color(0.36, 0.34, 0.70, 1.0),
-	"adc": Color(0.70, 0.22, 0.20, 1.0),
-	"support": Color(0.22, 0.48, 0.68, 1.0),
-}
+const SKILL_BUTTON_SCENE := preload("res://ui/components/skill_button.tscn")
 
 @onready var main_menu_grid: GridContainer = $MainMenuGrid
 @onready var skill_grid: GridContainer = $SkillGrid
@@ -27,7 +20,7 @@ const SKILL_COLORS := {
 @onready var back_button: Button = $BackButton
 @onready var return_button: Button = $ReturnButton
 
-var skill_buttons: Array[Button] = []
+var skill_buttons: Array[BattleSkillButton] = []
 var target_buttons: Array[Button] = []
 
 
@@ -90,33 +83,26 @@ func refresh_drill_action(drill: Dictionary, input_locked: bool) -> void:
 
 
 func refresh_skills(skills: Array, input_locked: bool) -> void:
-	for child in skill_grid.get_children():
-		child.queue_free()
-	skill_buttons.clear()
-
-	for skill in skills:
-		var button := Button.new()
-		button.text = _format_skill_button(skill)
-		button.custom_minimum_size = Vector2(270, 112)
-		button.disabled = input_locked or not bool(skill.get("can_use", true))
-		_apply_skill_button_style(button, String(skill.get("skill_color_id", "neutral")))
-		button.pressed.connect(_on_skill_button_pressed.bind(skill.duplicate(true)))
-		skill_grid.add_child(button)
-		skill_buttons.push_back(button)
+	_ensure_skill_button_count(skills.size())
+	for index in range(skill_buttons.size()):
+		if index >= skills.size():
+			skill_buttons[index].visible = false
+			continue
+		skill_buttons[index].setup(skills[index], input_locked)
 
 
 func refresh_targets(player_team: Array, input_locked: bool) -> void:
-	for child in target_grid.get_children():
-		child.queue_free()
-	target_buttons.clear()
-
-	for index in range(player_team.size()):
+	_ensure_target_button_count(player_team.size())
+	for index in range(target_buttons.size()):
+		if index >= player_team.size():
+			target_buttons[index].visible = false
+			continue
 		var player: Dictionary = player_team[index]
 		var hp := int(player.get("hp", 0))
 		var max_hp := int(player.get("max_hp", 1))
 		var mana := int(player.get("mana", 0))
 		var max_mana := int(player.get("max_mana", 1))
-		var button := Button.new()
+		var button := target_buttons[index]
 		button.text = "%s\nHP %s/%s | Mana %s/%s" % [
 			player.get("name", "Player"),
 			hp,
@@ -126,7 +112,22 @@ func refresh_targets(player_team: Array, input_locked: bool) -> void:
 		]
 		button.custom_minimum_size = Vector2(270, 72)
 		button.disabled = input_locked or hp <= 0
-		button.pressed.connect(_on_target_button_pressed.bind(index))
+		button.set_meta("target_index", index)
+		button.visible = true
+
+
+func _ensure_skill_button_count(count: int) -> void:
+	while skill_buttons.size() < count:
+		var button := SKILL_BUTTON_SCENE.instantiate() as BattleSkillButton
+		button.selected.connect(_on_skill_button_selected)
+		skill_grid.add_child(button)
+		skill_buttons.push_back(button)
+
+
+func _ensure_target_button_count(count: int) -> void:
+	while target_buttons.size() < count:
+		var button := Button.new()
+		button.pressed.connect(_on_target_pool_button_pressed.bind(button))
 		target_grid.add_child(button)
 		target_buttons.push_back(button)
 
@@ -136,17 +137,19 @@ func set_buttons_disabled(disabled: bool) -> void:
 	quit_button.disabled = disabled
 	back_button.disabled = disabled
 	for button in skill_buttons:
-		button.disabled = disabled
+		if button.visible:
+			button.disabled = disabled
 	for button in target_buttons:
-		button.disabled = disabled
+		if button.visible:
+			button.disabled = disabled
 
 
-func _on_skill_button_pressed(skill: Dictionary) -> void:
+func _on_skill_button_selected(skill: Dictionary) -> void:
 	skill_selected.emit(skill)
 
 
-func _on_target_button_pressed(target_index: int) -> void:
-	target_selected.emit(target_index)
+func _on_target_pool_button_pressed(button: Button) -> void:
+	target_selected.emit(int(button.get_meta("target_index", -1)))
 
 
 func _on_fight_button_pressed() -> void:
@@ -167,54 +170,3 @@ func _on_back_button_pressed() -> void:
 
 func _on_return_button_pressed() -> void:
 	return_requested.emit()
-
-
-func _format_skill_button(skill: Dictionary) -> String:
-	var description := String(skill.get("description", ""))
-	if description.length() > 58:
-		description = description.substr(0, 55) + "..."
-	var mana_cost := int(skill.get("mana_cost", 0))
-	var mana_gain := int(skill.get("mana_gain", 0))
-	var cooldown := int(skill.get("cooldown_turns", 0))
-	var cooldown_remaining := int(skill.get("cooldown_remaining", 0))
-	var availability := String(skill.get("disabled_reason", ""))
-	var cost_text := "Gain %s mana" % mana_gain if mana_cost == 0 and mana_gain > 0 else "Mana %s" % mana_cost
-	var cooldown_text := "CD %s" % cooldown
-	if cooldown_remaining > 0:
-		cooldown_text = "CD %s/%s" % [cooldown_remaining, cooldown]
-	if not availability.is_empty():
-		cooldown_text += " | %s" % availability
-	return "%s\n%s | %s\n%s" % [
-		skill.get("name", "Skill"),
-		cost_text,
-		cooldown_text,
-		description,
-	]
-
-
-func _apply_skill_button_style(button: Button, color_id: String) -> void:
-	var base_color: Color = SKILL_COLORS.get(color_id, SKILL_COLORS["neutral"])
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = base_color.darkened(0.32)
-	normal.border_color = base_color.lightened(0.24)
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(6)
-
-	var hover := normal.duplicate()
-	hover.bg_color = base_color.darkened(0.18)
-	hover.border_color = base_color.lightened(0.36)
-
-	var pressed := normal.duplicate()
-	pressed.bg_color = base_color.darkened(0.42)
-
-	var disabled := normal.duplicate()
-	disabled.bg_color = Color(0.12, 0.12, 0.14, 0.86)
-	disabled.border_color = Color(0.28, 0.28, 0.32, 0.8)
-
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", hover)
-	button.add_theme_stylebox_override("disabled", disabled)
-	button.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0, 1.0))
-	button.add_theme_color_override("font_disabled_color", Color(0.58, 0.60, 0.64, 1.0))

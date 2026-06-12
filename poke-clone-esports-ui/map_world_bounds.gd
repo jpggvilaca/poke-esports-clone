@@ -6,7 +6,7 @@ const DEFAULT_MAP_MAX := Vector2(1600, 1100)
 const MAP_BOUNDS_MARGIN := 120.0
 const PLAYER_MIN_EDGE_MARGIN := Vector2(40, 50)
 const PLAYER_MAX_EDGE_MARGIN := Vector2(40, 40)
-const WALKABLE_PATH_NAME := "Path"
+const WALKABLE_GROUP := "walkable"
 
 var map_bounds := Rect2(DEFAULT_MAP_MIN, DEFAULT_MAP_MAX - DEFAULT_MAP_MIN)
 var walkable_path_rects: Array[Rect2] = []
@@ -116,7 +116,7 @@ func _cache_walkable_path_rects() -> void:
 
 
 func _cache_walkable_path_rects_from(node: Node) -> void:
-	if node is ColorRect and String(node.name).contains(WALKABLE_PATH_NAME):
+	if node is ColorRect and node.is_in_group(WALKABLE_GROUP):
 		var rect := (node as ColorRect).get_global_rect()
 		if rect.size != Vector2.ZERO:
 			walkable_path_rects.push_back(rect)

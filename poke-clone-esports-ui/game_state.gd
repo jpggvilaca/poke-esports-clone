@@ -236,7 +236,18 @@ func build_battle_setup() -> Dictionary:
 
 func complete_battle(result: Dictionary) -> Dictionary:
 	_ensure_started()
-	var completion := _ensure_profile_bridge().complete_trainer_battle(get_trainer_state(), pending_battle, result)
+	var bridge := _ensure_profile_bridge()
+	if bridge == null:
+		pending_battle.clear()
+		last_battle_summary = {
+			"text": "Battle rewards could not be applied because the profile bridge is unavailable.",
+			"winner": result.get("winner", "none"),
+			"npc_id": "",
+			"level_up_messages": [],
+		}
+		return last_battle_summary.duplicate(true)
+
+	var completion := bridge.complete_trainer_battle(get_trainer_state(), pending_battle, result)
 	if not completion.get("accepted", false):
 		last_battle_summary = {
 			"text": "Battle rewards could not be applied.",
@@ -335,7 +346,12 @@ func accept_scout_candidate(candidate_index: int) -> String:
 	if pending_scout_offer.is_empty():
 		return "No scout offer is pending."
 
-	var result = _ensure_scout_bridge().accept_scout_candidate(roster.duplicate(true), pending_scout_offer, candidate_index)
+	var bridge := _ensure_scout_bridge()
+	if bridge == null:
+		last_scout_message = "Scout system is unavailable."
+		return last_scout_message
+
+	var result = bridge.accept_scout_candidate(roster.duplicate(true), pending_scout_offer, candidate_index)
 	last_scout_message = String(result.get("message", result.get("error", "Scout choice failed.")))
 	if not result.get("accepted", false):
 		return last_scout_message
@@ -381,7 +397,17 @@ func _dictionary_array_from(values: Array) -> Array[Dictionary]:
 
 
 func get_skill_progress_summary(player: Dictionary, skill_id: String, progress: Dictionary) -> Dictionary:
-	return _ensure_profile_bridge().get_player_skill_summary(player, skill_id, progress)
+	var bridge := _ensure_profile_bridge()
+	if bridge == null:
+		return {
+			"id": skill_id,
+			"name": format_skill_name(skill_id),
+			"level": int(progress.get("level", 1)),
+			"xp": int(progress.get("xp", 0)),
+			"mana_cost": 0,
+			"cooldown_turns": 0,
+		}
+	return bridge.get_player_skill_summary(player, skill_id, progress)
 
 
 func toggle_lineup_member(roster_index: int) -> String:
@@ -417,7 +443,12 @@ func _refresh_pending_scout_offer() -> void:
 	if not pending_scout_offer.is_empty():
 		return
 
-	var offer = _ensure_scout_bridge().get_pending_scout_offer(
+	var bridge := _ensure_scout_bridge()
+	if bridge == null:
+		last_scout_message = "Scout system is unavailable."
+		return
+
+	var offer = bridge.get_pending_scout_offer(
 		rating,
 		completed_scout_offers.keys(),
 		declined_scout_offers.keys())
@@ -466,7 +497,22 @@ func _ensure_started() -> void:
 
 func _create_player(player_name: String, spec: String) -> Dictionary:
 	var bridge := _ensure_profile_bridge()
-	var player: Dictionary = bridge.create_player_profile(player_name, spec)
+	var player: Dictionary = {}
+	if bridge == null:
+		player = {
+			"name": player_name,
+			"spec": spec,
+			"rank": "Rookie",
+			"level": 1,
+			"xp": 0,
+			"xp_required_for_next_level": 100,
+			"max_hp": 100,
+			"max_mana": 100,
+			"active_skill_ids": [],
+			"skill_progress": {},
+		}
+	else:
+		player = bridge.create_player_profile(player_name, spec)
 	player["player_id"] = _allocate_player_id()
 	player["current_hp"] = int(player.get("max_hp", 100))
 	player["current_mana"] = STARTING_MANA
@@ -488,6 +534,15 @@ func _ensure_player_identity_fields(player: Dictionary) -> Dictionary:
 		return player
 
 	var bridge := _ensure_profile_bridge()
+	if bridge == null:
+		if not player.has("trait_id"):
+			player["trait_id"] = ""
+		if not player.has("trait_name"):
+			player["trait_name"] = ""
+		if not player.has("trait_description"):
+			player["trait_description"] = ""
+		return player
+
 	var snapshot: Dictionary = bridge.create_player_profile(
 		String(player.get("name", "Player")),
 		String(player.get("spec", "Top")))
@@ -657,6 +712,9 @@ func _battle_lineup_indices() -> Array[int]:
 func _ensure_profile_bridge() -> ProfileBridge:
 	if not is_instance_valid(profile_bridge):
 		profile_bridge = ProfileBridge.new()
+		if not is_instance_valid(profile_bridge):
+			push_error("ProfileBridge failed to load. Check the GDExtension build in res://bin.")
+			return null
 		profile_bridge.name = "ProfileBridge"
 		add_child(profile_bridge)
 	return profile_bridge
@@ -665,6 +723,9 @@ func _ensure_profile_bridge() -> ProfileBridge:
 func _ensure_scout_bridge() -> ScoutBridge:
 	if not is_instance_valid(scout_bridge):
 		scout_bridge = ScoutBridge.new()
+		if not is_instance_valid(scout_bridge):
+			push_error("ScoutBridge failed to load. Check the GDExtension build in res://bin.")
+			return null
 		scout_bridge.name = "ScoutBridge"
 		add_child(scout_bridge)
 	return scout_bridge

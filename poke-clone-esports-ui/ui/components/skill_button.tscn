@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://battle_skill_button.gd" id="1_skill_button"]
+
+[node name="SkillButton" type="Button"]
+custom_minimum_size = Vector2(270, 112)
+script = ExtResource("1_skill_button")

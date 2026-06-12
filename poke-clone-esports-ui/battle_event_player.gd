@@ -25,10 +25,10 @@ func play_events(events: Array, state: Dictionary) -> void:
 func _apply_event(event: Dictionary) -> void:
 	var type := String(event.get("type", "none"))
 	match type:
-		"battle_started":
+		BattleEventTypes.BATTLE_STARTED:
 			message_log.push_log("Battle start!")
 			message_log.set_message("%s wants to battle." % opponent_status.get_display_name())
-		"player_switched":
+		BattleEventTypes.PLAYER_SWITCHED:
 			if String(event.get("actor", "")) == "opponent":
 				message_log.set_message("Opponent sends out %s." % event.get("player_name", "opponent"))
 			elif String(event.get("reason", "")) == "turn":
@@ -36,60 +36,60 @@ func _apply_event(event: Dictionary) -> void:
 			else:
 				message_log.set_message("Switched to %s." % event.get("player_name", "player"))
 			message_log.push_log(message_log.get_message())
-		"skill_started":
+		BattleEventTypes.SKILL_STARTED:
 			var actor := _display_event_actor(event)
 			message_log.set_message("%s used %s." % [actor, BattleRewardPresenter.format_skill_id(String(event.get("skill_id", "a skill")))])
 			message_log.push_log(message_log.get_message())
-		"drill_started":
+		BattleEventTypes.DRILL_STARTED:
 			var actor := _display_actor(String(event.get("actor", "none")))
 			var drill_name := String(event.get("reason", "Drill"))
 			message_log.set_message("%s chose %s." % [actor, drill_name])
 			message_log.push_log(message_log.get_message())
-		"drill_completed":
+		BattleEventTypes.DRILL_COMPLETED:
 			var actor := _display_actor(String(event.get("actor", "none")))
 			message_log.push_log("%s drill result: %s (+%s mana)." % [
 				actor,
 				String(event.get("reason", "good")).capitalize(),
 				event.get("amount", 0),
 			])
-		"mana_changed":
+		BattleEventTypes.MANA_CHANGED:
 			_animate_mana(String(event.get("actor", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("actor_player_index", -1)))
 			message_log.push_log("%s mana %s -> %s." % [_display_event_actor(event), event.get("old_value", 0), event.get("new_value", 0)])
-		"cooldown_started":
+		BattleEventTypes.COOLDOWN_STARTED:
 			message_log.push_log("%s cooldown: %s turn(s)." % [BattleRewardPresenter.format_skill_id(String(event.get("skill_id", ""))), event.get("new_value", 0)])
-		"cooldown_ready":
+		BattleEventTypes.COOLDOWN_READY:
 			message_log.push_log("%s is ready." % BattleRewardPresenter.format_skill_id(String(event.get("skill_id", ""))))
-		"action_blocked":
+		BattleEventTypes.ACTION_BLOCKED:
 			message_log.push_log("%s could not act: %s." % [_display_actor(String(event.get("actor", "none"))), event.get("reason", "blocked")])
-		"attack_missed":
+		BattleEventTypes.ATTACK_MISSED:
 			message_log.set_message("It missed.")
 			message_log.push_log("The play missed.")
-		"damage_applied":
+		BattleEventTypes.DAMAGE_APPLIED:
 			_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
 			message_log.push_log("%s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
-		"healing_applied":
+		BattleEventTypes.HEALING_APPLIED:
 			_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
 			message_log.push_log("%s recovered %s HP." % [_display_event_target(event), event.get("amount", 0)])
-		"status_applied":
+		BattleEventTypes.STATUS_APPLIED:
 			message_log.push_log(_format_status_log(event))
-		"status_expired":
+		BattleEventTypes.STATUS_EXPIRED:
 			message_log.push_log("%s status expired." % _display_event_target(event))
-		"mark_applied":
+		BattleEventTypes.MARK_APPLIED:
 			message_log.push_log("%s was marked." % _display_event_target(event))
-		"mark_triggered":
+		BattleEventTypes.MARK_TRIGGERED:
 			message_log.push_log("Mark triggered for %s bonus damage." % event.get("amount", 0))
-		"mark_expired":
+		BattleEventTypes.MARK_EXPIRED:
 			message_log.push_log("%s mark expired." % _display_event_target(event))
-		"farming_triggered":
+		BattleEventTypes.FARMING_TRIGGERED:
 			message_log.push_log("%s: lineup gained up to %s mana." % [event.get("reason", "Farm secured"), event.get("amount", 0)])
-		"skill_xp_gained":
+		BattleEventTypes.SKILL_XP_GAINED:
 			reward_presenter.defer_progress_event(event)
-		"skill_leveled_up":
+		BattleEventTypes.SKILL_LEVELED_UP:
 			reward_presenter.defer_progress_event(event)
-		"battle_finished":
+		BattleEventTypes.BATTLE_FINISHED:
 			message_log.set_message("The battle is over.")
 			message_log.push_log("Winner: %s" % event.get("winner", "none"))
-		"reward_granted":
+		BattleEventTypes.REWARD_GRANTED:
 			var reward: Dictionary = event.get("reward", {})
 			message_log.push_log("Team earned %s battle XP." % reward.get("total_xp", 0))
 

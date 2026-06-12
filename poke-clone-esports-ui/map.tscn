@@ -82,7 +82,7 @@ offset_right = 1600.0
 offset_bottom = 1099.0
 color = Color(0.45, 0.68, 0.38, 1)
 
-[node name="PathHorizontalEdge" type="ColorRect" parent="Ground" unique_id=211841593]
+[node name="PathHorizontalEdge" type="ColorRect" parent="Ground" unique_id=211841593 groups=["walkable"]]
 z_index = -18
 offset_left = -1.0
 offset_top = 514.0
@@ -90,28 +90,28 @@ offset_right = 1599.0
 offset_bottom = 634.0
 color = Color(0.58, 0.48, 0.33, 1)
 
-[node name="PathHorizontal" type="ColorRect" parent="Ground" unique_id=190215223]
+[node name="PathHorizontal" type="ColorRect" parent="Ground" unique_id=190215223 groups=["walkable"]]
 z_index = -17
 offset_top = 530.0
 offset_right = 1601.0
 offset_bottom = 620.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVerticalEdge" type="ColorRect" parent="Ground" unique_id=1319791948]
+[node name="PathVerticalEdge" type="ColorRect" parent="Ground" unique_id=1319791948 groups=["walkable"]]
 z_index = -18
 offset_left = 735.0
 offset_right = 855.0
 offset_bottom = 1100.0
 color = Color(0.58, 0.48, 0.33, 1)
 
-[node name="PathVertical" type="ColorRect" parent="Ground" unique_id=9718695]
+[node name="PathVertical" type="ColorRect" parent="Ground" unique_id=9718695 groups=["walkable"]]
 z_index = -17
 offset_left = 750.0
 offset_right = 840.0
 offset_bottom = 1100.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="LanCafePathEdge" type="ColorRect" parent="Ground" unique_id=1366904696]
+[node name="LanCafePathEdge" type="ColorRect" parent="Ground" unique_id=1366904696 groups=["walkable"]]
 z_index = -18
 offset_left = 255.0
 offset_top = 290.0
@@ -119,7 +119,7 @@ offset_right = 605.0
 offset_bottom = 380.0
 color = Color(0.58, 0.48, 0.33, 1)
 
-[node name="LanCafePath" type="ColorRect" parent="Ground" unique_id=1521556929]
+[node name="LanCafePath" type="ColorRect" parent="Ground" unique_id=1521556929 groups=["walkable"]]
 z_index = -17
 offset_left = 270.0
 offset_top = 305.0
@@ -127,7 +127,7 @@ offset_right = 590.0
 offset_bottom = 365.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="MajorHallPathEdge" type="ColorRect" parent="Ground" unique_id=455544936]
+[node name="MajorHallPathEdge" type="ColorRect" parent="Ground" unique_id=455544936 groups=["walkable"]]
 z_index = -18
 offset_left = 1000.0
 offset_top = 280.0
@@ -135,7 +135,7 @@ offset_right = 1360.0
 offset_bottom = 370.0
 color = Color(0.58, 0.48, 0.33, 1)
 
-[node name="MajorHallPath" type="ColorRect" parent="Ground" unique_id=1761951654]
+[node name="MajorHallPath" type="ColorRect" parent="Ground" unique_id=1761951654 groups=["walkable"]]
 z_index = -17
 offset_left = 1015.0
 offset_top = 295.0
@@ -143,14 +143,14 @@ offset_right = 1345.0
 offset_bottom = 355.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical2" type="ColorRect" parent="Ground" unique_id=202581543]
+[node name="PathVertical2" type="ColorRect" parent="Ground" unique_id=202581543 groups=["walkable"]]
 z_index = -17
 offset_left = -92.0
 offset_top = -441.0
 offset_bottom = 635.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical3" type="ColorRect" parent="Ground" unique_id=641732361]
+[node name="PathVertical3" type="ColorRect" parent="Ground" unique_id=641732361 groups=["walkable"]]
 z_index = -17
 offset_left = -363.0
 offset_top = -547.0
@@ -158,7 +158,7 @@ offset_right = 269.0
 offset_bottom = -442.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical4" type="ColorRect" parent="Ground" unique_id=1308480729]
+[node name="PathVertical4" type="ColorRect" parent="Ground" unique_id=1308480729 groups=["walkable"]]
 z_index = -17
 offset_left = 742.0
 offset_top = -566.0
@@ -166,14 +166,14 @@ offset_right = 1374.0
 offset_bottom = -461.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical5" type="ColorRect" parent="Ground" unique_id=666583332]
+[node name="PathVertical5" type="ColorRect" parent="Ground" unique_id=666583332 groups=["walkable"]]
 z_index = -17
 offset_left = 735.0
 offset_top = -1261.0
 offset_right = 855.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical6" type="ColorRect" parent="Ground" unique_id=1612389094]
+[node name="PathVertical6" type="ColorRect" parent="Ground" unique_id=1612389094 groups=["walkable"]]
 z_index = -17
 offset_left = 615.0
 offset_top = -1365.0
@@ -181,7 +181,7 @@ offset_right = 1652.0
 offset_bottom = -1260.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical7" type="ColorRect" parent="Ground" unique_id=1159250128]
+[node name="PathVertical7" type="ColorRect" parent="Ground" unique_id=1159250128 groups=["walkable"]]
 z_index = -17
 offset_left = 1599.0
 offset_top = 514.0
@@ -189,7 +189,7 @@ offset_right = 2638.0
 offset_bottom = 634.0
 color = Color(0.72, 0.61, 0.43, 1)
 
-[node name="PathVertical8" type="ColorRect" parent="Ground" unique_id=1602383819]
+[node name="PathVertical8" type="ColorRect" parent="Ground" unique_id=1602383819 groups=["walkable"]]
 z_index = -17
 offset_left = 2486.0
 offset_top = -918.0
