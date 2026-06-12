@@ -5,6 +5,10 @@
 [ext_resource type="PackedScene" path="res://ui/drill_minigame.tscn" id="3_drill"]
 [ext_resource type="Texture2D" uid="uid://vtl8qok84ega" path="res://assets/players/avatars/portrait1.png" id="4_player_avatar"]
 [ext_resource type="Texture2D" uid="uid://bptittjvsb05a" path="res://assets/players/avatars/portrait2.png" id="5_opponent_avatar"]
+[ext_resource type="Script" path="res://battle_status_panel.gd" id="6_status_panel"]
+[ext_resource type="Script" path="res://battle_lineup_panel.gd" id="7_lineup_panel"]
+[ext_resource type="Script" path="res://battle_message_log.gd" id="8_message_log"]
+[ext_resource type="Script" path="res://battle_action_panel.gd" id="9_action_panel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_player_monitor"]
 content_margin_left = 18.0
@@ -252,6 +256,7 @@ anchor_bottom = 0.24
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_status")
+script = ExtResource("6_status_panel")
 
 [node name="Content" type="VBoxContainer" parent="OpponentStatus" unique_id=1512924220]
 layout_mode = 2
@@ -331,6 +336,7 @@ anchor_bottom = 0.71
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_status")
+script = ExtResource("6_status_panel")
 
 [node name="Content" type="VBoxContainer" parent="PlayerStatus" unique_id=294458150]
 layout_mode = 2
@@ -409,6 +415,7 @@ anchor_right = 0.94
 anchor_bottom = 0.71
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("7_lineup_panel")
 
 [node name="Margin" type="MarginContainer" parent="LineupPanel"]
 layout_mode = 2
@@ -443,6 +450,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 12
+script = ExtResource("8_message_log")
 
 [node name="Message" type="Label" parent="BottomPanel/BottomSplit/TextBox" unique_id=1839429302]
 layout_mode = 2
@@ -462,6 +470,7 @@ scroll_active = false
 custom_minimum_size = Vector2(560, 0)
 layout_mode = 2
 theme_override_constants/separation = 10
+script = ExtResource("9_action_panel")
 
 [node name="MainMenuGrid" type="GridContainer" parent="BottomPanel/BottomSplit/ActionBox" unique_id=1353749082]
 layout_mode = 2

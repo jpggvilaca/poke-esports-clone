@@ -44,9 +44,10 @@ func show_dialog(lines: Array[String]) -> void:
 	await dialog_box.dialog_finished
 
 
-func set_trainer_visible(is_visible: bool) -> void:
-	trainer_panel.visible = is_visible
-	if is_visible:
+func set_trainer_visible(_is_visible: bool) -> void:
+	trainer_panel.visible = _is_visible
+	
+	if _is_visible:
 		hide_prompt()
 
 

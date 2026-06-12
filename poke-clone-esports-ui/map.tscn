@@ -18,6 +18,9 @@
 [ext_resource type="Texture2D" uid="uid://bfj3xenvfu517" path="res://assets/players/Char_006_Idle.png" id="12_fan"]
 [ext_resource type="Texture2D" uid="uid://cicc6c4gw6icj" path="res://assets/players/Char_001.png" id="13_player"]
 [ext_resource type="Texture2D" uid="uid://dsfptn3powh4w" path="res://assets/players/Char_003_Idle.png" id="14_brother"]
+[ext_resource type="Script" uid="uid://bu825qrsv3dyh" path="res://map_world_bounds.gd" id="15_world_bounds"]
+[ext_resource type="Script" uid="uid://dyq7gwxpf6g6s" path="res://map_npc_controller.gd" id="16_npc_controller"]
+[ext_resource type="Script" uid="uid://qkfypxtpqyy0" path="res://map_player_controller.gd" id="17_player_controller"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_lancafe"]
 size = Vector2(339, 167.5)
@@ -70,6 +73,7 @@ script = ExtResource("1_map")
 [node name="MapUI" parent="." unique_id=248203091 instance=ExtResource("2_map_ui")]
 
 [node name="Ground" type="Node2D" parent="." unique_id=1284534122]
+script = ExtResource("15_world_bounds")
 
 [node name="Grass" type="ColorRect" parent="Ground" unique_id=1998482434]
 z_index = -20
@@ -512,6 +516,7 @@ position = Vector2(0, 12)
 shape = SubResource("RectangleShape2D_trashbin")
 
 [node name="NPCs" type="Node2D" parent="." unique_id=890992029]
+script = ExtResource("16_npc_controller")
 
 [node name="OlderBrother" type="StaticBody2D" parent="NPCs" unique_id=434386173 groups=["battle_npc"]]
 position = Vector2(760, 575)
@@ -628,6 +633,7 @@ horizontal_alignment = 1
 z_index = 10
 position = Vector2(760, 690)
 collision_mask = 6
+script = ExtResource("17_player_controller")
 
 [node name="Sprite" type="Sprite2D" parent="HumanPlayer" unique_id=25388552]
 scale = Vector2(2.2, 2.2)
