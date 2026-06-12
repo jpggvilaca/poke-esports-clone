@@ -1,18 +1,26 @@
 extends Node2D
 
 const STORY_DIALOGUE := preload("res://story_dialogue.gd")
-const MAP_SIZE := Vector2(1600, 1100)
+const DEFAULT_MAP_MIN := Vector2(0, 0)
+const DEFAULT_MAP_MAX := Vector2(1600, 1100)
+const MAP_BOUNDS_MARGIN := 120.0
+const PLAYER_MIN_EDGE_MARGIN := Vector2(40, 50)
+const PLAYER_MAX_EDGE_MARGIN := Vector2(40, 40)
+const WALKABLE_PATH_NAME := "Path"
 const PLAYER_SPEED := 210.0
 const INTERACT_DISTANCE := 82.0
 const BUILDING_INTERACT_DISTANCE := 190.0
 
 @onready var player_body: CharacterBody2D = $HumanPlayer
 @onready var player_sprite: Sprite2D = $HumanPlayer/Sprite
+@onready var player_camera: Camera2D = $HumanPlayer/Camera
 @onready var npc_root: Node2D = $NPCs
 @onready var lan_cafe: Node2D = $Buildings/LanCafe
 @onready var major_hall: Node2D = $Buildings/MajorHall
 @onready var map_ui: MapUI = $MapUI
 
+var map_bounds := Rect2(DEFAULT_MAP_MIN, DEFAULT_MAP_MAX - DEFAULT_MAP_MIN)
+var walkable_path_rects: Array[Rect2] = []
 var player_frame_timer := 0.0
 var npc_frame_timer := 0.0
 var battle_triggered := false
@@ -22,7 +30,12 @@ var npc_base_rows: Dictionary = {}
 
 
 func _ready() -> void:
-	player_body.global_position = GameState.saved_map_position
+	_update_map_bounds()
+	_cache_walkable_path_rects()
+	_configure_player_camera()
+	player_body.global_position = _clamp_to_map(GameState.saved_map_position)
+	if not _is_walkable_position(player_body.global_position):
+		player_body.global_position = _nearest_walkable_position(player_body.global_position)
 	_cache_npc_directions()
 	_refresh_npc_states()
 	_refresh_trainer_menu()
@@ -40,13 +53,145 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var direction := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	player_body.velocity = direction * PLAYER_SPEED
+	var movement := _get_walkable_movement(direction, delta)
+	var previous_position := player_body.global_position
+	player_body.velocity = movement / delta if delta > 0.0 else Vector2.ZERO
 	player_body.move_and_slide()
-	player_body.global_position.x = clamp(player_body.global_position.x, 40.0, MAP_SIZE.x - 40.0)
-	player_body.global_position.y = clamp(player_body.global_position.y, 50.0, MAP_SIZE.y - 40.0)
+	player_body.global_position = _clamp_to_map(player_body.global_position)
+	if not _is_walkable_position(player_body.global_position):
+		player_body.global_position = previous_position
+		player_body.velocity = Vector2.ZERO
 
-	_animate_player(direction, delta)
+	_animate_player(direction if movement != Vector2.ZERO else Vector2.ZERO, delta)
 	_update_nearest_battle_npc()
+
+
+func _update_map_bounds() -> void:
+	var bounds := Rect2(DEFAULT_MAP_MIN, DEFAULT_MAP_MAX - DEFAULT_MAP_MIN)
+	for root in [$Ground, $Buildings, $Objects, $NPCs]:
+		bounds = _include_node_bounds(root, bounds)
+	map_bounds = bounds.grow(MAP_BOUNDS_MARGIN)
+
+
+func _include_node_bounds(node: Node, bounds: Rect2) -> Rect2:
+	var expanded_bounds := bounds
+	var node_bounds := _get_canvas_item_bounds(node)
+	if node_bounds.size != Vector2.ZERO:
+		expanded_bounds = expanded_bounds.merge(node_bounds)
+
+	for child in node.get_children():
+		expanded_bounds = _include_node_bounds(child, expanded_bounds)
+
+	return expanded_bounds
+
+
+func _get_canvas_item_bounds(node: Node) -> Rect2:
+	if node is Sprite2D:
+		var sprite := node as Sprite2D
+		return _transform_rect(sprite.get_global_transform(), sprite.get_rect())
+
+	if node is Control:
+		var control := node as Control
+		return control.get_global_rect()
+
+	return Rect2()
+
+
+func _transform_rect(transform: Transform2D, rect: Rect2) -> Rect2:
+	var top_left := transform * rect.position
+	var top_right := transform * (rect.position + Vector2(rect.size.x, 0.0))
+	var bottom_left := transform * (rect.position + Vector2(0.0, rect.size.y))
+	var bottom_right := transform * (rect.position + rect.size)
+	var left = min(min(top_left.x, top_right.x), min(bottom_left.x, bottom_right.x))
+	var top = min(min(top_left.y, top_right.y), min(bottom_left.y, bottom_right.y))
+	var right = max(max(top_left.x, top_right.x), max(bottom_left.x, bottom_right.x))
+	var bottom = max(max(top_left.y, top_right.y), max(bottom_left.y, bottom_right.y))
+	return Rect2(Vector2(left, top), Vector2(right - left, bottom - top))
+
+
+func _configure_player_camera() -> void:
+	player_camera.enabled = true
+	player_camera.limit_left = int(floor(map_bounds.position.x))
+	player_camera.limit_top = int(floor(map_bounds.position.y))
+	player_camera.limit_right = int(ceil(map_bounds.position.x + map_bounds.size.x))
+	player_camera.limit_bottom = int(ceil(map_bounds.position.y + map_bounds.size.y))
+
+
+func _cache_walkable_path_rects() -> void:
+	walkable_path_rects.clear()
+	_cache_walkable_path_rects_from($Ground)
+
+
+func _cache_walkable_path_rects_from(node: Node) -> void:
+	if node is ColorRect and String(node.name).contains(WALKABLE_PATH_NAME):
+		var rect := (node as ColorRect).get_global_rect()
+		if rect.size != Vector2.ZERO:
+			walkable_path_rects.push_back(rect)
+
+	for child in node.get_children():
+		_cache_walkable_path_rects_from(child)
+
+
+func _get_walkable_movement(direction: Vector2, delta: float) -> Vector2:
+	if direction == Vector2.ZERO:
+		return Vector2.ZERO
+
+	var current_position := player_body.global_position
+	var direct_movement := direction * PLAYER_SPEED * delta
+	if _is_walkable_position(_clamp_to_map(current_position + direct_movement)):
+		return direct_movement
+
+	if direction.x != 0.0:
+		var horizontal_movement := Vector2(sign(direction.x), 0.0) * PLAYER_SPEED * delta
+		if _is_walkable_position(_clamp_to_map(current_position + horizontal_movement)):
+			return horizontal_movement
+
+	if direction.y != 0.0:
+		var vertical_movement := Vector2(0.0, sign(direction.y)) * PLAYER_SPEED * delta
+		if _is_walkable_position(_clamp_to_map(current_position + vertical_movement)):
+			return vertical_movement
+
+	return Vector2.ZERO
+
+
+func _is_walkable_position(position: Vector2) -> bool:
+	for rect in walkable_path_rects:
+		if rect.has_point(position):
+			return true
+	return false
+
+
+func _nearest_walkable_position(position: Vector2) -> Vector2:
+	if walkable_path_rects.is_empty():
+		return position
+
+	var nearest_position := position
+	var nearest_distance := INF
+	for rect in walkable_path_rects:
+		var candidate := Vector2(
+			clamp(position.x, rect.position.x, rect.position.x + rect.size.x),
+			clamp(position.y, rect.position.y, rect.position.y + rect.size.y)
+		)
+		var distance := position.distance_squared_to(candidate)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_position = candidate
+
+	return _clamp_to_map(nearest_position)
+
+
+func _clamp_to_map(position: Vector2) -> Vector2:
+	var min_position := map_bounds.position + PLAYER_MIN_EDGE_MARGIN
+	var max_position := map_bounds.position + map_bounds.size - PLAYER_MAX_EDGE_MARGIN
+	if max_position.x < min_position.x:
+		position.x = map_bounds.get_center().x
+	else:
+		position.x = clamp(position.x, min_position.x, max_position.x)
+	if max_position.y < min_position.y:
+		position.y = map_bounds.get_center().y
+	else:
+		position.y = clamp(position.y, min_position.y, max_position.y)
+	return position
 
 
 func _unhandled_input(event: InputEvent) -> void:
