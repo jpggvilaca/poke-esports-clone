@@ -2,6 +2,7 @@ class_name MapPlayerController
 extends CharacterBody2D
 
 const PLAYER_SPEED := 210.0
+const SPRINT_MULTIPLIER := 1.55
 
 @onready var player_sprite: Sprite2D = $Sprite
 @onready var player_camera: Camera2D = $Camera
@@ -52,21 +53,26 @@ func _get_walkable_movement(direction: Vector2, delta: float) -> Vector2:
 	if direction == Vector2.ZERO:
 		return Vector2.ZERO
 
-	var direct_movement := direction * PLAYER_SPEED * delta
+	var move_speed := _current_move_speed()
+	var direct_movement := direction * move_speed * delta
 	if world_bounds.is_walkable_position(world_bounds.clamp_to_map(global_position + direct_movement)):
 		return direct_movement
 
 	if direction.x != 0.0:
-		var horizontal_movement := Vector2(sign(direction.x), 0.0) * PLAYER_SPEED * delta
+		var horizontal_movement := Vector2(sign(direction.x), 0.0) * move_speed * delta
 		if world_bounds.is_walkable_position(world_bounds.clamp_to_map(global_position + horizontal_movement)):
 			return horizontal_movement
 
 	if direction.y != 0.0:
-		var vertical_movement := Vector2(0.0, sign(direction.y)) * PLAYER_SPEED * delta
+		var vertical_movement := Vector2(0.0, sign(direction.y)) * move_speed * delta
 		if world_bounds.is_walkable_position(world_bounds.clamp_to_map(global_position + vertical_movement)):
 			return vertical_movement
 
 	return Vector2.ZERO
+
+
+func _current_move_speed() -> float:
+	return PLAYER_SPEED * SPRINT_MULTIPLIER if Input.is_key_pressed(KEY_SHIFT) else PLAYER_SPEED
 
 
 func _animate_player(direction: Vector2, delta: float) -> void:

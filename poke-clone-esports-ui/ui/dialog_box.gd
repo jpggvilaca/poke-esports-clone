@@ -113,12 +113,9 @@ func _current_line_length() -> int:
 
 
 func _is_advance_event(event: InputEvent) -> bool:
-	if event.is_action_pressed("ui_accept"):
-		return true
-
 	var key_event := event as InputEventKey
 	if key_event != null and key_event.pressed and not key_event.echo:
-		return key_event.keycode == KEY_SPACE or key_event.keycode == KEY_ENTER or key_event.keycode == KEY_KP_ENTER
+		return key_event.keycode == KEY_E
 
 	var mouse_event := event as InputEventMouseButton
 	if mouse_event != null and mouse_event.pressed:

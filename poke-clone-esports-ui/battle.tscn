@@ -281,7 +281,7 @@ custom_minimum_size = Vector2(58, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.96, 0.84, 1)
 theme_override_font_sizes/font_size = 16
-text = "HP"
+text = "❤️"
 
 [node name="Hp" type="ProgressBar" parent="OpponentStatus/Content/HpRow" unique_id=715730010]
 custom_minimum_size = Vector2(0, 24)
@@ -305,7 +305,7 @@ custom_minimum_size = Vector2(58, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 16
-text = "Mana"
+text = "💧"
 
 [node name="Mana" type="ProgressBar" parent="OpponentStatus/Content/ManaRow" unique_id=508416208]
 custom_minimum_size = Vector2(0, 18)
@@ -321,10 +321,10 @@ theme_override_font_sizes/font_size = 16
 horizontal_alignment = 2
 
 [node name="Status" type="Label" parent="OpponentStatus/Content" unique_id=272502937]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.93, 0.82, 0.45, 1)
 theme_override_font_sizes/font_size = 15
-text = "Status: none"
 
 [node name="PlayerStatus" type="PanelContainer" parent="." unique_id=274945578]
 layout_mode = 1
@@ -361,7 +361,7 @@ custom_minimum_size = Vector2(58, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.96, 0.84, 1)
 theme_override_font_sizes/font_size = 16
-text = "HP"
+text = "❤️"
 
 [node name="Hp" type="ProgressBar" parent="PlayerStatus/Content/HpRow" unique_id=1570444365]
 custom_minimum_size = Vector2(0, 24)
@@ -385,7 +385,7 @@ custom_minimum_size = Vector2(58, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 16
-text = "Mana"
+text = "💧"
 
 [node name="Mana" type="ProgressBar" parent="PlayerStatus/Content/ManaRow" unique_id=1255659590]
 custom_minimum_size = Vector2(0, 18)
@@ -401,10 +401,10 @@ theme_override_font_sizes/font_size = 16
 horizontal_alignment = 2
 
 [node name="Status" type="Label" parent="PlayerStatus/Content" unique_id=433816712]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.93, 0.82, 0.45, 1)
 theme_override_font_sizes/font_size = 15
-text = "Status: none"
 
 [node name="LineupPanel" type="PanelContainer" parent="."]
 layout_mode = 1
@@ -446,6 +446,7 @@ layout_mode = 2
 theme_override_constants/separation = 22
 
 [node name="TextBox" type="VBoxContainer" parent="BottomPanel/BottomSplit" unique_id=787394285]
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -469,6 +470,7 @@ scroll_active = false
 [node name="ActionBox" type="VBoxContainer" parent="BottomPanel/BottomSplit" unique_id=632524657]
 custom_minimum_size = Vector2(560, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 10
 script = ExtResource("9_action_panel")
 

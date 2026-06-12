@@ -6,6 +6,8 @@ var bridge: BattleBridge
 @onready var drill_minigame: DrillMinigame = $DrillMinigame
 @onready var opponent_status: BattleStatusPanel = $OpponentStatus
 @onready var player_status: BattleStatusPanel = $PlayerStatus
+@onready var opponent_avatar: Control = $OpponentAvatar
+@onready var player_avatar: Control = $PlayerAvatar
 @onready var message_log: BattleMessageLog = $BottomPanel/BottomSplit/TextBox
 @onready var action_panel: BattleActionPanel = $BottomPanel/BottomSplit/ActionBox
 @onready var lineup_panel: BattleLineupPanel = $LineupPanel
@@ -18,6 +20,7 @@ var finished_result: Dictionary = {}
 var rewards_applied := false
 var current_state: Dictionary = {}
 var pending_skill: Dictionary = {}
+var battle_setup: Dictionary = {}
 
 
 func _ready() -> void:
@@ -25,7 +28,8 @@ func _ready() -> void:
 	if not _setup_bridge():
 		return
 
-	var result := bridge.start_battle(GameState.build_battle_setup())
+	battle_setup = GameState.build_battle_setup()
+	var result := bridge.start_battle(battle_setup)
 	_refresh_drill_action()
 
 	if not result.get("accepted", false):
@@ -56,7 +60,7 @@ func _setup_children() -> void:
 	drill_minigame.drill_finished.connect(_on_drill_minigame_finished)
 	drill_minigame.drill_cancelled.connect(_on_drill_minigame_cancelled)
 	add_child(event_player)
-	event_player.setup(message_log, player_status, opponent_status, reward_presenter)
+	event_player.setup(message_log, player_status, opponent_status, reward_presenter, player_avatar, opponent_avatar)
 
 
 func _setup_bridge() -> bool:
@@ -255,6 +259,10 @@ func _play_events(events: Array) -> void:
 
 func _update_state(state: Dictionary) -> void:
 	current_state = state.duplicate(true)
+	var opponent: Dictionary = current_state.get("opponent", {})
+	if not opponent.has("rating") and battle_setup.has("opponent_rating"):
+		opponent["rating"] = int(battle_setup.get("opponent_rating", 0))
+		current_state["opponent"] = opponent
 	player_status.set_status(current_state.get("player", {}), "Your Player")
 	opponent_status.set_status(current_state.get("opponent", {}), "Opponent")
 	lineup_panel.refresh(current_state)

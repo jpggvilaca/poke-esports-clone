@@ -280,10 +280,10 @@ namespace
         test.ExpectEqual(player.xp, 0, "starter begins with no XP");
         test.ExpectEqual(player.xpRequiredForNextLevel, 100, "level 1 needs 100 XP");
         test.ExpectEqual(player.rank, CareerRank::Rookie, "starter begins as Rookie");
-        test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(4), "starter learns four skills");
-        test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(4), "starter equips four skills");
+        test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(1), "starter learns one skill");
+        test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(1), "starter equips one skill");
         test.ExpectEqual(player.learnedSkillIds[0], std::string("top-basic"), "starter loadout begins with the spec basic");
-        test.ExpectEqual(player.activeSkillIds[1], std::string("top-hold-line"), "starter loadout includes the spec utility ability");
+        test.ExpectEqual(player.activeSkillIds[0], std::string("top-basic"), "starter active skill is the spec basic");
         test.ExpectEqual(player.traitId, std::string("clutch-player"), "top starter receives the top default trait");
 
         test.ExpectEqual(
@@ -321,6 +321,13 @@ namespace
 
         ProfileCommandResult duplicateLearn = profiles.LearnSkill(player, "jungle-gank");
         test.Expect(!duplicateLearn.accepted, "cannot learn the same skill twice");
+
+        profiles.LearnSkill(player, "top-hold-line");
+        profiles.LearnSkill(player, "top-sunder");
+        profiles.LearnSkill(player, "top-gamebreaker");
+        profiles.EquipSkill(player, "top-hold-line");
+        profiles.EquipSkill(player, "top-sunder");
+        profiles.EquipSkill(player, "top-gamebreaker");
 
         ProfileCommandResult equipWhenFull = profiles.EquipSkill(player, "jungle-gank");
         test.Expect(!equipWhenFull.accepted, "cannot equip when all active slots are full");
@@ -598,7 +605,7 @@ namespace
         test.ExpectEqual(first.candidates.size(), static_cast<std::size_t>(3), "first scout offer has three candidates");
         test.ExpectEqual(first.candidates[0].name, std::string("Mira"), "first scout candidate name is hydrated");
         test.ExpectEqual(first.candidates[0].spec, Spec::Support, "first scout candidate spec is hydrated");
-        test.ExpectEqual(first.candidates[0].activeSkillIds.size(), static_cast<std::size_t>(4), "scout candidate receives starter skills");
+        test.ExpectEqual(first.candidates[0].activeSkillIds.size(), static_cast<std::size_t>(1), "scout candidate receives starter skills");
 
         ScoutOfferView third = scouts.GetNextOffer(1200, { "first-scout" }, { "second-scout" });
         test.Expect(third.available, "completed and declined offers are skipped");

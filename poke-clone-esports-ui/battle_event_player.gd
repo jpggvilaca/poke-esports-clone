@@ -4,15 +4,19 @@ extends Node
 var message_log: BattleMessageLog
 var player_status: BattleStatusPanel
 var opponent_status: BattleStatusPanel
+var player_float_anchor: Control
+var opponent_float_anchor: Control
 var reward_presenter: BattleRewardPresenter
 var current_state: Dictionary = {}
 
 
-func setup(next_message_log: BattleMessageLog, next_player_status: BattleStatusPanel, next_opponent_status: BattleStatusPanel, next_reward_presenter: BattleRewardPresenter) -> void:
+func setup(next_message_log: BattleMessageLog, next_player_status: BattleStatusPanel, next_opponent_status: BattleStatusPanel, next_reward_presenter: BattleRewardPresenter, next_player_float_anchor: Control = null, next_opponent_float_anchor: Control = null) -> void:
 	message_log = next_message_log
 	player_status = next_player_status
 	opponent_status = next_opponent_status
 	reward_presenter = next_reward_presenter
+	player_float_anchor = next_player_float_anchor
+	opponent_float_anchor = next_opponent_float_anchor
 
 
 func play_events(events: Array, state: Dictionary) -> void:
@@ -66,9 +70,11 @@ func _apply_event(event: Dictionary) -> void:
 			message_log.push_log("The play missed.")
 		BattleEventTypes.DAMAGE_APPLIED:
 			_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
+			_show_floating_number(String(event.get("target", "none")), int(event.get("amount", 0)), false, int(event.get("target_player_index", -1)))
 			message_log.push_log("%s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
 		BattleEventTypes.HEALING_APPLIED:
 			_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
+			_show_floating_number(String(event.get("target", "none")), int(event.get("amount", 0)), true, int(event.get("target_player_index", -1)))
 			message_log.push_log("%s recovered %s HP." % [_display_event_target(event), event.get("amount", 0)])
 		BattleEventTypes.STATUS_APPLIED:
 			message_log.push_log(_format_status_log(event))
@@ -110,6 +116,42 @@ func _animate_mana(actor: String, old_value: int, new_value: int, player_index: 
 		opponent_status.animate_mana(old_value, new_value)
 	else:
 		player_status.animate_mana(old_value, new_value)
+
+
+func _show_floating_number(actor: String, amount: int, is_healing: bool, player_index: int = -1) -> void:
+	if amount <= 0:
+		return
+	if actor != "player" and actor != "opponent":
+		return
+	if actor == "player" and player_index != int(current_state.get("active_player_index", 0)):
+		return
+
+	var anchor := opponent_float_anchor if actor == "opponent" else player_float_anchor
+	if anchor == null:
+		return
+
+	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.text = "+%s" % amount if is_healing else "-%s" % amount
+	label.z_index = 100
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 52)
+	label.add_theme_color_override("font_color", Color(0.36, 1.0, 0.44, 1.0) if is_healing else Color(1.0, 0.28, 0.08, 1.0))
+	label.add_theme_color_override("font_outline_color", Color(0.02, 0.015, 0.01, 1.0))
+	label.add_theme_constant_override("outline_size", 8)
+	anchor.add_child(label)
+
+	var label_size := Vector2(150, 70)
+	label.size = label_size
+	label.position = Vector2((anchor.size.x - label_size.x) * 0.5, -38.0)
+	label.scale = Vector2(0.75, 0.75)
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 88.0, 0.85).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, 0.85).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(label, "scale", Vector2(1.22, 1.22), 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_callback(label.queue_free)
 
 
 func _display_actor(actor: String) -> String:

@@ -1,6 +1,13 @@
 class_name BattleStatusPanel
 extends PanelContainer
 
+const HP_LOW := Color(0.86, 0.12, 0.10, 1.0)
+const HP_WARN := Color(0.95, 0.46, 0.10, 1.0)
+const HP_MID := Color(0.92, 0.78, 0.18, 1.0)
+const HP_HIGH := Color(0.22, 0.72, 0.28, 1.0)
+const MANA_BLUE := Color(0.16, 0.48, 0.95, 1.0)
+const BAR_BG := Color(0.06, 0.07, 0.08, 1.0)
+
 @onready var name_label: Label = $Content/Name
 @onready var meta_label: Label = $Content/Meta
 @onready var hp_bar: ProgressBar = $Content/HpRow/Hp
@@ -20,9 +27,13 @@ func set_status(data: Dictionary, fallback_name: String) -> void:
 	var identity_suffix := ""
 	if not identity_name.is_empty():
 		identity_suffix = " | %s" % identity_name
+	var rating := int(data.get("rating", data.get("opponent_rating", 0)))
+	var rating_suffix := ""
+	if rating > 0:
+		rating_suffix = " | Rating %s" % rating
 	meta_label.text = "%s%s" % [
 		data.get("spec", "Spec"),
-		identity_suffix,
+		identity_suffix + rating_suffix,
 	]
 	hp_bar.max_value = max(1, max_hp)
 	hp_bar.value = clamp(hp, 0, max_hp)
@@ -32,19 +43,24 @@ func set_status(data: Dictionary, fallback_name: String) -> void:
 	mana_bar.value = clamp(mana, 0, max_mana)
 	mana_bar.tooltip_text = "Mana %s/%s" % [mana, max_mana]
 	mana_value.text = "%s/%s" % [mana, max_mana]
+	_apply_hp_style(hp, max_hp)
+	_apply_progress_style(mana_bar, MANA_BLUE)
 	status_label.text = format_status_indicator(data.get("status", {}))
+	status_label.visible = not status_label.text.is_empty()
 	status_label.tooltip_text = format_status_tooltip(data.get("status", {}))
 
 
 func animate_hp(old_value: int, new_value: int) -> void:
 	hp_bar.value = old_value
 	hp_value.text = "%s/%s" % [new_value, int(hp_bar.max_value)]
+	_apply_hp_style(new_value, int(hp_bar.max_value))
 	create_tween().tween_property(hp_bar, "value", new_value, 0.30)
 
 
 func animate_mana(old_value: int, new_value: int) -> void:
 	mana_bar.value = old_value
 	mana_value.text = "%s/%s" % [new_value, int(mana_bar.max_value)]
+	_apply_progress_style(mana_bar, MANA_BLUE)
 	create_tween().tween_property(mana_bar, "value", new_value, 0.25)
 
 
@@ -54,7 +70,7 @@ func get_display_name() -> String:
 
 static func compact_status_indicator(status: Dictionary) -> String:
 	var full_status := format_status_indicator(status)
-	if full_status == "Status: none":
+	if full_status.is_empty():
 		return ""
 	return full_status
 
@@ -73,25 +89,25 @@ static func format_status_indicator(status: Dictionary) -> String:
 	var healing_turns := int(status.get("healing_received_modifier_turns", 0))
 
 	if int(status.get("stunned_turns", 0)) > 0:
-		entries.push_back("[STUN %s]" % status.get("stunned_turns", 0))
+		entries.push_back("[💫 %s]" % status.get("stunned_turns", 0))
 	if int(status.get("silenced_turns", 0)) > 0:
-		entries.push_back("[SIL %s]" % status.get("silenced_turns", 0))
+		entries.push_back("[🤐 %s]" % status.get("silenced_turns", 0))
 	if int(status.get("rooted_turns", 0)) > 0:
-		entries.push_back("[ROOT %s]" % status.get("rooted_turns", 0))
+		entries.push_back("[🪢 %s]" % status.get("rooted_turns", 0))
 	if int(status.get("mark_turns", 0)) > 0:
-		entries.push_back("[MARK %s]" % status.get("mark_turns", 0))
+		entries.push_back("[🎯 %s]" % status.get("mark_turns", 0))
 	if attack_percent != 0 and attack_turns > 0:
-		entries.push_back("[%s ATK %s%% %st]" % [_status_marker(attack_percent), _signed_value(attack_percent), attack_turns])
+		entries.push_back("[%s⚔ %s%% %st]" % [_status_arrow(attack_percent), _signed_value(attack_percent), attack_turns])
 	if defense_percent != 0 and defense_turns > 0:
-		entries.push_back("[%s DEF %s%% %st]" % [_status_marker(defense_percent), _signed_value(defense_percent), defense_turns])
+		entries.push_back("[%s🛡 %s%% %st]" % [_status_arrow(defense_percent), _signed_value(defense_percent), defense_turns])
 	if penetration_percent != 0 and penetration_turns > 0:
-		entries.push_back("[PEN %s%% %st]" % [_signed_value(penetration_percent), penetration_turns])
+		entries.push_back("[🗡 %s%% %st]" % [_signed_value(penetration_percent), penetration_turns])
 	if cooldown_percent != 0 and cooldown_turns > 0:
-		entries.push_back("[CD %s%% %st]" % [_signed_value(cooldown_percent), cooldown_turns])
+		entries.push_back("[⏱ %s%% %st]" % [_signed_value(cooldown_percent), cooldown_turns])
 	if healing_percent != 0 and healing_turns > 0:
-		entries.push_back("[HEAL %s%% %st]" % [_signed_value(healing_percent), healing_turns])
+		entries.push_back("[❤️ %s%% %st]" % [_signed_value(healing_percent), healing_turns])
 	if entries.is_empty():
-		return "Status: none"
+		return ""
 	return _join_strings(entries, "  ")
 
 
@@ -123,10 +139,33 @@ static func _append_modifier_tooltip(lines: Array[String], status: Dictionary, v
 	lines.push_back("%s: %s%% for %s turn(s)." % [label, _signed_value(value), turns])
 
 
-static func _status_marker(value: int) -> String:
+func _apply_hp_style(hp: int, max_hp: int) -> void:
+	var ratio := float(hp) / float(max(1, max_hp))
+	var color := HP_HIGH
+	if ratio <= 0.25:
+		color = HP_LOW
+	elif ratio <= 0.50:
+		color = HP_WARN
+	elif ratio <= 0.75:
+		color = HP_MID
+	_apply_progress_style(hp_bar, color)
+
+
+func _apply_progress_style(bar: ProgressBar, fill_color: Color) -> void:
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.set_corner_radius_all(4)
+	var background := StyleBoxFlat.new()
+	background.bg_color = BAR_BG
+	background.set_corner_radius_all(4)
+	bar.add_theme_stylebox_override("fill", fill)
+	bar.add_theme_stylebox_override("background", background)
+
+
+static func _status_arrow(value: int) -> String:
 	if value > 0:
-		return "BUFF"
-	return "DEBUFF"
+		return "⬆"
+	return "⬇"
 
 
 static func _signed_value(value: int) -> String:

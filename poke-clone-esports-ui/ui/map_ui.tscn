@@ -40,6 +40,27 @@ script = ExtResource("1_map_ui_script")
 
 [node name="DialogBox" parent="." instance=ExtResource("2_dialog_box")]
 
+[node name="RatingPanel" type="PanelContainer" parent="."]
+z_index = 40
+anchors_preset = -1
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -230.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 72.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_prompt")
+
+[node name="RatingLabel" type="Label" parent="RatingPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 22
+text = "Rating 1000"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="PromptPanel" type="PanelContainer" parent="."]
 visible = false
 anchors_preset = -1
@@ -77,13 +98,25 @@ theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 18
 theme_override_constants/margin_bottom = 16
 
-[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin"]
+[node name="Tabs" type="TabContainer" parent="TrainerPanel/Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Overview" type="MarginContainer" parent="TrainerPanel/Margin/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin/Tabs/Overview"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="TrainerText" type="Label" parent="TrainerPanel/Margin/Scroll"]
+[node name="Text" type="Label" parent="TrainerPanel/Margin/Tabs/Overview/Scroll"]
 custom_minimum_size = Vector2(560, 0)
 layout_mode = 2
 size_flags_horizontal = 3
@@ -91,3 +124,177 @@ size_flags_vertical = 3
 theme_override_colors/font_color = Color(0.1, 0.1, 0.09, 1)
 theme_override_font_sizes/font_size = 20
 autowrap_mode = 3
+
+[node name="Players" type="MarginContainer" parent="TrainerPanel/Margin/Tabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin/Tabs/Players"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Text" type="Label" parent="TrainerPanel/Margin/Tabs/Players/Scroll"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.1, 0.1, 0.09, 1)
+theme_override_font_sizes/font_size = 19
+autowrap_mode = 3
+
+[node name="Lineup" type="MarginContainer" parent="TrainerPanel/Margin/Tabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin/Tabs/Lineup"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Text" type="Label" parent="TrainerPanel/Margin/Tabs/Lineup/Scroll"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.1, 0.1, 0.09, 1)
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3
+
+[node name="Scout" type="MarginContainer" parent="TrainerPanel/Margin/Tabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin/Tabs/Scout"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Text" type="Label" parent="TrainerPanel/Margin/Tabs/Scout/Scroll"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.1, 0.1, 0.09, 1)
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3
+
+[node name="History" type="MarginContainer" parent="TrainerPanel/Margin/Tabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="TrainerPanel/Margin/Tabs/History"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Text" type="Label" parent="TrainerPanel/Margin/Tabs/History/Scroll"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.1, 0.1, 0.09, 1)
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3
+
+[node name="MainMenuPanel" type="PanelContainer" parent="."]
+visible = false
+z_index = 50
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -190.0
+offset_top = -150.0
+offset_right = 190.0
+offset_bottom = 150.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_trainer")
+
+[node name="Margin" type="MarginContainer" parent="MainMenuPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="MainMenuPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="Title" type="Label" parent="MainMenuPanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 30
+text = "Poke-Clone Esports"
+horizontal_alignment = 1
+
+[node name="PlayButton" type="Button" parent="MainMenuPanel/Margin/Content"]
+custom_minimum_size = Vector2(240, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Play"
+
+[node name="QuitButton" type="Button" parent="MainMenuPanel/Margin/Content"]
+custom_minimum_size = Vector2(240, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Quit"
+
+[node name="SpecChoicePanel" type="PanelContainer" parent="."]
+visible = false
+z_index = 50
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -190.0
+offset_right = 230.0
+offset_bottom = 190.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_trainer")
+
+[node name="Margin" type="MarginContainer" parent="SpecChoicePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="SpecChoicePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="SpecChoicePanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.08, 0.1, 0.1, 1)
+theme_override_font_sizes/font_size = 26
+text = "Choose your first spec"
+horizontal_alignment = 1
+
+[node name="SpecButtons" type="VBoxContainer" parent="SpecChoicePanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1

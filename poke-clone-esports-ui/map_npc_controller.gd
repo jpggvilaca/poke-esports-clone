@@ -16,6 +16,8 @@ func tick_animation(delta: float, player_position: Vector2) -> void:
 	for npc in get_children():
 		if not _is_battle_npc(npc):
 			continue
+		if not GameState.is_npc_available(String(npc.name)):
+			continue
 
 		var sprite := npc.get_node_or_null("Sprite")
 		if not (sprite is Sprite2D):
@@ -40,6 +42,14 @@ func refresh_defeated_states() -> void:
 			continue
 
 		var npc_id := String(npc.name)
+		var available := GameState.is_npc_available(npc_id)
+		npc.visible = available
+		var collision := npc.get_node_or_null("Collision")
+		if collision is CollisionShape2D:
+			collision.disabled = not available
+		if not available:
+			continue
+
 		var defeated := GameState.is_npc_defeated(npc_id)
 		var sprite := npc.get_node_or_null("Sprite")
 		if sprite is CanvasItem:
@@ -47,7 +57,7 @@ func refresh_defeated_states() -> void:
 
 		var label := npc.get_node_or_null("%sLabel" % npc.name)
 		if label is Label:
-			label.text = "%s\nDefeated" % GameState.get_npc_display_name(npc_id) if defeated else GameState.get_npc_display_name(npc_id)
+			label.text = get_npc_label_text(npc, defeated)
 
 
 func find_nearest_battle_npc(player_position: Vector2, max_distance: float) -> Node2D:
@@ -55,6 +65,8 @@ func find_nearest_battle_npc(player_position: Vector2, max_distance: float) -> N
 	var nearest_distance := max_distance + 1.0
 	for npc in get_children():
 		if not _is_battle_npc(npc):
+			continue
+		if not GameState.is_npc_available(String(npc.name)):
 			continue
 		if GameState.is_npc_defeated(String(npc.name)):
 			continue
@@ -65,6 +77,34 @@ func find_nearest_battle_npc(player_position: Vector2, max_distance: float) -> N
 			nearest_npc = npc
 
 	return nearest_npc
+
+
+func get_npc(npc_id: String) -> Node2D:
+	var npc := get_node_or_null(npc_id)
+	return npc if npc is Node2D else null
+
+
+func get_npc_display_name(npc: Node) -> String:
+	var fallback_name := GameState.get_npc_display_name(String(npc.name))
+	var profile := npc as MapNpcProfile
+	if profile != null:
+		return profile.get_display_name(fallback_name)
+	return fallback_name
+
+
+func get_npc_battle_overrides(npc: Node) -> Dictionary:
+	var profile := npc as MapNpcProfile
+	if profile == null:
+		return {}
+	return profile.get_battle_overrides(GameState.get_npc_display_name(String(npc.name)))
+
+
+func get_npc_label_text(npc: Node, defeated := false) -> String:
+	var name := get_npc_display_name(npc)
+	var label_text := name
+	if defeated:
+		label_text += "\nDefeated"
+	return label_text
 
 
 func _cache_npc_directions() -> void:

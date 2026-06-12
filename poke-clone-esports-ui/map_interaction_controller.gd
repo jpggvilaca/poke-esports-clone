@@ -25,13 +25,13 @@ func update(player_position: Vector2) -> Dictionary:
 		current_interaction = {
 			"type": "battle_npc",
 			"node": nearest_npc,
-			"label": "Press Enter to battle %s" % GameState.get_npc_display_name(String(nearest_npc.name)),
+			"label": "E - Battle %s" % npc_controller.get_npc_display_name(nearest_npc),
 		}
 
 	var recovery_distance := player_position.distance_to(lan_cafe.global_position)
 	if recovery_distance <= BUILDING_INTERACT_DISTANCE and recovery_distance < nearest_distance:
 		nearest_distance = recovery_distance
-		current_interaction = {"type": "recovery", "label": "Press Enter to recover at LAN CAFE"}
+		current_interaction = {"type": "recovery", "label": "E - Recover at LAN CAFE"}
 
 	var tournament_distance := player_position.distance_to(major_hall.global_position)
 	if tournament_distance <= BUILDING_INTERACT_DISTANCE and tournament_distance < nearest_distance:

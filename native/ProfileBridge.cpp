@@ -310,9 +310,12 @@ void ProfileBridge::award_participant_xp(
         {
             player[keys[key_index]] = profile_snapshot[keys[key_index]];
         }
-        player["current_hp"] = std::min(
-            static_cast<int>(player.get("current_hp", player.get("max_hp", 100))),
-            static_cast<int>(player.get("max_hp", 100)));
+        const int max_hp = static_cast<int>(player.get("max_hp", 100));
+        player["current_hp"] = xp_result.leveledUp
+            ? max_hp
+            : std::min(
+                static_cast<int>(player.get("current_hp", max_hp)),
+                max_hp);
         player["current_mana"] = std::min(
             static_cast<int>(player.get("current_mana", 0)),
             static_cast<int>(player.get("max_mana", Balance::StartingMaxMana)));

@@ -21,6 +21,8 @@ func _ready() -> void:
 	interaction_controller.setup(npc_controller, lan_cafe, major_hall)
 	_refresh_trainer_menu()
 	_update_nearest_interaction()
+	if GameState.should_show_start_menu():
+		call_deferred("_show_start_menu")
 
 
 func _physics_process(delta: float) -> void:
@@ -30,7 +32,7 @@ func _physics_process(delta: float) -> void:
 	var player_position := player_controller.get_player_position()
 	npc_controller.tick_animation(delta, player_position)
 
-	var ui_blocking := map_ui.is_trainer_visible() or map_ui.is_dialog_open()
+	var ui_blocking := map_ui.is_trainer_visible() or map_ui.is_dialog_open() or map_ui.is_blocking_overlay_open()
 	player_controller.set_input_enabled(not ui_blocking)
 	player_controller.tick_movement(delta)
 	if ui_blocking:
@@ -40,10 +42,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if map_ui.is_dialog_open():
+	if map_ui.is_dialog_open() or map_ui.is_blocking_overlay_open():
 		return
 
-	if event.is_action_pressed("ui_accept") and not map_ui.is_trainer_visible():
+	if _is_interact_event(event) and not map_ui.is_trainer_visible():
 		var interaction := interaction_controller.get_current_interaction()
 		if not interaction.is_empty():
 			_use_interaction(interaction)
@@ -69,7 +71,7 @@ func _update_nearest_interaction() -> void:
 		map_ui.hide_prompt()
 		return
 
-	map_ui.show_prompt(String(interaction.get("label", "Press Enter")))
+	map_ui.show_prompt(String(interaction.get("label", "E - Interact")))
 
 
 func _use_interaction(interaction: Dictionary) -> void:
@@ -98,8 +100,10 @@ func _start_tournament_battle() -> void:
 
 func _start_npc_battle(npc: Node2D) -> void:
 	battle_triggered = true
-	await map_ui.show_dialog(STORY_DIALOGUE.get_npc_intro(String(npc.name)))
-	if GameState.prepare_npc_battle(String(npc.name), player_controller.get_player_position()):
+	var npc_name := npc_controller.get_npc_display_name(npc)
+	await map_ui.show_dialog(STORY_DIALOGUE.get_npc_intro(String(npc.name), npc_name))
+	var battle_overrides := npc_controller.get_npc_battle_overrides(npc)
+	if GameState.prepare_npc_battle(String(npc.name), player_controller.get_player_position(), battle_overrides):
 		get_tree().change_scene_to_file("res://battle.tscn")
 		return
 
@@ -114,7 +118,9 @@ func _toggle_trainer_menu() -> void:
 
 
 func _refresh_trainer_menu() -> void:
-	map_ui.set_trainer_text(trainer_formatter.format_trainer_text(GameState.get_trainer_state()))
+	var trainer_state := GameState.get_trainer_state()
+	map_ui.set_trainer_tabs(trainer_formatter.format_trainer_tabs(trainer_state))
+	map_ui.set_rating(int(trainer_state.get("rating", 0)))
 
 
 func _handle_scout_candidate_choice(candidate_index: int) -> void:
@@ -148,3 +154,36 @@ func _number_key_to_index(event: InputEventKey) -> int:
 		KEY_6, KEY_KP_6:
 			return 5
 	return -1
+
+
+func _is_interact_event(event: InputEvent) -> bool:
+	var key_event := event as InputEventKey
+	return key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_E
+
+
+func _show_start_menu() -> void:
+	map_ui.show_main_menu()
+	await map_ui.play_requested
+	GameState.mark_start_menu_seen()
+	map_ui.hide_main_menu()
+	if not GameState.is_intro_complete():
+		await _play_opening_story()
+	_refresh_trainer_menu()
+	_update_nearest_interaction()
+
+
+func _play_opening_story() -> void:
+	player_controller.set_input_enabled(false)
+	map_ui.hide_prompt()
+	var brother := npc_controller.get_npc("OlderBrother")
+	if brother != null:
+		brother.global_position = player_controller.get_player_position() + Vector2(0, -165)
+		var tween := create_tween()
+		tween.tween_property(brother, "global_position", player_controller.get_player_position() + Vector2(0, -105), 0.45)
+		await tween.finished
+
+	await map_ui.show_dialog(STORY_DIALOGUE.get_opening_intro())
+	var spec := await map_ui.show_spec_choice(GameState.get_available_specs())
+	if GameState.choose_starter_spec(spec):
+		await map_ui.show_dialog(STORY_DIALOGUE.get_spec_choice_followup(spec))
+	npc_controller.refresh_defeated_states()

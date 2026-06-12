@@ -4,6 +4,7 @@ const MAJOR_HALL_REQUIRED_RATING := 1080
 const MAX_ROSTER_SIZE := 6
 const MAX_LINEUP_SIZE := 3
 const STARTING_MANA := 25
+const STARTER_SPECS: Array[String] = ["Top", "Jungle", "Mid", "ADC", "Support"]
 
 const NPC_BATTLES := {
 	"OlderBrother": {
@@ -20,19 +21,61 @@ const NPC_BATTLES := {
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
 	},
-	"Fan": {
-		"id": "Fan",
-		"display_name": "LAN Regular",
-		"opponent_name": "LAN Regular",
-		"opponent_spec": "Support",
-		"trophy_id": "defeated_lan_regular",
+	"CasualWest": {
+		"id": "CasualWest",
+		"display_name": "Casual",
+		"opponent_name": "Casual",
+		"opponent_spec": "ADC",
+		"trophy_id": "defeated_casual_west",
 		"single_use": true,
-		"money_reward": 60,
+		"money_reward": 45,
 		"match_context": "normal",
 		"opponent_level": 1,
-		"opponent_hp": 90,
+		"opponent_hp": 80,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
+	},
+	"CasualNorth": {
+		"id": "CasualNorth",
+		"display_name": "Casual",
+		"opponent_name": "Casual",
+		"opponent_spec": "Top",
+		"trophy_id": "defeated_casual_north",
+		"single_use": true,
+		"money_reward": 55,
+		"match_context": "normal",
+		"opponent_level": 1,
+		"opponent_hp": 88,
+		"opponent_mana": 100,
+		"opponent_base_power_bonus": 0,
+	},
+	"CasualUptown": {
+		"id": "CasualUptown",
+		"display_name": "Casual",
+		"opponent_name": "Casual",
+		"opponent_spec": "Mid",
+		"trophy_id": "defeated_casual_uptown",
+		"single_use": true,
+		"money_reward": 65,
+		"match_context": "normal",
+		"opponent_level": 2,
+		"opponent_hp": 98,
+		"opponent_mana": 100,
+		"opponent_base_power_bonus": 1,
+	},
+	"CasualEast": {
+		"id": "CasualEast",
+		"display_name": "Casual",
+		"opponent_name": "Casual",
+		"opponent_spec": "Jungle",
+		"trophy_id": "defeated_casual_east",
+		"single_use": true,
+		"money_reward": 70,
+		"match_context": "normal",
+		"opponent_level": 2,
+		"opponent_hp": 102,
+		"opponent_mana": 100,
+		"opponent_base_power_bonus": 1,
 	},
 	"Rival": {
 		"id": "Rival",
@@ -70,20 +113,6 @@ const NPC_BATTLES := {
 				"base_power_bonus": 1,
 			},
 		],
-	},
-	"Coach": {
-		"id": "Coach",
-		"display_name": "Coach",
-		"opponent_name": "Coach",
-		"opponent_spec": "Mid",
-		"trophy_id": "defeated_coach",
-		"single_use": true,
-		"money_reward": 130,
-		"match_context": "normal",
-		"opponent_level": 3,
-		"opponent_hp": 125,
-		"opponent_mana": 100,
-		"opponent_base_power_bonus": 2,
 	},
 }
 
@@ -125,6 +154,10 @@ var last_battle_summary := {
 	"winner": "none",
 	"npc_id": "",
 }
+var start_menu_seen := false
+var intro_completed := false
+var older_brother_intro_done := false
+var rival_story_unlocked := false
 var profile_bridge: ProfileBridge
 var scout_bridge: ScoutBridge
 
@@ -133,9 +166,11 @@ func _ready() -> void:
 	_ensure_started()
 
 
-func prepare_npc_battle(npc_id: String, player_position: Vector2) -> bool:
+func prepare_npc_battle(npc_id: String, player_position: Vector2, battle_overrides: Dictionary = {}) -> bool:
 	_ensure_started()
 	if is_npc_defeated(npc_id):
+		return false
+	if not is_npc_available(npc_id):
 		return false
 
 	var config: Dictionary = NPC_BATTLES.get(npc_id, {})
@@ -144,6 +179,8 @@ func prepare_npc_battle(npc_id: String, player_position: Vector2) -> bool:
 
 	saved_map_position = player_position
 	pending_battle = config.duplicate(true)
+	for key in battle_overrides:
+		pending_battle[key] = battle_overrides[key]
 	pending_battle["seed"] = int(Time.get_ticks_msec() % 2147483647)
 	return true
 
@@ -223,6 +260,7 @@ func build_battle_setup() -> Dictionary:
 		"player_team": player_team,
 		"opponent_name": battle.get("opponent_name", "Opponent"),
 		"opponent_spec": battle.get("opponent_spec", "Jungle"),
+		"opponent_rating": int(battle.get("opponent_rating", 1000)),
 		"opponent_trait_id": battle.get("opponent_trait_id", ""),
 		"opponent_hp": int(battle.get("opponent_hp", 100)),
 		"opponent_mana": int(battle.get("opponent_mana", battle.get("opponent_focus", 100))),
@@ -310,6 +348,7 @@ func get_trainer_state() -> Dictionary:
 		"last_scout_message": last_scout_message,
 		"last_battle_summary": last_battle_summary.duplicate(),
 		"major_hall_required_rating": int(TOURNAMENT_BATTLE.get("required_rating", MAJOR_HALL_REQUIRED_RATING)),
+		"intro_completed": intro_completed,
 	}
 
 
@@ -322,11 +361,64 @@ func get_npc_display_name(npc_id: String) -> String:
 	return String(config.get("display_name", npc_id))
 
 
+func is_npc_available(npc_id: String) -> bool:
+	if not NPC_BATTLES.has(npc_id):
+		return false
+	if npc_id == "OlderBrother":
+		return not older_brother_intro_done
+	if npc_id == "Rival":
+		return rival_story_unlocked
+	return true
+
+
+func get_available_specs() -> Array[String]:
+	var specs: Array[String] = []
+	for spec in STARTER_SPECS:
+		specs.push_back(spec)
+	return specs
+
+
+func is_intro_complete() -> bool:
+	return intro_completed
+
+
+func should_show_start_menu() -> bool:
+	return not start_menu_seen
+
+
+func mark_start_menu_seen() -> void:
+	start_menu_seen = true
+
+
+func choose_starter_spec(spec: String) -> bool:
+	_ensure_started()
+	if not STARTER_SPECS.has(spec):
+		return false
+
+	var original_id := String(roster[0].get("player_id", ""))
+	var player := _create_player("Player", spec)
+	if not original_id.is_empty():
+		player["player_id"] = original_id
+		_reserve_player_id(original_id)
+
+	roster[0] = _ensure_player_identity_fields(_ensure_player_id(player))
+	active_player_index = 0
+	active_player_id = String(roster[0].get("player_id", ""))
+	lineup_player_ids.clear()
+	lineup_indices.clear()
+	for index in range(min(MAX_LINEUP_SIZE, roster.size())):
+		lineup_player_ids.push_back(String(roster[index].get("player_id", "")))
+	_sanitize_lineup_indices()
+	intro_completed = true
+	older_brother_intro_done = true
+	return true
+
+
 func get_tournament_prompt() -> String:
 	var required_rating := int(TOURNAMENT_BATTLE.get("required_rating", MAJOR_HALL_REQUIRED_RATING))
 	if rating < required_rating:
 		return "Major Hall requires %s rating (you: %s)" % [required_rating, rating]
-	return "Press Enter to enter MAJOR HALL tournament"
+	return "E - Enter MAJOR HALL tournament"
 
 
 func get_tournament_locked_message() -> String:
@@ -462,12 +554,6 @@ func _refresh_pending_scout_offer() -> void:
 func _ensure_started() -> void:
 	if roster.is_empty():
 		roster.push_back(_create_player("Player", "Top"))
-	if roster.size() == 1:
-		roster.push_back(_create_player("Sub Jungler", "Jungle"))
-	var added_initial_support := false
-	if roster.size() == 2:
-		roster.push_back(_create_player("Rookie Support", "Support"))
-		added_initial_support = true
 	for index in range(roster.size()):
 		var player: Dictionary = roster[index]
 		player = _ensure_player_id(player)
@@ -483,15 +569,6 @@ func _ensure_started() -> void:
 		if not player.has("current_mana"):
 			player["current_mana"] = int(player.get("current_focus", STARTING_MANA))
 		roster[index] = player
-	_sanitize_lineup_indices()
-	if added_initial_support and lineup_indices.size() < MAX_LINEUP_SIZE:
-		for index in range(roster.size()):
-			var player_id := String(roster[index].get("player_id", ""))
-			if lineup_player_ids.has(player_id):
-				continue
-			lineup_player_ids.push_back(player_id)
-			if lineup_player_ids.size() >= MAX_LINEUP_SIZE:
-				break
 	_sanitize_lineup_indices()
 
 

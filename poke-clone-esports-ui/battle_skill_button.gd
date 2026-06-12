@@ -23,7 +23,7 @@ func setup(skill: Dictionary, input_locked: bool) -> void:
 	skill_data = skill.duplicate(true)
 	text = _format_skill_button(skill_data)
 	disabled = input_locked or not bool(skill_data.get("can_use", true))
-	tooltip_text = String(skill_data.get("description", ""))
+	tooltip_text = ""
 	_apply_skill_button_style(String(skill_data.get("skill_color_id", "neutral")))
 	visible = true
 
