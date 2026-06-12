@@ -24,6 +24,8 @@ SkillView SkillSystem::CreateSkillView(
     view.id = definition.id;
     view.name = definition.name;
     view.description = definition.description;
+    view.sourceSpec = definition.sourceSpec;
+    view.colorId = definition.colorId;
     view.tone = definition.tone;
     view.power = rules_.GetPower(definition, progress);
     view.manaCost = rules_.GetManaCost(definition, progress, user);
@@ -83,30 +85,29 @@ SkillView SkillSystem::CreateSkillView(
     return view;
 }
 
-SkillUseResult SkillSystem::UseSkill(
-    BattleActor actor,
-    Competitor& attacker,
-    BattleStatus& attackerStatus,
-    BattleActor targetActor,
-    Competitor& target,
-    BattleStatus& targetStatus,
-    SkillProgress& progress,
-    int actorPlayerIndex,
-    int targetPlayerIndex,
-    std::mt19937& randomEngine) const
+SkillUseResult SkillSystem::UseSkill(const SkillUseRequest& request, std::mt19937& randomEngine) const
 {
     SkillUseResult result;
-    result.actor = actor;
-    result.target = targetActor;
-    result.skillId = progress.skillId;
-    result.oldMana = attacker.mana;
-    result.newMana = attacker.mana;
-    result.oldActorHp = attacker.hp;
-    result.newActorHp = attacker.hp;
-    result.oldTargetHp = target.hp;
-    result.newTargetHp = target.hp;
+    if (request.competitor == nullptr
+        || request.status == nullptr
+        || request.progress == nullptr
+        || request.target.competitor == nullptr
+        || request.target.status == nullptr)
+    {
+        return result;
+    }
 
-    const Skill* definition = data_.FindSkill(progress.skillId);
+    result.actor = request.actor;
+    result.target = request.target.actor;
+    result.skillId = request.progress->skillId;
+    result.oldMana = request.competitor->mana;
+    result.newMana = request.competitor->mana;
+    result.oldActorHp = request.competitor->hp;
+    result.newActorHp = request.competitor->hp;
+    result.oldTargetHp = request.target.competitor->hp;
+    result.newTargetHp = request.target.competitor->hp;
+
+    const Skill* definition = data_.FindSkill(request.progress->skillId);
     if (definition == nullptr)
     {
         return result;
@@ -114,168 +115,207 @@ SkillUseResult SkillSystem::UseSkill(
 
     result.used = true;
     result.skillId = definition->id;
+    EmitSkillStarted(request, *definition, result);
+    ResolveSkillCost(request, *definition, result);
+
+    if (!ResolveHitRoll(request, *definition, randomEngine, result))
+    {
+        AwardSkillXpStage(request, *definition, result);
+        return result;
+    }
+
+    ResolveDamageStage(request, *definition, result);
+    ResolveSecondaryEffectsStage(request, *definition, result);
+    AwardSkillXpStage(request, *definition, result);
+    return result;
+}
+
+void SkillSystem::ResolveSkillCost(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    SkillUseResult& result) const
+{
+    Competitor& attacker = *request.competitor;
     attacker.mana = std::clamp(
-        attacker.mana - rules_.GetManaCost(*definition, progress, attacker) + rules_.GetManaGain(*definition, progress),
+        attacker.mana - rules_.GetManaCost(definition, *request.progress, attacker) + rules_.GetManaGain(definition, *request.progress),
         0,
         attacker.maxMana);
     result.newMana = attacker.mana;
 
+    if (result.oldMana == result.newMana)
+    {
+        return;
+    }
+
+    BattleEvent manaChanged;
+    manaChanged.type = BattleEventType::ManaChanged;
+    manaChanged.actor = request.actor;
+    manaChanged.actorPlayerIndex = request.playerIndex;
+    manaChanged.profileIndex = attacker.profileIndex;
+    manaChanged.actorName = attacker.name;
+    manaChanged.skillId = definition.id;
+    manaChanged.oldValue = result.oldMana;
+    manaChanged.newValue = result.newMana;
+    manaChanged.amount = result.newMana - result.oldMana;
+    result.events.push_back(manaChanged);
+}
+
+void SkillSystem::EmitSkillStarted(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    SkillUseResult& result) const
+{
+    const Competitor& attacker = *request.competitor;
+    const Competitor& target = *request.target.competitor;
     BattleEvent skillStarted;
     skillStarted.type = BattleEventType::SkillStarted;
-    skillStarted.actor = actor;
-    skillStarted.target = result.target;
-    skillStarted.actorPlayerIndex = actorPlayerIndex;
-    skillStarted.targetPlayerIndex = targetPlayerIndex;
+    skillStarted.actor = request.actor;
+    skillStarted.target = request.target.actor;
+    skillStarted.actorPlayerIndex = request.playerIndex;
+    skillStarted.targetPlayerIndex = request.target.playerIndex;
     skillStarted.profileIndex = attacker.profileIndex;
     skillStarted.targetProfileIndex = target.profileIndex;
     skillStarted.actorName = attacker.name;
     skillStarted.targetName = target.name;
-    skillStarted.skillId = definition->id;
+    skillStarted.skillId = definition.id;
     result.events.push_back(skillStarted);
+}
 
-    if (result.oldMana != result.newMana)
+bool SkillSystem::ResolveHitRoll(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    std::mt19937& randomEngine,
+    SkillUseResult& result) const
+{
+    const Competitor& attacker = *request.competitor;
+    const Competitor& target = *request.target.competitor;
+    if (Chance(rules_.GetAccuracy(definition, *request.progress, attacker), randomEngine))
     {
-        BattleEvent manaChanged;
-        manaChanged.type = BattleEventType::ManaChanged;
-        manaChanged.actor = actor;
-        manaChanged.actorPlayerIndex = actorPlayerIndex;
-        manaChanged.profileIndex = attacker.profileIndex;
-        manaChanged.actorName = attacker.name;
-        manaChanged.skillId = definition->id;
-        manaChanged.oldValue = result.oldMana;
-        manaChanged.newValue = result.newMana;
-        manaChanged.amount = result.newMana - result.oldMana;
-        result.events.push_back(manaChanged);
+        return true;
     }
 
-    if (!Chance(rules_.GetAccuracy(*definition, progress, attacker), randomEngine))
+    result.hit = false;
+
+    BattleEvent missed;
+    missed.type = BattleEventType::AttackMissed;
+    missed.actor = request.actor;
+    missed.target = request.target.actor;
+    missed.actorPlayerIndex = request.playerIndex;
+    missed.targetPlayerIndex = request.target.playerIndex;
+    missed.profileIndex = attacker.profileIndex;
+    missed.targetProfileIndex = target.profileIndex;
+    missed.actorName = attacker.name;
+    missed.targetName = target.name;
+    missed.skillId = definition.id;
+    result.events.push_back(missed);
+    return false;
+}
+
+void SkillSystem::ResolveDamageStage(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    SkillUseResult& result) const
+{
+    if (definition.power <= 0)
     {
-        result.hit = false;
-        BattleEvent missed;
-        missed.type = BattleEventType::AttackMissed;
-        missed.actor = actor;
-        missed.target = result.target;
-        missed.actorPlayerIndex = actorPlayerIndex;
-        missed.targetPlayerIndex = targetPlayerIndex;
-        missed.profileIndex = attacker.profileIndex;
-        missed.targetProfileIndex = target.profileIndex;
-        missed.actorName = attacker.name;
-        missed.targetName = target.name;
-        missed.skillId = definition->id;
-        result.events.push_back(missed);
-
-        result.xp = progression_.AwardSkillXp(progress);
-        if (result.xp.xpGained > 0)
-        {
-            BattleEvent xpGained;
-            xpGained.type = BattleEventType::SkillXpGained;
-            xpGained.actor = actor;
-            xpGained.actorPlayerIndex = actorPlayerIndex;
-            xpGained.profileIndex = attacker.profileIndex;
-            xpGained.actorName = attacker.name;
-            xpGained.skillId = definition->id;
-            xpGained.oldValue = result.xp.oldXp;
-            xpGained.newValue = result.xp.newXp;
-            xpGained.amount = result.xp.xpGained;
-            xpGained.xp = result.xp;
-            result.events.push_back(xpGained);
-        }
-
-        if (result.xp.leveledUp)
-        {
-            BattleEvent leveledUp;
-            leveledUp.type = BattleEventType::SkillLeveledUp;
-            leveledUp.actor = actor;
-            leveledUp.actorPlayerIndex = actorPlayerIndex;
-            leveledUp.profileIndex = attacker.profileIndex;
-            leveledUp.actorName = attacker.name;
-            leveledUp.skillId = definition->id;
-            leveledUp.oldLevel = result.xp.oldLevel;
-            leveledUp.newLevel = result.xp.newLevel;
-            leveledUp.xp = result.xp;
-            result.events.push_back(leveledUp);
-        }
-        return result;
+        return;
     }
 
-    if (definition->power > 0)
+    Competitor& attacker = *request.competitor;
+    BattleStatus& attackerStatus = *request.status;
+    Competitor& target = *request.target.competitor;
+    BattleStatus& targetStatus = *request.target.status;
+    result.damage = rules_.CalculateDamage(
+        definition,
+        *request.progress,
+        attacker,
+        attackerStatus,
+        target,
+        targetStatus);
+    target.hp = std::max(0, target.hp - result.damage.amount);
+    result.newTargetHp = target.hp;
+
+    BattleEvent damageApplied;
+    damageApplied.type = BattleEventType::DamageApplied;
+    damageApplied.actor = request.actor;
+    damageApplied.target = request.target.actor;
+    damageApplied.actorPlayerIndex = request.playerIndex;
+    damageApplied.targetPlayerIndex = request.target.playerIndex;
+    damageApplied.profileIndex = attacker.profileIndex;
+    damageApplied.targetProfileIndex = target.profileIndex;
+    damageApplied.actorName = attacker.name;
+    damageApplied.targetName = target.name;
+    damageApplied.skillId = definition.id;
+    damageApplied.oldValue = result.oldTargetHp;
+    damageApplied.newValue = result.newTargetHp;
+    damageApplied.amount = result.damage.amount;
+    damageApplied.damage = result.damage;
+    result.events.push_back(damageApplied);
+
+    if (result.damage.markBonusDamage <= 0)
     {
-        result.damage = rules_.CalculateDamage(
-            *definition,
-            progress,
-            attacker,
-            attackerStatus,
-            target,
-            targetStatus);
-        target.hp = std::max(0, target.hp - result.damage.amount);
-        result.newTargetHp = target.hp;
-
-        BattleEvent damageApplied;
-        damageApplied.type = BattleEventType::DamageApplied;
-        damageApplied.actor = actor;
-        damageApplied.target = result.target;
-        damageApplied.actorPlayerIndex = actorPlayerIndex;
-        damageApplied.targetPlayerIndex = targetPlayerIndex;
-        damageApplied.profileIndex = attacker.profileIndex;
-        damageApplied.targetProfileIndex = target.profileIndex;
-        damageApplied.actorName = attacker.name;
-        damageApplied.targetName = target.name;
-        damageApplied.skillId = definition->id;
-        damageApplied.oldValue = result.oldTargetHp;
-        damageApplied.newValue = result.newTargetHp;
-        damageApplied.amount = result.damage.amount;
-        damageApplied.damage = result.damage;
-        result.events.push_back(damageApplied);
-
-        if (result.damage.markBonusDamage > 0)
-        {
-            BattleEvent markTriggered;
-            markTriggered.type = BattleEventType::MarkTriggered;
-            markTriggered.actor = actor;
-            markTriggered.target = result.target;
-            markTriggered.actorPlayerIndex = actorPlayerIndex;
-            markTriggered.targetPlayerIndex = targetPlayerIndex;
-            markTriggered.profileIndex = attacker.profileIndex;
-            markTriggered.targetProfileIndex = target.profileIndex;
-            markTriggered.actorName = attacker.name;
-            markTriggered.targetName = target.name;
-            markTriggered.skillId = definition->id;
-            markTriggered.amount = result.damage.markBonusDamage;
-            result.events.push_back(markTriggered);
-            targetStatus.markTurns = 0;
-            targetStatus.markBonusDamage = 0;
-            targetStatus.markSource = BattleActor::None;
-        }
+        return;
     }
 
-    std::vector<SkillEffectDefinition> effects = definition->effects;
-    if (effects.empty() && definition->effectType != SkillEffectType::None)
+    BattleEvent markTriggered;
+    markTriggered.type = BattleEventType::MarkTriggered;
+    markTriggered.actor = request.actor;
+    markTriggered.target = request.target.actor;
+    markTriggered.actorPlayerIndex = request.playerIndex;
+    markTriggered.targetPlayerIndex = request.target.playerIndex;
+    markTriggered.profileIndex = attacker.profileIndex;
+    markTriggered.targetProfileIndex = target.profileIndex;
+    markTriggered.actorName = attacker.name;
+    markTriggered.targetName = target.name;
+    markTriggered.skillId = definition.id;
+    markTriggered.amount = result.damage.markBonusDamage;
+    result.events.push_back(markTriggered);
+    targetStatus.markTurns = 0;
+    targetStatus.markBonusDamage = 0;
+    targetStatus.markSource = BattleActor::None;
+}
+
+std::vector<SkillEffectDefinition> SkillSystem::BuildEffectList(const Skill& definition) const
+{
+    std::vector<SkillEffectDefinition> effects = definition.effects;
+    if (effects.empty() && definition.effectType != SkillEffectType::None)
     {
         effects.push_back({
-            definition->effectType,
-            definition->effectTarget,
-            definition->effectValue,
-            definition->durationTurns,
-            definition->markBonusDamage,
+            definition.effectType,
+            definition.effectTarget,
+            definition.effectValue,
+            definition.durationTurns,
+            definition.markBonusDamage,
         });
     }
+    return effects;
+}
 
-    for (const SkillEffectDefinition& effect : effects)
+void SkillSystem::ResolveSecondaryEffectsStage(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    SkillUseResult& result) const
+{
+    Competitor& attacker = *request.competitor;
+    BattleStatus& attackerStatus = *request.status;
+    Competitor& target = *request.target.competitor;
+    BattleStatus& targetStatus = *request.target.status;
+    for (const SkillEffectDefinition& effect : BuildEffectList(definition))
     {
         const int oldActorHp = attacker.hp;
         const int oldTargetHp = target.hp;
         SecondaryEffectResult appliedEffect = ApplySecondaryEffect(
-            actor,
-            result.target,
-            *definition,
+            request.actor,
+            request.target.actor,
+            definition,
             effect,
-            progress,
+            *request.progress,
             attacker,
             attackerStatus,
             target,
             targetStatus,
-            actorPlayerIndex,
-            targetPlayerIndex);
+            request.playerIndex,
+            request.target.playerIndex);
         result.newActorHp = attacker.hp;
         result.newTargetHp = target.hp;
         if (!appliedEffect.applied)
@@ -291,15 +331,15 @@ SkillUseResult SkillSystem::UseSkill(
 
         const bool effectOnActor = effect.target == SkillEffectTarget::Self;
         BattleEvent effectApplied;
-        effectApplied.actor = actor;
+        effectApplied.actor = request.actor;
         effectApplied.target = appliedEffect.target;
-        effectApplied.actorPlayerIndex = actorPlayerIndex;
-        effectApplied.targetPlayerIndex = effectOnActor ? actorPlayerIndex : targetPlayerIndex;
+        effectApplied.actorPlayerIndex = request.playerIndex;
+        effectApplied.targetPlayerIndex = effectOnActor ? request.playerIndex : request.target.playerIndex;
         effectApplied.profileIndex = attacker.profileIndex;
         effectApplied.targetProfileIndex = effectOnActor ? attacker.profileIndex : target.profileIndex;
         effectApplied.actorName = attacker.name;
         effectApplied.targetName = effectOnActor ? attacker.name : target.name;
-        effectApplied.skillId = definition->id;
+        effectApplied.skillId = definition.id;
         effectApplied.effect = appliedEffect;
 
         if (appliedEffect.type == SkillEffectType::Heal)
@@ -322,17 +362,24 @@ SkillUseResult SkillSystem::UseSkill(
 
         result.events.push_back(effectApplied);
     }
+}
 
-    result.xp = progression_.AwardSkillXp(progress);
+void SkillSystem::AwardSkillXpStage(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    SkillUseResult& result) const
+{
+    Competitor& attacker = *request.competitor;
+    result.xp = progression_.AwardSkillXp(*request.progress);
     if (result.xp.xpGained > 0)
     {
         BattleEvent xpGained;
         xpGained.type = BattleEventType::SkillXpGained;
-        xpGained.actor = actor;
-        xpGained.actorPlayerIndex = actorPlayerIndex;
+        xpGained.actor = request.actor;
+        xpGained.actorPlayerIndex = request.playerIndex;
         xpGained.profileIndex = attacker.profileIndex;
         xpGained.actorName = attacker.name;
-        xpGained.skillId = definition->id;
+        xpGained.skillId = definition.id;
         xpGained.oldValue = result.xp.oldXp;
         xpGained.newValue = result.xp.newXp;
         xpGained.amount = result.xp.xpGained;
@@ -340,21 +387,22 @@ SkillUseResult SkillSystem::UseSkill(
         result.events.push_back(xpGained);
     }
 
-    if (result.xp.leveledUp)
+    if (!result.xp.leveledUp)
     {
-        BattleEvent leveledUp;
-        leveledUp.type = BattleEventType::SkillLeveledUp;
-        leveledUp.actor = actor;
-        leveledUp.actorPlayerIndex = actorPlayerIndex;
-        leveledUp.profileIndex = attacker.profileIndex;
-        leveledUp.actorName = attacker.name;
-        leveledUp.skillId = definition->id;
-        leveledUp.oldLevel = result.xp.oldLevel;
-        leveledUp.newLevel = result.xp.newLevel;
-        leveledUp.xp = result.xp;
-        result.events.push_back(leveledUp);
+        return;
     }
-    return result;
+
+    BattleEvent leveledUp;
+    leveledUp.type = BattleEventType::SkillLeveledUp;
+    leveledUp.actor = request.actor;
+    leveledUp.actorPlayerIndex = request.playerIndex;
+    leveledUp.profileIndex = attacker.profileIndex;
+    leveledUp.actorName = attacker.name;
+    leveledUp.skillId = definition.id;
+    leveledUp.oldLevel = result.xp.oldLevel;
+    leveledUp.newLevel = result.xp.newLevel;
+    leveledUp.xp = result.xp;
+    result.events.push_back(leveledUp);
 }
 
 BattleActor SkillSystem::Opposite(BattleActor actor) const

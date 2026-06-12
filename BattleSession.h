@@ -69,6 +69,8 @@ private:
         const std::string& error,
         BattleActor actor,
         const std::string& skillId) const;
+    SkillActionTarget ResolvePlayerSkillTarget(const Skill& definition, int targetPlayerIndex);
+    SkillActionTarget ResolveOpponentSkillTarget(const Skill& definition);
     DrillView CreateDrillView(const Competitor& competitor, const BattleStatus& status) const;
     DrillUseResult ResolveDrill(
         BattleActor actor,

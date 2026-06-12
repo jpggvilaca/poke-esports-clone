@@ -1,21 +1,21 @@
-id,name,mana_cost,mana_gain,cooldown_turns,power,accuracy,effects
-top-basic,Basic attack,0,25,0,16,0.95,none
-top-hold-line,Stomp,35,0,2,0,1.00,rooted:enemy:0:1:0
-top-sunder,Purge,45,0,2,28,0.95,attack_penetration_modifier:self:35:2:0
-top-gamebreaker,Unbreakable,100,0,5,28,0.90,defense_modifier:self:30:2:0
-jungle-basic,Basic attack,0,25,0,16,0.95,none
-jungle-gank,Gank,35,0,2,14,0.95,stunned:enemy:0:1:0
-jungle-invade,Invade,45,0,2,30,0.95,cooldown_modifier:enemy:50:2:0
-jungle-smite-fight,Decimate,100,0,5,62,0.90,mark:enemy:0:2:28
-mid-basic,Basic attack,0,25,0,16,0.95,none
-mid-silence,Light binding,35,0,2,12,0.95,silenced:enemy:0:1:0
-mid-burst,Spark,45,0,2,34,0.92,attack_modifier:enemy:-30:2:0
-mid-ultimate,Sonic wave,100,0,5,65,0.88,cooldown_modifier:self:-30:2:0
-adc-basic,Basic Attack,0,25,0,16,0.95,none
-adc-trap,Place Trap,35,0,2,8,1.00,stunned:enemy:0:2:0
-adc-multi-strike,Multi Strike,45,0,2,36,0.94,none
-adc-bullet-time,Bullet Time,100,0,5,72,0.88,none
-support-basic,Basic attack,0,25,0,14,0.95,none
-support-peel,Peel,35,0,2,0,1.00,heal:ally:40:0:0
-support-shotcall,Shotcall,45,0,2,0,1.00,attack_modifier:ally:25:2:0
-support-teamfight,Teamfight plan,100,0,5,0,1.00,attack_modifier:player_lineup:10:2:0
+id,name,mana_cost,mana_gain,cooldown_turns,power,accuracy,effects,source_spec,skill_color_id
+top-basic,Basic attack,0,25,0,16,0.95,none,top,neutral
+top-hold-line,Stomp,35,0,2,0,1.00,rooted:enemy:0:1:0,top,top
+top-sunder,Purge,45,0,2,28,0.95,attack_penetration_modifier:self:35:2:0,top,top
+top-gamebreaker,Unbreakable,100,0,5,28,0.90,defense_modifier:self:30:2:0,top,top
+jungle-basic,Basic attack,0,25,0,16,0.95,none,jungle,neutral
+jungle-gank,Gank,35,0,2,14,0.95,stunned:enemy:0:1:0,jungle,jungle
+jungle-invade,Invade,45,0,2,30,0.95,cooldown_modifier:enemy:50:2:0,jungle,jungle
+jungle-smite-fight,Decimate,100,0,5,62,0.90,mark:enemy:0:2:28,jungle,jungle
+mid-basic,Basic attack,0,25,0,16,0.95,none,mid,neutral
+mid-silence,Light binding,35,0,2,12,0.95,silenced:enemy:0:1:0,mid,mid
+mid-burst,Spark,45,0,2,34,0.92,attack_modifier:enemy:-30:2:0,mid,mid
+mid-ultimate,Sonic wave,100,0,5,65,0.88,cooldown_modifier:self:-30:2:0,mid,mid
+adc-basic,Basic Attack,0,25,0,16,0.95,none,adc,neutral
+adc-trap,Place Trap,35,0,2,8,1.00,stunned:enemy:0:2:0,adc,adc
+adc-multi-strike,Multi Strike,45,0,2,36,0.94,none,adc,adc
+adc-bullet-time,Bullet Time,100,0,5,72,0.88,none,adc,adc
+support-basic,Basic attack,0,25,0,14,0.95,none,support,neutral
+support-peel,Peel,35,0,2,0,1.00,heal:ally:40:0:0,support,support
+support-shotcall,Shotcall,45,0,2,0,1.00,attack_modifier:ally:25:2:0,support,support
+support-teamfight,Teamfight plan,100,0,5,0,1.00,attack_modifier:player_lineup:10:2:0,support,support

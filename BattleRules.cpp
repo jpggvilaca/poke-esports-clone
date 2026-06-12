@@ -180,6 +180,11 @@ DamageResult BattleRules::CalculateDamage(
         damage *= (100.0 - defensePercent) / 100.0;
     }
 
+    if (defenderStatus.rootedTurns > 0)
+    {
+        damage *= (100.0 + Balance::RootedTargetDamageBonusPercent) / 100.0;
+    }
+
     if (defenderStatus.markTurns > 0 && defenderStatus.markSource != BattleActor::None)
     {
         result.markBonusDamage = defenderStatus.markBonusDamage;

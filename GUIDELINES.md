@@ -24,6 +24,25 @@ Current direction:
 
 Do not add sponsors, item complexity, storage boxes, recruitment, or full team switching until the core trainer, roster, battle, rating, encounter, and major loop exists.
 
+## Game Design Doctrine
+
+Use these principles when deciding whether a mechanic belongs in the game.
+
+- Design from player experience backward. For each mechanic, name the intended player feeling first, then the combat dynamic, then the rule/data change that creates it.
+- Prefer simple mechanics that combine into interesting decisions. A new rule should either deepen an existing decision or create a clear new one.
+- Every combat mechanic needs readable feedback: the player should know what happened, why it happened, and what they can do differently next turn.
+- Balance is iterative. Add mechanics with exposed tuning values, tests for invariants, and enough event/result data to inspect outcomes later.
+- Preserve counterplay. Strong effects should have costs, timing windows, target restrictions, cooldowns, or visible setup.
+- Avoid hidden complexity. If a mechanic needs memory or history, surface the relevant state through UI text, icons, colors, or logs.
+- Treat game feel as support and clarity, not decoration. Animation, color, log text, and sound should make decisions easier to understand.
+
+Reference anchors:
+
+- MDA: A Formal Approach to Game Design and Game Research: https://en.wikipedia.org/wiki/MDA_framework
+- Designing Game Feel, A Survey: https://arxiv.org/abs/2011.09201
+- On Video Game Balancing, Joining Player- and Data-Driven Analytics: https://arxiv.org/abs/2308.07576
+- Demonstrating the Feasibility of Automatic Game Balancing: https://arxiv.org/abs/1603.03795
+
 ## Architecture Boundary
 
 Godot is the presentation layer. C++ is the source of truth.

@@ -56,9 +56,61 @@ personal_dialogue_flags
 
 ### External Content Data
 
-- Move skills, specs, traits, drills, and NPC battle configs out of hardcoded C++/GDScript.
-- Use JSON, CSV, TOML, or Godot resources.
+- Expand the current CSV data pipeline beyond skills, specs, traits, and drills.
+- Move NPC battle configs and encounter tables out of hardcoded GDScript.
+- Consider JSON, TOML, or Godot resources later only if CSV becomes too limiting.
 - Keep validation strict so broken IDs fail loudly.
+
+## Mechanics Inbox
+
+These are good ideas, but should wait until the current refactor pass is complete and the MVP loop has more playtesting.
+
+### Boost Skills
+
+- Let the player spend extra mana to boost a selected skill.
+- Boost should add a modest damage/effect increase, not create a separate skill.
+- Only offer boost when the active player has excess mana after the normal cost.
+- Needs a clean action modifier path for "base cost + boost cost" and "base power + boost power".
+- UI needs an obvious boost toggle/choice before skill confirmation.
+
+### Super-Effective Mana Reward
+
+- When a damaging skill is super-effective, grant the attacker bonus mana.
+- Keep the reward small so counter matchups feel good without snowballing too hard.
+- Needs an after-damage reaction stage and clear battle log feedback.
+- Could later become a spec passive, trait effect, or global battle rule.
+
+### Spec Passive Expansion
+
+- Each spec should have a clear always-on identity passive.
+- Prefer extending the current default-trait system instead of creating another passive system.
+- Possible examples:
+  - Top: reduced stun duration or stun resistance.
+  - Jungle: bonus effect strength on marks/disruption.
+  - Mid: extra mana or damage on super-effective hits.
+  - ADC: bonus accuracy or crit-style damage on repeated attacks.
+  - Support: stronger healing, shielding, or team buffs.
+- Add new trait effect types only when a specific passive is ready to implement.
+
+### Synergy Chains
+
+- Let one action make a later action stronger.
+- Simple version: attacks deal bonus damage against rooted or marked targets.
+- Larger version: if previous attack type/color was X, the next compatible attack gets bonus damage.
+- Needs skill tags/colors, recent-action history, and careful UI feedback so the player understands why the bonus happened.
+
+### Conditional Mark Mechanics
+
+- Current explicit mark skills already exist.
+- Future extension: apply `MARKED` after a condition, such as three attacks of the same type/color.
+- Needs recent-action history and skill type/color tracking.
+- The mark should trigger on a later damaging skill for bonus damage, then clear.
+
+### Advanced Counter Clarity
+
+- Counter color metadata now exists for skill buttons.
+- Future work can add richer counter explainers: arrows, tooltips, "strong against" hints, and matchup preview before battle.
+- Do not rely on color alone; color should be paired with labels/icons for accessibility.
 
 ## Game Feel And Presentation
 

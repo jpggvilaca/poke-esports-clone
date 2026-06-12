@@ -356,6 +356,8 @@ Dictionary SkillToDictionary(const SkillView& skill)
     dictionary["id"] = String(skill.id.c_str());
     dictionary["name"] = String(skill.name.c_str());
     dictionary["description"] = String(skill.description.c_str());
+    dictionary["source_spec"] = String(skill.sourceSpec.c_str());
+    dictionary["skill_color_id"] = String(skill.colorId.c_str());
     dictionary["tone"] = String(ToString(skill.tone).c_str());
     dictionary["mana_cost"] = skill.manaCost;
     dictionary["mana_gain"] = skill.manaGain;

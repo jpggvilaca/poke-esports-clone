@@ -7,6 +7,14 @@ const LOG_COLOR_DAMAGE := "#ff934f"
 const LOG_COLOR_HP := "#5bd487"
 const LOG_COLOR_MANA := "#57d7ff"
 const LOG_COLOR_XP := "#f3d35b"
+const SKILL_COLORS := {
+	"neutral": Color(0.32, 0.34, 0.38, 1.0),
+	"top": Color(0.58, 0.46, 0.28, 1.0),
+	"jungle": Color(0.20, 0.48, 0.30, 1.0),
+	"mid": Color(0.36, 0.34, 0.70, 1.0),
+	"adc": Color(0.70, 0.22, 0.20, 1.0),
+	"support": Color(0.22, 0.48, 0.68, 1.0),
+}
 
 var bridge: BattleBridge
 @onready var rewards_panel: RewardsPanel = $RewardsPanel
@@ -239,6 +247,7 @@ func _refresh_skills() -> void:
 		button.text = _format_skill_button(skill)
 		button.custom_minimum_size = Vector2(270, 112)
 		button.disabled = input_locked or not bool(skill.get("can_use", true))
+		_apply_skill_button_style(button, String(skill.get("skill_color_id", "neutral")))
 		button.pressed.connect(_on_skill_pressed.bind(skill.duplicate(true)))
 		skill_grid.add_child(button)
 		skill_buttons.push_back(button)
@@ -265,6 +274,34 @@ func _format_skill_button(skill: Dictionary) -> String:
 		cooldown_text,
 		description,
 	]
+
+
+func _apply_skill_button_style(button: Button, color_id: String) -> void:
+	var base_color: Color = SKILL_COLORS.get(color_id, SKILL_COLORS["neutral"])
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = base_color.darkened(0.32)
+	normal.border_color = base_color.lightened(0.24)
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(6)
+
+	var hover := normal.duplicate()
+	hover.bg_color = base_color.darkened(0.18)
+	hover.border_color = base_color.lightened(0.36)
+
+	var pressed := normal.duplicate()
+	pressed.bg_color = base_color.darkened(0.42)
+
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.12, 0.12, 0.14, 0.86)
+	disabled.border_color = Color(0.28, 0.28, 0.32, 0.8)
+
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", hover)
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0, 1.0))
+	button.add_theme_color_override("font_disabled_color", Color(0.58, 0.60, 0.64, 1.0))
 
 
 func _refresh_lineup_strip(state: Dictionary = {}) -> void:

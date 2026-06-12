@@ -237,6 +237,8 @@ struct Skill
     std::string id;
     std::string name;
     std::string description;
+    std::string sourceSpec;
+    std::string colorId;
     SkillTone tone = SkillTone::Basic;
     int manaCost = 0;
     int manaGain = 0;
@@ -485,6 +487,8 @@ struct SkillView
     std::string id;
     std::string name;
     std::string description;
+    std::string sourceSpec;
+    std::string colorId;
     SkillTone tone = SkillTone::Basic;
     int power = 0;
     int manaCost = 0;

@@ -190,54 +190,23 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId, int
         return RejectSkillAction(SimulationError::InsufficientMana, "Not enough mana.", BattleActor::Player, skillId);
     }
 
-    BattleActor targetActor = BattleActor::Opponent;
-    Competitor* targetCompetitor = &ActiveOpponent();
-    BattleStatus* targetStatus = &ActiveOpponentStatus();
-    int resolvedTargetPlayerIndex = -1;
-
-    if (definition->power <= 0)
+    SkillActionTarget target = ResolvePlayerSkillTarget(*definition, targetPlayerIndex);
+    if (target.competitor == nullptr || target.status == nullptr)
     {
-        if (definition->effectTarget == SkillEffectTarget::Self)
-        {
-            targetActor = BattleActor::Player;
-            targetCompetitor = &player;
-            targetStatus = &playerStatus;
-            resolvedTargetPlayerIndex = activePlayerIndex_;
-        }
-        else if (definition->effectTarget == SkillEffectTarget::Ally)
-        {
-            const int allyIndex = targetPlayerIndex < 0 ? activePlayerIndex_ : targetPlayerIndex;
-            if (!IsLivingPlayerIndex(allyIndex))
-            {
-                return RejectSkillAction(SimulationError::InvalidSkillTarget, "Invalid target.", BattleActor::Player, skillId);
-            }
-            targetActor = BattleActor::Player;
-            targetCompetitor = &playerTeam_[allyIndex];
-            targetStatus = &playerStatuses_[allyIndex];
-            resolvedTargetPlayerIndex = allyIndex;
-        }
-        else if (definition->effectTarget == SkillEffectTarget::PlayerLineup)
-        {
-            targetActor = BattleActor::Player;
-            targetCompetitor = &player;
-            targetStatus = &playerStatus;
-            resolvedTargetPlayerIndex = activePlayerIndex_;
-        }
+        return RejectSkillAction(SimulationError::InvalidSkillTarget, "Invalid target.", BattleActor::Player, skillId);
     }
 
     BattleActionResult result;
     result.accepted = true;
-    SkillUseResult skillUse = skills_.UseSkill(
-        BattleActor::Player,
-        player,
-        playerStatus,
-        targetActor,
-        *targetCompetitor,
-        *targetStatus,
-        *progress,
-        activePlayerIndex_,
-        resolvedTargetPlayerIndex,
-        randomEngine_);
+    SkillUseRequest request;
+    request.actor = BattleActor::Player;
+    request.competitor = &player;
+    request.status = &playerStatus;
+    request.progress = progress;
+    request.target = target;
+    request.playerIndex = activePlayerIndex_;
+
+    SkillUseResult skillUse = skills_.UseSkill(request, randomEngine_);
     AppendEvents(result, skillUse.events);
     result.skillUses.push_back(skillUse);
     if (definition->effectTarget == SkillEffectTarget::PlayerLineup && skillUse.hit)
@@ -731,6 +700,71 @@ BattleActionResult BattleSession::RejectSkillAction(
     return result;
 }
 
+SkillActionTarget BattleSession::ResolvePlayerSkillTarget(const Skill& definition, int targetPlayerIndex)
+{
+    SkillActionTarget target;
+    target.actor = BattleActor::Opponent;
+    target.competitor = &ActiveOpponent();
+    target.status = &ActiveOpponentStatus();
+    target.playerIndex = -1;
+
+    if (definition.power > 0)
+    {
+        return target;
+    }
+
+    if (definition.effectTarget == SkillEffectTarget::Self)
+    {
+        target.actor = BattleActor::Player;
+        target.competitor = &ActivePlayer();
+        target.status = &ActivePlayerStatus();
+        target.playerIndex = activePlayerIndex_;
+    }
+    else if (definition.effectTarget == SkillEffectTarget::Ally)
+    {
+        const int allyIndex = targetPlayerIndex < 0 ? activePlayerIndex_ : targetPlayerIndex;
+        if (!IsLivingPlayerIndex(allyIndex))
+        {
+            return {};
+        }
+
+        target.actor = BattleActor::Player;
+        target.competitor = &playerTeam_[allyIndex];
+        target.status = &playerStatuses_[allyIndex];
+        target.playerIndex = allyIndex;
+    }
+    else if (definition.effectTarget == SkillEffectTarget::PlayerLineup)
+    {
+        target.actor = BattleActor::Player;
+        target.competitor = &ActivePlayer();
+        target.status = &ActivePlayerStatus();
+        target.playerIndex = activePlayerIndex_;
+    }
+
+    return target;
+}
+
+SkillActionTarget BattleSession::ResolveOpponentSkillTarget(const Skill& definition)
+{
+    SkillActionTarget target;
+    target.actor = BattleActor::Player;
+    target.competitor = &ActivePlayer();
+    target.status = &ActivePlayerStatus();
+    target.playerIndex = activePlayerIndex_;
+
+    if (definition.power <= 0
+        && (definition.effectTarget == SkillEffectTarget::Self
+            || definition.effectTarget == SkillEffectTarget::Ally))
+    {
+        target.actor = BattleActor::Opponent;
+        target.competitor = &ActiveOpponent();
+        target.status = &ActiveOpponentStatus();
+        target.playerIndex = -1;
+    }
+
+    return target;
+}
+
 DrillView BattleSession::CreateDrillView(const Competitor& competitor, const BattleStatus& status) const
 {
     DrillView view;
@@ -984,31 +1018,15 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
         return;
     }
 
-    BattleActor targetActor = BattleActor::Player;
-    Competitor* targetCompetitor = &ActivePlayer();
-    BattleStatus* targetStatus = &ActivePlayerStatus();
-    int targetPlayerIndex = activePlayerIndex_;
-    if (definition->power <= 0
-        && (definition->effectTarget == SkillEffectTarget::Self
-            || definition->effectTarget == SkillEffectTarget::Ally))
-    {
-        targetActor = BattleActor::Opponent;
-        targetCompetitor = &opponent;
-        targetStatus = &opponentStatus;
-        targetPlayerIndex = -1;
-    }
+    SkillUseRequest request;
+    request.actor = BattleActor::Opponent;
+    request.competitor = &opponent;
+    request.status = &opponentStatus;
+    request.progress = progress;
+    request.target = ResolveOpponentSkillTarget(*definition);
+    request.playerIndex = -1;
 
-    SkillUseResult skillUse = skills_.UseSkill(
-        BattleActor::Opponent,
-        opponent,
-        opponentStatus,
-        targetActor,
-        *targetCompetitor,
-        *targetStatus,
-        *progress,
-        -1,
-        targetPlayerIndex,
-        randomEngine_);
+    SkillUseResult skillUse = skills_.UseSkill(request, randomEngine_);
     AppendEvents(result, skillUse.events);
     result.skillUses.push_back(skillUse);
     TickCooldowns(BattleActor::Opponent, opponent, result);

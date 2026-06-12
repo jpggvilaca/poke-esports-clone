@@ -40,6 +40,17 @@ namespace
         return skill;
     }
 
+    std::string InferSkillSourceSpec(const std::string& skillId)
+    {
+        const std::size_t delimiter = skillId.find('-');
+        if (delimiter == std::string::npos)
+        {
+            return "";
+        }
+
+        return skillId.substr(0, delimiter);
+    }
+
     TraitDefinition MakeTrait(
         const std::string& id,
         const std::string& name,
@@ -355,6 +366,16 @@ namespace
         {
             skill.tone = GetSkillTone(skill);
             skill.description = CreateSkillDescription(skill);
+            if (skill.sourceSpec.empty())
+            {
+                skill.sourceSpec = InferSkillSourceSpec(skill.id);
+            }
+            if (skill.colorId.empty())
+            {
+                skill.colorId = skill.tone == SkillTone::Basic
+                    ? "neutral"
+                    : skill.sourceSpec;
+            }
         }
     }
 }
@@ -560,7 +581,7 @@ void SimulationData::LoadSkillsFromCsv(const std::string& path)
         {
             continue;
         }
-        if (fields.size() != 8)
+        if (fields.size() != 8 && fields.size() != 10)
         {
             throw std::runtime_error("Invalid skill row in " + path + " at line " + std::to_string(line_number));
         }
@@ -582,6 +603,11 @@ void SimulationData::LoadSkillsFromCsv(const std::string& path)
             skill.effectValue = primary_effect.value;
             skill.durationTurns = primary_effect.durationTurns;
             skill.markBonusDamage = primary_effect.markBonusDamage;
+        }
+        if (fields.size() == 10)
+        {
+            skill.sourceSpec = fields[8];
+            skill.colorId = fields[9];
         }
         loaded_skills.push_back(skill);
     }

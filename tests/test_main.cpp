@@ -395,6 +395,29 @@ namespace
                 }
             }
         }
+
+        for (const SpecData& spec : data.GetSpecs())
+        {
+            for (const std::string& skillId : spec.skillIds)
+            {
+                const Skill* skill = data.FindSkill(skillId);
+                if (skill == nullptr)
+                {
+                    continue;
+                }
+
+                test.Expect(!skill->sourceSpec.empty(), skillId + " exposes source spec metadata");
+                test.Expect(!skill->colorId.empty(), skillId + " exposes skill color metadata");
+                if (skillId.find("-basic") != std::string::npos)
+                {
+                    test.ExpectEqual(skill->colorId, std::string("neutral"), skillId + " basic skill uses neutral color");
+                }
+                else
+                {
+                    test.Expect(skill->colorId != "neutral", skillId + " non-basic skill uses spec color");
+                }
+            }
+        }
     }
 
     void TestTraitBattleRules(TestContext& test)
@@ -864,6 +887,17 @@ namespace
                     defender,
                     defendedTarget);
                 test.Expect(modified.amount > plain.amount, "attack buff and penetration increase damage through defense");
+
+                BattleStatus rootedTarget;
+                rootedTarget.rootedTurns = 1;
+                const DamageResult rooted = rules.CalculateDamage(
+                    *adcBasic,
+                    { adcBasic->id, 1, 0 },
+                    attacker,
+                    plainAttacker,
+                    defender,
+                    rootedTarget);
+                test.Expect(rooted.amount > plain.amount, "rooted targets take setup follow-up damage");
             }
 
             const Skill* topSunder = data.FindSkill("top-sunder");

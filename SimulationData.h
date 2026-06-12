@@ -33,6 +33,7 @@ namespace Balance
     inline constexpr double AdvantageModifier = 1.05;
     inline constexpr double DisadvantageModifier = 0.95;
     inline constexpr double NeutralModifier = 1.0;
+    inline constexpr int RootedTargetDamageBonusPercent = 15;
 }
 
 class SimulationData
