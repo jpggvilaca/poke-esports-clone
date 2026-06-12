@@ -6,10 +6,10 @@ uid="uid://cxb4v5dwu5fsg"
 
 [deps]
 
-files=["res://data/skills.name.translation", "res://data/skills.mana.translation", "res://data/skills.mana.translation", "res://data/skills.cooldown.translation", "res://data/skills.power.translation", "res://data/skills.accuracy.translation", "res://data/skills.effects.translation"]
+files=["res://data/skills.name.translation", "res://data/skills.mana.translation", "res://data/skills.mana.translation", "res://data/skills.cooldown.translation", "res://data/skills.power.translation", "res://data/skills.accuracy.translation", "res://data/skills.effects.translation", "res://data/skills.source.translation", "res://data/skills.skill.translation"]
 
 source_file="res://data/skills.csv"
-dest_files=["res://data/skills.name.translation", "res://data/skills.mana.translation", "res://data/skills.mana.translation", "res://data/skills.cooldown.translation", "res://data/skills.power.translation", "res://data/skills.accuracy.translation", "res://data/skills.effects.translation"]
+dest_files=["res://data/skills.name.translation", "res://data/skills.mana.translation", "res://data/skills.mana.translation", "res://data/skills.cooldown.translation", "res://data/skills.power.translation", "res://data/skills.accuracy.translation", "res://data/skills.effects.translation", "res://data/skills.source.translation", "res://data/skills.skill.translation"]
 
 [params]
 

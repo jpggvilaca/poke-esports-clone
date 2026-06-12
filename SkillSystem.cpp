@@ -1,5 +1,7 @@
 #include "SkillSystem.h"
 
+#include "BattleEventFactory.h"
+#include "BattleStatusUtils.h"
 #include "SimulationData.h"
 
 #include <algorithm>
@@ -61,27 +63,6 @@ SkillView SkillSystem::CreateSkillView(
         effectDefinition.markBonusDamage = effect.markBonusDamage;
         effect.value = rules_.GetEffectValue(effectDefinition, progress, user);
     }
-    view.canUse = true;
-    if (userStatus.stunnedTurns > 0)
-    {
-        view.canUse = false;
-        view.disabledReason = "Stunned";
-    }
-    else if (userStatus.silencedTurns > 0 && view.manaCost > 0)
-    {
-        view.canUse = false;
-        view.disabledReason = "Silenced";
-    }
-    else if (cooldownRemaining > 0)
-    {
-        view.canUse = false;
-        view.disabledReason = "Cooldown " + std::to_string(cooldownRemaining);
-    }
-    else if (view.manaCost > user.mana)
-    {
-        view.canUse = false;
-        view.disabledReason = "Need " + std::to_string(view.manaCost) + " mana";
-    }
     return view;
 }
 
@@ -125,6 +106,7 @@ SkillUseResult SkillSystem::UseSkill(const SkillUseRequest& request, std::mt1993
     }
 
     ResolveDamageStage(request, *definition, result);
+    ResolvePostSkillReactionsStage(request, *definition, result);
     ResolveSecondaryEffectsStage(request, *definition, result);
     AwardSkillXpStage(request, *definition, result);
     return result;
@@ -147,12 +129,10 @@ void SkillSystem::ResolveSkillCost(
         return;
     }
 
-    BattleEvent manaChanged;
-    manaChanged.type = BattleEventType::ManaChanged;
-    manaChanged.actor = request.actor;
-    manaChanged.actorPlayerIndex = request.playerIndex;
-    manaChanged.profileIndex = attacker.profileIndex;
-    manaChanged.actorName = attacker.name;
+    BattleEvent manaChanged = MakeActorEvent(
+        BattleEventType::ManaChanged,
+        MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+        definition.id);
     manaChanged.skillId = definition.id;
     manaChanged.oldValue = result.oldMana;
     manaChanged.newValue = result.newMana;
@@ -167,17 +147,11 @@ void SkillSystem::EmitSkillStarted(
 {
     const Competitor& attacker = *request.competitor;
     const Competitor& target = *request.target.competitor;
-    BattleEvent skillStarted;
-    skillStarted.type = BattleEventType::SkillStarted;
-    skillStarted.actor = request.actor;
-    skillStarted.target = request.target.actor;
-    skillStarted.actorPlayerIndex = request.playerIndex;
-    skillStarted.targetPlayerIndex = request.target.playerIndex;
-    skillStarted.profileIndex = attacker.profileIndex;
-    skillStarted.targetProfileIndex = target.profileIndex;
-    skillStarted.actorName = attacker.name;
-    skillStarted.targetName = target.name;
-    skillStarted.skillId = definition.id;
+    BattleEvent skillStarted = MakeTargetedEvent(
+        BattleEventType::SkillStarted,
+        MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+        MakeBattleEventParticipant(request.target.actor, request.target.playerIndex, target),
+        definition.id);
     result.events.push_back(skillStarted);
 }
 
@@ -196,17 +170,11 @@ bool SkillSystem::ResolveHitRoll(
 
     result.hit = false;
 
-    BattleEvent missed;
-    missed.type = BattleEventType::AttackMissed;
-    missed.actor = request.actor;
-    missed.target = request.target.actor;
-    missed.actorPlayerIndex = request.playerIndex;
-    missed.targetPlayerIndex = request.target.playerIndex;
-    missed.profileIndex = attacker.profileIndex;
-    missed.targetProfileIndex = target.profileIndex;
-    missed.actorName = attacker.name;
-    missed.targetName = target.name;
-    missed.skillId = definition.id;
+    BattleEvent missed = MakeTargetedEvent(
+        BattleEventType::AttackMissed,
+        MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+        MakeBattleEventParticipant(request.target.actor, request.target.playerIndex, target),
+        definition.id);
     result.events.push_back(missed);
     return false;
 }
@@ -235,39 +203,42 @@ void SkillSystem::ResolveDamageStage(
     target.hp = std::max(0, target.hp - result.damage.amount);
     result.newTargetHp = target.hp;
 
-    BattleEvent damageApplied;
-    damageApplied.type = BattleEventType::DamageApplied;
-    damageApplied.actor = request.actor;
-    damageApplied.target = request.target.actor;
-    damageApplied.actorPlayerIndex = request.playerIndex;
-    damageApplied.targetPlayerIndex = request.target.playerIndex;
-    damageApplied.profileIndex = attacker.profileIndex;
-    damageApplied.targetProfileIndex = target.profileIndex;
-    damageApplied.actorName = attacker.name;
-    damageApplied.targetName = target.name;
-    damageApplied.skillId = definition.id;
+    BattleEvent damageApplied = MakeTargetedEvent(
+        BattleEventType::DamageApplied,
+        MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+        MakeBattleEventParticipant(request.target.actor, request.target.playerIndex, target),
+        definition.id);
     damageApplied.oldValue = result.oldTargetHp;
     damageApplied.newValue = result.newTargetHp;
     damageApplied.amount = result.damage.amount;
     damageApplied.damage = result.damage;
     result.events.push_back(damageApplied);
+}
 
-    if (result.damage.markBonusDamage <= 0)
+void SkillSystem::ResolvePostSkillReactionsStage(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    SkillUseResult& result) const
+{
+    (void)definition;
+    if (!result.damage.applied || result.damage.markBonusDamage <= 0)
     {
         return;
     }
 
-    BattleEvent markTriggered;
-    markTriggered.type = BattleEventType::MarkTriggered;
-    markTriggered.actor = request.actor;
-    markTriggered.target = request.target.actor;
-    markTriggered.actorPlayerIndex = request.playerIndex;
-    markTriggered.targetPlayerIndex = request.target.playerIndex;
-    markTriggered.profileIndex = attacker.profileIndex;
-    markTriggered.targetProfileIndex = target.profileIndex;
-    markTriggered.actorName = attacker.name;
-    markTriggered.targetName = target.name;
-    markTriggered.skillId = definition.id;
+    BattleStatus& targetStatus = *request.target.status;
+    if (targetStatus.markTurns <= 0)
+    {
+        return;
+    }
+
+    const Competitor& attacker = *request.competitor;
+    const Competitor& target = *request.target.competitor;
+    BattleEvent markTriggered = MakeTargetedEvent(
+        BattleEventType::MarkTriggered,
+        MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+        MakeBattleEventParticipant(request.target.actor, request.target.playerIndex, target),
+        definition.id);
     markTriggered.amount = result.damage.markBonusDamage;
     result.events.push_back(markTriggered);
     targetStatus.markTurns = 0;
@@ -313,9 +284,7 @@ void SkillSystem::ResolveSecondaryEffectsStage(
             attacker,
             attackerStatus,
             target,
-            targetStatus,
-            request.playerIndex,
-            request.target.playerIndex);
+            targetStatus);
         result.newActorHp = attacker.hp;
         result.newTargetHp = target.hp;
         if (!appliedEffect.applied)
@@ -330,16 +299,14 @@ void SkillSystem::ResolveSecondaryEffectsStage(
         result.effects.push_back(appliedEffect);
 
         const bool effectOnActor = effect.target == SkillEffectTarget::Self;
-        BattleEvent effectApplied;
-        effectApplied.actor = request.actor;
+        BattleEvent effectApplied = MakeTargetedEvent(
+            BattleEventType::StatusApplied,
+            MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+            effectOnActor
+                ? MakeBattleEventParticipant(request.actor, request.playerIndex, attacker)
+                : MakeBattleEventParticipant(request.target.actor, request.target.playerIndex, target),
+            definition.id);
         effectApplied.target = appliedEffect.target;
-        effectApplied.actorPlayerIndex = request.playerIndex;
-        effectApplied.targetPlayerIndex = effectOnActor ? request.playerIndex : request.target.playerIndex;
-        effectApplied.profileIndex = attacker.profileIndex;
-        effectApplied.targetProfileIndex = effectOnActor ? attacker.profileIndex : target.profileIndex;
-        effectApplied.actorName = attacker.name;
-        effectApplied.targetName = effectOnActor ? attacker.name : target.name;
-        effectApplied.skillId = definition.id;
         effectApplied.effect = appliedEffect;
 
         if (appliedEffect.type == SkillEffectType::Heal)
@@ -373,13 +340,10 @@ void SkillSystem::AwardSkillXpStage(
     result.xp = progression_.AwardSkillXp(*request.progress);
     if (result.xp.xpGained > 0)
     {
-        BattleEvent xpGained;
-        xpGained.type = BattleEventType::SkillXpGained;
-        xpGained.actor = request.actor;
-        xpGained.actorPlayerIndex = request.playerIndex;
-        xpGained.profileIndex = attacker.profileIndex;
-        xpGained.actorName = attacker.name;
-        xpGained.skillId = definition.id;
+        BattleEvent xpGained = MakeActorEvent(
+            BattleEventType::SkillXpGained,
+            MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+            definition.id);
         xpGained.oldValue = result.xp.oldXp;
         xpGained.newValue = result.xp.newXp;
         xpGained.amount = result.xp.xpGained;
@@ -392,13 +356,10 @@ void SkillSystem::AwardSkillXpStage(
         return;
     }
 
-    BattleEvent leveledUp;
-    leveledUp.type = BattleEventType::SkillLeveledUp;
-    leveledUp.actor = request.actor;
-    leveledUp.actorPlayerIndex = request.playerIndex;
-    leveledUp.profileIndex = attacker.profileIndex;
-    leveledUp.actorName = attacker.name;
-    leveledUp.skillId = definition.id;
+    BattleEvent leveledUp = MakeActorEvent(
+        BattleEventType::SkillLeveledUp,
+        MakeBattleEventParticipant(request.actor, request.playerIndex, attacker),
+        definition.id);
     leveledUp.oldLevel = result.xp.oldLevel;
     leveledUp.newLevel = result.xp.newLevel;
     leveledUp.xp = result.xp;
@@ -425,12 +386,8 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
     Competitor& attacker,
     BattleStatus& attackerStatus,
     Competitor& targetCompetitor,
-    BattleStatus& targetBattleStatus,
-    int actorPlayerIndex,
-    int targetPlayerIndex) const
+    BattleStatus& targetBattleStatus) const
 {
-    (void)actorPlayerIndex;
-    (void)targetPlayerIndex;
     SecondaryEffectResult result;
     if (effect.type == SkillEffectType::None
         || effect.target == SkillEffectTarget::PlayerLineup)
@@ -456,7 +413,6 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
         ? actor
         : targetActor;
 
-    result.applied = true;
     result.type = effect.type;
     result.target = effectTarget;
     result.value = effectValue;
@@ -464,6 +420,7 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
 
     if (effect.type == SkillEffectType::Heal)
     {
+        result.applied = true;
         const int oldHp = effectTargetCompetitor.hp;
         int healing = effectValue;
         if (effectStatus.healingReceivedModifierTurns > 0)
@@ -475,48 +432,15 @@ SecondaryEffectResult SkillSystem::ApplySecondaryEffect(
         return result;
     }
 
-    if (effect.type == SkillEffectType::AttackModifier)
+    result.applied = ApplyBattleStatusEffect(
+        effectStatus,
+        effect.type,
+        effectValue,
+        effect.durationTurns,
+        actor,
+        effect.markBonusDamage);
+    if (effect.type == SkillEffectType::Mark && result.applied)
     {
-        effectStatus.attackModifierPercent = effectValue;
-        effectStatus.attackModifierTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::DefenseModifier)
-    {
-        effectStatus.defenseModifierPercent = effectValue;
-        effectStatus.defenseModifierTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::AttackPenetrationModifier)
-    {
-        effectStatus.attackPenetrationPercent = effectValue;
-        effectStatus.attackPenetrationTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::CooldownModifier)
-    {
-        effectStatus.cooldownModifierPercent = effectValue;
-        effectStatus.cooldownModifierTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::HealingReceivedModifier)
-    {
-        effectStatus.healingReceivedModifierPercent = effectValue;
-        effectStatus.healingReceivedModifierTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::Stunned)
-    {
-        effectStatus.stunnedTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::Silenced)
-    {
-        effectStatus.silencedTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::Rooted)
-    {
-        effectStatus.rootedTurns = effect.durationTurns;
-    }
-    else if (effect.type == SkillEffectType::Mark)
-    {
-        effectStatus.markTurns = effect.durationTurns;
-        effectStatus.markBonusDamage = effect.markBonusDamage;
-        effectStatus.markSource = actor;
         result.markBonusDamage = effect.markBonusDamage;
     }
 

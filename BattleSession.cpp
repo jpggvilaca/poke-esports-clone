@@ -1,15 +1,14 @@
 #include "BattleSession.h"
 
+#include "BattleEventFactory.h"
+#include "BattleStatusUtils.h"
 #include "SimulationData.h"
 
 #include <algorithm>
+#include <string>
 
 namespace
 {
-    inline constexpr int PlayerWinXpReward = 120;
-    inline constexpr int FarmingActionInterval = 3;
-    inline constexpr int FarmingManaGain = 20;
-
     bool IsKnown(GameType gameType)
     {
         return gameType == GameType::LeagueOfLegends;
@@ -41,104 +40,24 @@ BattleSession::BattleSession(const SimulationData& data, std::uint32_t seed)
 
 BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
 {
-    if (!IsKnown(setup.gameType))
+    const BattleSetupValidation validation = ValidateBattleSetup(setup);
+    if (!validation.valid)
     {
-        return RejectAction(SimulationError::UnknownGameType, "Unknown game type.");
+        return RejectAction(validation.errorCode, validation.message);
     }
 
-    if (setup.playerTeam.empty())
-    {
-        return RejectAction(SimulationError::BattleNeedsPlayerProfile, "A battle needs at least one player profile.");
-    }
-
-    if (setup.opponentTeam.empty()
-        && (!IsKnown(setup.opponentSpec) || data_.FindSpec(setup.opponentSpec) == nullptr))
-    {
-        return RejectAction(SimulationError::UnknownSpec, "Unknown spec.");
-    }
-
-    for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
-    {
-        if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
-        {
-            return RejectAction(SimulationError::UnknownPlayerProfileSpec, "Unknown player profile spec.");
-        }
-    }
-
-    for (const BattleSetup::OpponentSlot& slot : setup.opponentTeam)
-    {
-        if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
-        {
-            return RejectAction(SimulationError::UnknownSpec, "Unknown spec.");
-        }
-    }
-
-    if (setup.activePlayerIndex < 0
-        || setup.activePlayerIndex >= static_cast<int>(setup.playerTeam.size()))
-    {
-        return RejectAction(SimulationError::UnknownActivePlayerProfile, "Unknown active player profile.");
-    }
-
-    playerTeam_.clear();
-    playerStatuses_.clear();
-    opponentTeam_.clear();
-    opponentStatuses_.clear();
-    participatingPlayerIndices_.clear();
-    for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
-    {
-        playerTeam_.push_back(CreateCompetitor(slot, setup.gameType));
-        playerStatuses_.push_back({});
-    }
+    ResetBattleState();
+    BuildPlayerTeam(setup);
 
     activePlayerIndex_ = setup.activePlayerIndex;
     MarkParticipant(activePlayerIndex_);
 
-    if (setup.opponentTeam.empty())
-    {
-        BattleSetup::OpponentSlot slot;
-        slot.name = setup.opponentName;
-        slot.spec = setup.opponentSpec;
-        slot.traitId = setup.opponentTraitId;
-        slot.maxHp = setup.opponentMaxHp;
-        slot.currentHp = setup.opponentMaxHp;
-        slot.maxMana = setup.opponentMaxMana > 0 ? setup.opponentMaxMana : setup.opponentMaxFocus;
-        slot.basePowerBonus = setup.opponentBasePowerBonus;
-        opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
-        opponentStatuses_.push_back({});
-    }
-    else
-    {
-        for (const BattleSetup::OpponentSlot& slot : setup.opponentTeam)
-        {
-            opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
-            opponentStatuses_.push_back({});
-        }
-    }
+    BuildOpponentTeam(setup);
+    SelectStartingOpponent(setup.activeOpponentIndex);
 
-    activeOpponentIndex_ = setup.activeOpponentIndex;
-    if (!IsLivingOpponentIndex(activeOpponentIndex_))
-    {
-        activeOpponentIndex_ = FirstLivingOpponentIndex();
-    }
     started_ = true;
-    finished_ = false;
-    winner_ = BattleWinner::None;
-    playerActionCount_ = 0;
 
-    BattleActionResult result;
-    result.accepted = true;
-    result.battleStarted = true;
-    BattleEvent event;
-    event.type = BattleEventType::BattleStarted;
-    event.newPlayerIndex = activePlayerIndex_;
-    event.playerName = ActivePlayer().name;
-    event.actor = BattleActor::Player;
-    event.actorPlayerIndex = activePlayerIndex_;
-    event.profileIndex = ActivePlayer().profileIndex;
-    event.actorName = ActivePlayer().name;
-    result.events.push_back(event);
-    result.finalState = GetState();
-    return result;
+    return CreateBattleStartedResult();
 }
 
 BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId, int targetPlayerIndex)
@@ -163,31 +82,31 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId, int
     }
 
     AbilityRuntimeState& abilityState = EnsureAbilityState(player, skillId);
-    if (playerStatus.stunnedTurns > 0)
+    const SkillActionValidation validation = ValidateSkillAction(
+        player,
+        playerStatus,
+        *definition,
+        *progress,
+        abilityState.cooldownRemaining);
+    if (!validation.canUse && validation.consumesTurn)
     {
         BattleActionResult result;
         result.accepted = true;
-        AppendActionBlocked(result, BattleActor::Player, skillId, "Stunned");
-        TickCooldowns(BattleActor::Player, player, result);
-        FinishActionOpportunity(BattleActor::Player, player, playerStatus, result);
+        FinishNonSkillActionOpportunity(
+            BattleActor::Player,
+            player,
+            playerStatus,
+            result,
+            skillId,
+            validation.disabledReason);
         ResolveAfterPlayerAction(result);
         result.finalState = GetState();
         return result;
     }
 
-    if (playerStatus.silencedTurns > 0 && !IsBasicAbility(*definition))
+    if (!validation.canUse)
     {
-        return RejectSkillAction(SimulationError::ActorSilenced, "Silenced.", BattleActor::Player, skillId);
-    }
-
-    if (abilityState.cooldownRemaining > 0)
-    {
-        return RejectSkillAction(SimulationError::SkillOnCooldown, "Ability is on cooldown.", BattleActor::Player, skillId);
-    }
-
-    if (rules_.GetManaCost(*definition, *progress, player) > player.mana)
-    {
-        return RejectSkillAction(SimulationError::InsufficientMana, "Not enough mana.", BattleActor::Player, skillId);
+        return RejectSkillAction(validation.errorCode, validation.message, BattleActor::Player, skillId);
     }
 
     SkillActionTarget target = ResolvePlayerSkillTarget(*definition, targetPlayerIndex);
@@ -206,16 +125,7 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId, int
     request.target = target;
     request.playerIndex = activePlayerIndex_;
 
-    SkillUseResult skillUse = skills_.UseSkill(request, randomEngine_);
-    AppendEvents(result, skillUse.events);
-    result.skillUses.push_back(skillUse);
-    if (definition->effectTarget == SkillEffectTarget::PlayerLineup && skillUse.hit)
-    {
-        ApplyLineupEffect(*definition, *progress, player, result);
-    }
-    TickCooldowns(BattleActor::Player, player, result);
-    StartCooldown(BattleActor::Player, player, playerStatus, *definition, result);
-    FinishActionOpportunity(BattleActor::Player, player, playerStatus, result);
+    ExecuteSkillAction(request, *definition, result);
     ResolveAfterPlayerAction(result);
 
     result.finalState = GetState();
@@ -247,17 +157,20 @@ BattleActionResult BattleSession::UsePlayerDrill(DrillResultQuality quality)
 
     if (playerStatus.stunnedTurns > 0)
     {
-        AppendActionBlocked(result, BattleActor::Player, drill->id, "Stunned");
-        TickCooldowns(BattleActor::Player, player, result);
-        FinishActionOpportunity(BattleActor::Player, player, playerStatus, result);
+        FinishNonSkillActionOpportunity(
+            BattleActor::Player,
+            player,
+            playerStatus,
+            result,
+            drill->id,
+            "Stunned");
         ResolveAfterPlayerAction(result);
         result.finalState = GetState();
         return result;
     }
 
     result.drillUse = ResolveDrill(BattleActor::Player, player, quality, result);
-    TickCooldowns(BattleActor::Player, player, result);
-    FinishActionOpportunity(BattleActor::Player, player, playerStatus, result);
+    FinishNonSkillActionOpportunity(BattleActor::Player, player, playerStatus, result);
     ResolveAfterPlayerAction(result);
     result.finalState = GetState();
     return result;
@@ -280,13 +193,8 @@ BattleActionResult BattleSession::PassPlayerTurn()
 
     BattleActionResult result;
     result.accepted = true;
-    if (playerStatus.stunnedTurns > 0)
-    {
-        AppendActionBlocked(result, BattleActor::Player, "", "Stunned");
-    }
-
-    TickCooldowns(BattleActor::Player, player, result);
-    FinishActionOpportunity(BattleActor::Player, player, playerStatus, result);
+    const std::string blockedReason = playerStatus.stunnedTurns > 0 ? "Stunned" : "";
+    FinishNonSkillActionOpportunity(BattleActor::Player, player, playerStatus, result, "", blockedReason);
     ResolveAfterPlayerAction(result);
     result.finalState = GetState();
     return result;
@@ -349,12 +257,21 @@ std::vector<SkillView> BattleSession::GetAvailablePlayerSkills() const
         const Skill* definition = data_.FindSkill(progress.skillId);
         if (definition != nullptr)
         {
-            skills.push_back(skills_.CreateSkillView(
+            SkillView view = skills_.CreateSkillView(
                 *definition,
                 progress,
                 ActivePlayer(),
                 ActivePlayerStatus(),
-                GetCooldownRemaining(ActivePlayer(), progress.skillId)));
+                GetCooldownRemaining(ActivePlayer(), progress.skillId));
+            const SkillActionValidation validation = ValidateSkillAction(
+                ActivePlayer(),
+                ActivePlayerStatus(),
+                *definition,
+                progress,
+                view.cooldownRemaining);
+            view.canUse = validation.canUse;
+            view.disabledReason = validation.disabledReason;
+            skills.push_back(view);
         }
     }
 
@@ -369,6 +286,131 @@ DrillView BattleSession::GetPlayerDrill() const
     }
 
     return CreateDrillView(ActivePlayer(), ActivePlayerStatus());
+}
+
+BattleSession::BattleSetupValidation BattleSession::ValidateBattleSetup(const BattleSetup& setup) const
+{
+    if (!IsKnown(setup.gameType))
+    {
+        return { false, SimulationError::UnknownGameType, "Unknown game type." };
+    }
+
+    if (setup.playerTeam.empty())
+    {
+        return {
+            false,
+            SimulationError::BattleNeedsPlayerProfile,
+            "A battle needs at least one player profile."
+        };
+    }
+
+    if (setup.opponentTeam.empty()
+        && (!IsKnown(setup.opponentSpec) || data_.FindSpec(setup.opponentSpec) == nullptr))
+    {
+        return { false, SimulationError::UnknownSpec, "Unknown spec." };
+    }
+
+    for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
+    {
+        if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
+        {
+            return {
+                false,
+                SimulationError::UnknownPlayerProfileSpec,
+                "Unknown player profile spec."
+            };
+        }
+    }
+
+    for (const BattleSetup::OpponentSlot& slot : setup.opponentTeam)
+    {
+        if (!IsKnown(slot.spec) || data_.FindSpec(slot.spec) == nullptr)
+        {
+            return { false, SimulationError::UnknownSpec, "Unknown spec." };
+        }
+    }
+
+    if (setup.activePlayerIndex < 0
+        || setup.activePlayerIndex >= static_cast<int>(setup.playerTeam.size()))
+    {
+        return {
+            false,
+            SimulationError::UnknownActivePlayerProfile,
+            "Unknown active player profile."
+        };
+    }
+
+    return {};
+}
+
+void BattleSession::ResetBattleState()
+{
+    playerTeam_.clear();
+    playerStatuses_.clear();
+    opponentTeam_.clear();
+    opponentStatuses_.clear();
+    participatingPlayerIndices_.clear();
+    finished_ = false;
+    winner_ = BattleWinner::None;
+    playerActionCount_ = 0;
+}
+
+void BattleSession::BuildPlayerTeam(const BattleSetup& setup)
+{
+    for (const BattleSetup::PlayerSlot& slot : setup.playerTeam)
+    {
+        playerTeam_.push_back(CreateCompetitor(slot, setup.gameType));
+        playerStatuses_.push_back({});
+    }
+}
+
+void BattleSession::BuildOpponentTeam(const BattleSetup& setup)
+{
+    if (setup.opponentTeam.empty())
+    {
+        BattleSetup::OpponentSlot slot;
+        slot.name = setup.opponentName;
+        slot.spec = setup.opponentSpec;
+        slot.traitId = setup.opponentTraitId;
+        slot.maxHp = setup.opponentMaxHp;
+        slot.currentHp = setup.opponentMaxHp;
+        slot.maxMana = setup.opponentMaxMana > 0 ? setup.opponentMaxMana : setup.opponentMaxFocus;
+        slot.basePowerBonus = setup.opponentBasePowerBonus;
+        opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
+        opponentStatuses_.push_back({});
+        return;
+    }
+
+    for (const BattleSetup::OpponentSlot& slot : setup.opponentTeam)
+    {
+        opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
+        opponentStatuses_.push_back({});
+    }
+}
+
+void BattleSession::SelectStartingOpponent(int requestedOpponentIndex)
+{
+    activeOpponentIndex_ = requestedOpponentIndex;
+    if (!IsLivingOpponentIndex(activeOpponentIndex_))
+    {
+        activeOpponentIndex_ = FirstLivingOpponentIndex();
+    }
+}
+
+BattleActionResult BattleSession::CreateBattleStartedResult() const
+{
+    BattleActionResult result;
+    result.accepted = true;
+    result.battleStarted = true;
+
+    BattleEvent event = MakeActorEvent(
+        BattleEventType::BattleStarted,
+        MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, ActivePlayer()));
+    event.newPlayerIndex = activePlayerIndex_;
+    event.playerName = ActivePlayer().name;
+    result.events.push_back(event);
+    result.finalState = GetState();
+    return result;
 }
 
 Competitor BattleSession::CreateCompetitor(
@@ -671,6 +713,56 @@ bool BattleSession::IsBasicAbility(const Skill& definition) const
     return definition.manaCost == 0 && definition.cooldownTurns == 0;
 }
 
+BattleSession::SkillActionValidation BattleSession::ValidateSkillAction(
+    const Competitor& actor,
+    const BattleStatus& status,
+    const Skill& definition,
+    const SkillProgress& progress,
+    int cooldownRemaining) const
+{
+    SkillActionValidation validation;
+
+    if (status.stunnedTurns > 0)
+    {
+        validation.canUse = false;
+        validation.consumesTurn = true;
+        validation.errorCode = SimulationError::ActorStunned;
+        validation.message = "Stunned.";
+        validation.disabledReason = "Stunned";
+        return validation;
+    }
+
+    if (status.silencedTurns > 0 && !IsBasicAbility(definition))
+    {
+        validation.canUse = false;
+        validation.errorCode = SimulationError::ActorSilenced;
+        validation.message = "Silenced.";
+        validation.disabledReason = "Silenced";
+        return validation;
+    }
+
+    if (cooldownRemaining > 0)
+    {
+        validation.canUse = false;
+        validation.errorCode = SimulationError::SkillOnCooldown;
+        validation.message = "Ability is on cooldown.";
+        validation.disabledReason = "Cooldown " + std::to_string(cooldownRemaining);
+        return validation;
+    }
+
+    const int manaCost = rules_.GetManaCost(definition, progress, actor);
+    if (manaCost > actor.mana)
+    {
+        validation.canUse = false;
+        validation.errorCode = SimulationError::InsufficientMana;
+        validation.message = "Not enough mana.";
+        validation.disabledReason = "Need " + std::to_string(manaCost) + " mana";
+        return validation;
+    }
+
+    return validation;
+}
+
 AbilityRuntimeState& BattleSession::EnsureAbilityState(Competitor& competitor, const std::string& skillId) const
 {
     AbilityRuntimeState* state = competitor.FindAbilityState(skillId);
@@ -765,6 +857,34 @@ SkillActionTarget BattleSession::ResolveOpponentSkillTarget(const Skill& definit
     return target;
 }
 
+SkillUseResult BattleSession::ExecuteSkillAction(
+    const SkillUseRequest& request,
+    const Skill& definition,
+    BattleActionResult& result)
+{
+    SkillUseResult skillUse = skills_.UseSkill(request, randomEngine_);
+    AppendEvents(result, skillUse.events);
+    result.skillUses.push_back(skillUse);
+
+    if (definition.effectTarget == SkillEffectTarget::PlayerLineup
+        && request.actor == BattleActor::Player
+        && request.competitor != nullptr
+        && request.progress != nullptr
+        && skillUse.hit)
+    {
+        ApplyLineupEffect(definition, *request.progress, *request.competitor, result);
+    }
+
+    if (request.competitor != nullptr && request.status != nullptr)
+    {
+        TickCooldowns(request.actor, *request.competitor, result);
+        StartCooldown(request.actor, *request.competitor, *request.status, definition, result);
+        TickActionStatusDurations(request.actor, *request.status, result);
+    }
+
+    return skillUse;
+}
+
 DrillView BattleSession::CreateDrillView(const Competitor& competitor, const BattleStatus& status) const
 {
     DrillView view;
@@ -806,10 +926,7 @@ DrillUseResult BattleSession::ResolveDrill(
     drillUse.quality = quality;
     drillUse.oldMana = competitor.mana;
 
-    BattleEvent started;
-    started.type = BattleEventType::DrillStarted;
-    started.actor = actor;
-    started.skillId = drill->id;
+    BattleEvent started = MakeActorEvent(BattleEventType::DrillStarted, { actor, -1, competitor.profileIndex, competitor.name }, drill->id);
     started.reason = drill->displayName;
     result.events.push_back(started);
 
@@ -820,18 +937,19 @@ DrillUseResult BattleSession::ResolveDrill(
 
     if (drillUse.newMana != drillUse.oldMana)
     {
-        BattleEvent mana;
-        mana.type = BattleEventType::ManaChanged;
-        mana.actor = actor;
+        BattleEvent mana = MakeActorEvent(
+            BattleEventType::ManaChanged,
+            { actor, -1, competitor.profileIndex, competitor.name });
         mana.oldValue = drillUse.oldMana;
         mana.newValue = drillUse.newMana;
+        mana.amount = drillUse.manaGained;
         result.events.push_back(mana);
     }
 
-    BattleEvent completed;
-    completed.type = BattleEventType::DrillCompleted;
-    completed.actor = actor;
-    completed.skillId = drill->id;
+    BattleEvent completed = MakeActorEvent(
+        BattleEventType::DrillCompleted,
+        { actor, -1, competitor.profileIndex, competitor.name },
+        drill->id);
     completed.oldValue = drillUse.oldMana;
     completed.newValue = drillUse.newMana;
     completed.amount = drillUse.manaGained;
@@ -880,9 +998,7 @@ void BattleSession::StartCooldown(
     AbilityRuntimeState& abilityState = EnsureAbilityState(competitor, definition.id);
     abilityState.cooldownRemaining = cooldown;
 
-    BattleEvent event;
-    event.type = BattleEventType::CooldownStarted;
-    event.actor = actor;
+    BattleEvent event = MakeBattleEvent(BattleEventType::CooldownStarted, actor);
     event.skillId = definition.id;
     event.newValue = cooldown;
     result.events.push_back(event);
@@ -900,11 +1016,11 @@ void BattleSession::TickCooldowns(BattleActor actor, Competitor& competitor, Bat
         const int oldValue = abilityState.cooldownRemaining;
         --abilityState.cooldownRemaining;
 
-        BattleEvent event;
-        event.type = abilityState.cooldownRemaining == 0
-            ? BattleEventType::CooldownReady
-            : BattleEventType::CooldownTicked;
-        event.actor = actor;
+        BattleEvent event = MakeBattleEvent(
+            abilityState.cooldownRemaining == 0
+                ? BattleEventType::CooldownReady
+                : BattleEventType::CooldownTicked,
+            actor);
         event.skillId = abilityState.skillId;
         event.oldValue = oldValue;
         event.newValue = abilityState.cooldownRemaining;
@@ -914,36 +1030,29 @@ void BattleSession::TickCooldowns(BattleActor actor, Competitor& competitor, Bat
 
 void BattleSession::TickStatusDurations(BattleActor actor, BattleStatus& status, BattleActionResult& result) const
 {
-    auto tick = [&](int& turns, int& value, SkillEffectType effect)
+    for (BattleStatusEffectSlot slot : GetBattleStatusEffectSlots(status))
     {
-        if (turns <= 0)
+        if (slot.turns == nullptr || *slot.turns <= 0)
         {
-            return;
+            continue;
         }
 
-        --turns;
-        if (turns > 0)
+        --(*slot.turns);
+        if (*slot.turns > 0)
         {
-            return;
+            continue;
         }
 
-        value = 0;
-        BattleEvent event;
-        event.type = BattleEventType::StatusExpired;
-        event.actor = actor;
+        if (slot.value != nullptr)
+        {
+            *slot.value = 0;
+        }
+
+        BattleEvent event = MakeBattleEvent(BattleEventType::StatusExpired, actor);
         event.target = actor;
-        event.effect.type = effect;
+        event.effect.type = slot.type;
         result.events.push_back(event);
-    };
-
-    tick(status.attackModifierTurns, status.attackModifierPercent, SkillEffectType::AttackModifier);
-    tick(status.defenseModifierTurns, status.defenseModifierPercent, SkillEffectType::DefenseModifier);
-    tick(status.attackPenetrationTurns, status.attackPenetrationPercent, SkillEffectType::AttackPenetrationModifier);
-    tick(status.cooldownModifierTurns, status.cooldownModifierPercent, SkillEffectType::CooldownModifier);
-    tick(status.healingReceivedModifierTurns, status.healingReceivedModifierPercent, SkillEffectType::HealingReceivedModifier);
-    tick(status.stunnedTurns, status.stunnedTurns, SkillEffectType::Stunned);
-    tick(status.silencedTurns, status.silencedTurns, SkillEffectType::Silenced);
-    tick(status.rootedTurns, status.rootedTurns, SkillEffectType::Rooted);
+    }
 
     if (status.markTurns > 0)
     {
@@ -952,22 +1061,36 @@ void BattleSession::TickStatusDurations(BattleActor actor, BattleStatus& status,
         {
             status.markBonusDamage = 0;
             status.markSource = BattleActor::None;
-            BattleEvent event;
-            event.type = BattleEventType::MarkExpired;
-            event.actor = actor;
+            BattleEvent event = MakeBattleEvent(BattleEventType::MarkExpired, actor);
             event.target = actor;
             result.events.push_back(event);
         }
     }
 }
 
-void BattleSession::FinishActionOpportunity(
+void BattleSession::TickActionStatusDurations(
     BattleActor actor,
-    Competitor& competitor,
     BattleStatus& status,
     BattleActionResult& result) const
 {
     TickStatusDurations(actor, status, result);
+}
+
+void BattleSession::FinishNonSkillActionOpportunity(
+    BattleActor actor,
+    Competitor& competitor,
+    BattleStatus& status,
+    BattleActionResult& result,
+    const std::string& blockedActionId,
+    const std::string& blockedReason) const
+{
+    if (!blockedReason.empty())
+    {
+        AppendActionBlocked(result, actor, blockedActionId, blockedReason);
+    }
+
+    TickCooldowns(actor, competitor, result);
+    TickActionStatusDurations(actor, status, result);
 }
 
 void BattleSession::AppendActionBlocked(
@@ -976,9 +1099,7 @@ void BattleSession::AppendActionBlocked(
     const std::string& skillId,
     const std::string& reason) const
 {
-    BattleEvent event;
-    event.type = BattleEventType::ActionBlocked;
-    event.actor = actor;
+    BattleEvent event = MakeBattleEvent(BattleEventType::ActionBlocked, actor);
     event.skillId = skillId;
     event.reason = reason;
     result.events.push_back(event);
@@ -991,9 +1112,13 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
 
     if (opponentStatus.stunnedTurns > 0)
     {
-        AppendActionBlocked(result, BattleActor::Opponent, "", "Stunned");
-        TickCooldowns(BattleActor::Opponent, opponent, result);
-        FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
+        FinishNonSkillActionOpportunity(
+            BattleActor::Opponent,
+            opponent,
+            opponentStatus,
+            result,
+            "",
+            "Stunned");
         return;
     }
 
@@ -1005,16 +1130,14 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
         randomEngine_);
     if (progress == nullptr)
     {
-        TickCooldowns(BattleActor::Opponent, opponent, result);
-        FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
+        FinishNonSkillActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
         return;
     }
 
     const Skill* definition = data_.FindSkill(progress->skillId);
     if (definition == nullptr)
     {
-        TickCooldowns(BattleActor::Opponent, opponent, result);
-        FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
+        FinishNonSkillActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
         return;
     }
 
@@ -1026,23 +1149,18 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
     request.target = ResolveOpponentSkillTarget(*definition);
     request.playerIndex = -1;
 
-    SkillUseResult skillUse = skills_.UseSkill(request, randomEngine_);
-    AppendEvents(result, skillUse.events);
-    result.skillUses.push_back(skillUse);
-    TickCooldowns(BattleActor::Opponent, opponent, result);
-    StartCooldown(BattleActor::Opponent, opponent, opponentStatus, *definition, result);
-    FinishActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
+    ExecuteSkillAction(request, *definition, result);
 }
 
-void BattleSession::RegisterPlayerAction(BattleActionResult& result)
+void BattleSession::RegisterPlayerActionAndApplyFarming(BattleActionResult& result)
 {
     ++playerActionCount_;
-    ResolveTimedFarming(result);
+    ApplyTimedFarmingIfDue(result);
 }
 
 void BattleSession::ResolveAfterPlayerAction(BattleActionResult& result)
 {
-    RegisterPlayerAction(result);
+    RegisterPlayerActionAndApplyFarming(result);
     FinishBattleIfNeeded(result);
 
     if (!finished_)
@@ -1080,15 +1198,12 @@ void BattleSession::AdvanceToNextPlayer(BattleActionResult& result)
     result.newPlayerIndex = activePlayerIndex_;
     result.newPlayerName = playerTeam_[activePlayerIndex_].name;
 
-    BattleEvent event;
-    event.type = BattleEventType::PlayerSwitched;
-    event.actor = BattleActor::Player;
+    BattleEvent event = MakeActorEvent(
+        BattleEventType::PlayerSwitched,
+        MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, playerTeam_[activePlayerIndex_]));
     event.oldPlayerIndex = oldPlayerIndex;
     event.newPlayerIndex = activePlayerIndex_;
-    event.profileIndex = playerTeam_[activePlayerIndex_].profileIndex;
-    event.actorPlayerIndex = activePlayerIndex_;
     event.playerName = playerTeam_[activePlayerIndex_].name;
-    event.actorName = playerTeam_[activePlayerIndex_].name;
     event.reason = "turn";
     result.events.push_back(event);
 }
@@ -1109,60 +1224,19 @@ void BattleSession::AdvanceToNextOpponent(BattleActionResult& result)
     const int oldOpponentIndex = activeOpponentIndex_;
     activeOpponentIndex_ = nextOpponentIndex;
 
-    BattleEvent event;
-    event.type = BattleEventType::PlayerSwitched;
-    event.actor = BattleActor::Opponent;
+    BattleEvent event = MakeActorEvent(
+        BattleEventType::PlayerSwitched,
+        MakeBattleEventParticipant(BattleActor::Opponent, activeOpponentIndex_, opponentTeam_[activeOpponentIndex_]));
     event.oldPlayerIndex = oldOpponentIndex;
     event.newPlayerIndex = activeOpponentIndex_;
-    event.profileIndex = opponentTeam_[activeOpponentIndex_].profileIndex;
-    event.actorPlayerIndex = activeOpponentIndex_;
     event.playerName = opponentTeam_[activeOpponentIndex_].name;
-    event.actorName = opponentTeam_[activeOpponentIndex_].name;
     event.reason = "opponent_down";
     result.events.push_back(event);
 }
 
-void BattleSession::ResolveTimedFarming(BattleActionResult& result)
+void BattleSession::ApplyTimedFarmingIfDue(BattleActionResult& result)
 {
-    if (playerActionCount_ <= 0 || playerActionCount_ % FarmingActionInterval != 0)
-    {
-        return;
-    }
-
-    BattleEvent started;
-    started.type = BattleEventType::FarmingTriggered;
-    started.actor = BattleActor::Player;
-    started.amount = FarmingManaGain;
-    started.reason = "Farm secured";
-    result.events.push_back(started);
-
-    for (int index = 0; index < static_cast<int>(playerTeam_.size()); ++index)
-    {
-        Competitor& player = playerTeam_[index];
-        if (player.hp <= 0)
-        {
-            continue;
-        }
-
-        const int oldMana = player.mana;
-        player.mana = std::clamp(player.mana + FarmingManaGain, 0, player.maxMana);
-        if (player.mana == oldMana)
-        {
-            continue;
-        }
-
-        BattleEvent manaChanged;
-        manaChanged.type = BattleEventType::ManaChanged;
-        manaChanged.actor = BattleActor::Player;
-        manaChanged.actorPlayerIndex = index;
-        manaChanged.profileIndex = player.profileIndex;
-        manaChanged.actorName = player.name;
-        manaChanged.oldValue = oldMana;
-        manaChanged.newValue = player.mana;
-        manaChanged.amount = player.mana - oldMana;
-        manaChanged.reason = "farming";
-        result.events.push_back(manaChanged);
-    }
+    economy_.ApplyTimedFarming(playerActionCount_, playerTeam_, result.events);
 }
 
 void BattleSession::ApplyLineupEffect(
@@ -1185,37 +1259,16 @@ void BattleSession::ApplyLineupEffect(
         }
 
         BattleStatus& status = playerStatuses_[index];
-        if (definition.effectType == SkillEffectType::AttackModifier)
-        {
-            status.attackModifierPercent = effectValue;
-            status.attackModifierTurns = definition.durationTurns;
-        }
-        else if (definition.effectType == SkillEffectType::DefenseModifier)
-        {
-            status.defenseModifierPercent = effectValue;
-            status.defenseModifierTurns = definition.durationTurns;
-        }
-        else if (definition.effectType == SkillEffectType::CooldownModifier)
-        {
-            status.cooldownModifierPercent = effectValue;
-            status.cooldownModifierTurns = definition.durationTurns;
-        }
-        else
+        if (!ApplyBattleStatusEffect(status, definition.effectType, effectValue, definition.durationTurns))
         {
             continue;
         }
 
-        BattleEvent event;
-        event.type = BattleEventType::StatusApplied;
-        event.actor = BattleActor::Player;
-        event.target = BattleActor::Player;
-        event.actorPlayerIndex = activePlayerIndex_;
-        event.targetPlayerIndex = index;
-        event.profileIndex = actor.profileIndex;
-        event.targetProfileIndex = playerTeam_[index].profileIndex;
-        event.actorName = actor.name;
-        event.targetName = playerTeam_[index].name;
-        event.skillId = definition.id;
+        BattleEvent event = MakeTargetedEvent(
+            BattleEventType::StatusApplied,
+            MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, actor),
+            MakeBattleEventParticipant(BattleActor::Player, index, playerTeam_[index]),
+            definition.id);
         event.amount = effectValue;
         event.effect.type = definition.effectType;
         event.effect.target = BattleActor::Player;
@@ -1266,32 +1319,22 @@ void BattleSession::FinishBattleIfNeeded(BattleActionResult& result)
     winner_ = HasLivingOpponent() ? BattleWinner::Opponent : BattleWinner::Player;
     result.battleFinished = true;
     result.winner = winner_;
-    BattleEvent event;
-    event.type = BattleEventType::BattleFinished;
+    BattleEvent event = MakeBattleEvent(BattleEventType::BattleFinished, BattleActor::None);
     event.winner = winner_;
     result.events.push_back(event);
-    AttachRewardIfNeeded(result);
+    AttachBattleRewardIfNeeded(result);
 }
 
-void BattleSession::AttachRewardIfNeeded(BattleActionResult& result) const
+void BattleSession::AttachBattleRewardIfNeeded(BattleActionResult& result) const
 {
-    if (winner_ != BattleWinner::Player || participatingPlayerIndices_.empty())
+    result.reward = economy_.CreateBattleReward(winner_, participatingPlayerIndices_, playerTeam_);
+
+    if (!result.reward.awarded)
     {
         return;
     }
 
-    result.reward.awarded = true;
-    result.reward.totalXp = PlayerWinXpReward;
-    result.reward.xpPerParticipant = PlayerWinXpReward
-        / static_cast<int>(participatingPlayerIndices_.size());
-
-    for (int playerIndex : participatingPlayerIndices_)
-    {
-        result.reward.participantPlayerIndices.push_back(playerTeam_[playerIndex].profileIndex);
-    }
-
-    BattleEvent event;
-    event.type = BattleEventType::RewardGranted;
+    BattleEvent event = MakeBattleEvent(BattleEventType::RewardGranted, BattleActor::Player);
     event.reward = result.reward;
     result.events.push_back(event);
 }

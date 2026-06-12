@@ -64,6 +64,10 @@ private:
         const SkillUseRequest& request,
         const Skill& definition,
         SkillUseResult& result) const;
+    void ResolvePostSkillReactionsStage(
+        const SkillUseRequest& request,
+        const Skill& definition,
+        SkillUseResult& result) const;
     std::vector<SkillEffectDefinition> BuildEffectList(const Skill& definition) const;
     void ResolveSecondaryEffectsStage(
         const SkillUseRequest& request,
@@ -82,9 +86,7 @@ private:
         Competitor& attacker,
         BattleStatus& attackerStatus,
         Competitor& targetCompetitor,
-        BattleStatus& targetBattleStatus,
-        int actorPlayerIndex,
-        int targetPlayerIndex) const;
+        BattleStatus& targetBattleStatus) const;
 
     const SimulationData& data_;
     const BattleRules& rules_;

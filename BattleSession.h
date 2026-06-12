@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BattleEconomySystem.h"
 #include "BattleRules.h"
 #include "Models.h"
 #include "OpponentAI.h"
@@ -32,6 +33,29 @@ public:
     DrillView GetPlayerDrill() const;
 
 private:
+    struct SkillActionValidation
+    {
+        bool canUse = true;
+        bool consumesTurn = false;
+        SimulationError errorCode = SimulationError::None;
+        std::string message;
+        std::string disabledReason;
+    };
+
+    struct BattleSetupValidation
+    {
+        bool valid = true;
+        SimulationError errorCode = SimulationError::None;
+        std::string message;
+    };
+
+    // Battle setup
+    BattleSetupValidation ValidateBattleSetup(const BattleSetup& setup) const;
+    void ResetBattleState();
+    void BuildPlayerTeam(const BattleSetup& setup);
+    void BuildOpponentTeam(const BattleSetup& setup);
+    void SelectStartingOpponent(int requestedOpponentIndex);
+    BattleActionResult CreateBattleStartedResult() const;
     Competitor CreateCompetitor(
         int profileIndex,
         const std::string& name,
@@ -40,8 +64,12 @@ private:
         const PassiveBonuses& bonuses) const;
     Competitor CreateCompetitor(const BattleSetup::PlayerSlot& slot, GameType gameType) const;
     Competitor CreateCompetitor(const BattleSetup::OpponentSlot& slot, GameType gameType) const;
+
+    // Result and event helpers
     BattleActionResult RejectAction(SimulationError errorCode, const std::string& error) const;
     void AppendEvents(BattleActionResult& result, const std::vector<BattleEvent>& events) const;
+
+    // Active combatants
     Competitor& ActivePlayer();
     const Competitor& ActivePlayer() const;
     BattleStatus& ActivePlayerStatus();
@@ -50,7 +78,6 @@ private:
     const Competitor& ActiveOpponent() const;
     BattleStatus& ActiveOpponentStatus();
     const BattleStatus& ActiveOpponentStatus() const;
-    void MarkParticipant(int playerIndex);
     bool IsKnownPlayerIndex(int playerIndex) const;
     bool IsLivingPlayerIndex(int playerIndex) const;
     bool HasLivingPlayer() const;
@@ -61,7 +88,15 @@ private:
     bool HasLivingOpponent() const;
     int FirstLivingOpponentIndex() const;
     int NextLivingOpponentIndex(int fromOpponentIndex) const;
+
+    // Skill actions
     bool IsBasicAbility(const Skill& definition) const;
+    SkillActionValidation ValidateSkillAction(
+        const Competitor& actor,
+        const BattleStatus& status,
+        const Skill& definition,
+        const SkillProgress& progress,
+        int cooldownRemaining) const;
     AbilityRuntimeState& EnsureAbilityState(Competitor& competitor, const std::string& skillId) const;
     int GetCooldownRemaining(const Competitor& competitor, const std::string& skillId) const;
     BattleActionResult RejectSkillAction(
@@ -71,6 +106,12 @@ private:
         const std::string& skillId) const;
     SkillActionTarget ResolvePlayerSkillTarget(const Skill& definition, int targetPlayerIndex);
     SkillActionTarget ResolveOpponentSkillTarget(const Skill& definition);
+    SkillUseResult ExecuteSkillAction(
+        const SkillUseRequest& request,
+        const Skill& definition,
+        BattleActionResult& result);
+
+    // Drill actions
     DrillView CreateDrillView(const Competitor& competitor, const BattleStatus& status) const;
     DrillUseResult ResolveDrill(
         BattleActor actor,
@@ -79,6 +120,8 @@ private:
         BattleActionResult& result) const;
     int GetDrillManaGain(const DrillDefinition& drill, DrillResultQuality quality) const;
     std::string DrillQualityToString(DrillResultQuality quality) const;
+
+    // Cooldowns and statuses
     void StartCooldown(
         BattleActor actor,
         Competitor& competitor,
@@ -87,26 +130,38 @@ private:
         BattleActionResult& result) const;
     void TickCooldowns(BattleActor actor, Competitor& competitor, BattleActionResult& result) const;
     void TickStatusDurations(BattleActor actor, BattleStatus& status, BattleActionResult& result) const;
-    void FinishActionOpportunity(BattleActor actor, Competitor& competitor, BattleStatus& status, BattleActionResult& result) const;
+    void TickActionStatusDurations(BattleActor actor, BattleStatus& status, BattleActionResult& result) const;
+    void FinishNonSkillActionOpportunity(
+        BattleActor actor,
+        Competitor& competitor,
+        BattleStatus& status,
+        BattleActionResult& result,
+        const std::string& blockedActionId = "",
+        const std::string& blockedReason = "") const;
     void AppendActionBlocked(
         BattleActionResult& result,
         BattleActor actor,
         const std::string& skillId,
         const std::string& reason) const;
+
+    // Turn flow and battle completion
+    void MarkParticipant(int playerIndex);
     void ResolveOpponentTurn(BattleActionResult& result);
-    void RegisterPlayerAction(BattleActionResult& result);
+    void RegisterPlayerActionAndApplyFarming(BattleActionResult& result);
     void ResolveAfterPlayerAction(BattleActionResult& result);
     void AdvanceToNextPlayer(BattleActionResult& result);
     void AdvanceToNextOpponent(BattleActionResult& result);
-    void ResolveTimedFarming(BattleActionResult& result);
+    void ApplyTimedFarmingIfDue(BattleActionResult& result);
     void ApplyLineupEffect(
         const Skill& definition,
         const SkillProgress& progress,
         Competitor& actor,
         BattleActionResult& result);
-    CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;
     void FinishBattleIfNeeded(BattleActionResult& result);
-    void AttachRewardIfNeeded(BattleActionResult& result) const;
+    void AttachBattleRewardIfNeeded(BattleActionResult& result) const;
+
+    // Views
+    CompetitorView CreateCompetitorView(const Competitor& competitor, const BattleStatus& status) const;
 
     const SimulationData& data_;
     std::mt19937 randomEngine_;
@@ -114,6 +169,7 @@ private:
     ProgressionSystem progression_;
     SkillSystem skills_;
     OpponentAI opponentAI_;
+    BattleEconomySystem economy_;
     bool started_ = false;
     bool finished_ = false;
     BattleWinner winner_ = BattleWinner::None;

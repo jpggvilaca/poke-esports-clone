@@ -156,8 +156,11 @@
     <ClCompile Include="TrainerProfile.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BattleEconomySystem.h" />
+    <ClInclude Include="BattleEventFactory.h" />
     <ClInclude Include="BattleRules.h" />
     <ClInclude Include="BattleSession.h" />
+    <ClInclude Include="BattleStatusUtils.h" />
     <ClInclude Include="OpponentAI.h" />
     <ClInclude Include="PlayerProfileSystem.h" />
     <ClInclude Include="RatingSystem.h" />

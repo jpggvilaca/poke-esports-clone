@@ -27,8 +27,11 @@
     <ClCompile Include="TrainerProfile.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BattleEconomySystem.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="BattleEventFactory.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="BattleRules.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="BattleSession.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="BattleStatusUtils.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="OpponentAI.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="PlayerProfileSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="RatingSystem.h"><Filter>Header Files</Filter></ClInclude>

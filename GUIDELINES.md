@@ -68,6 +68,14 @@ Godot UI/Audio/Animation
 - Do not emit Godot signals or use Godot types inside pure backend systems.
 - Do not make backend systems reactive/event-driven. They may mutate owned game state, then return facts about what changed.
 - Keep systems small and composable: battle flow, skill use, progression, counter logic, items, economy, and match flow should be separate systems.
+- Add skill-triggered follow-up mechanics through the `SkillUseRequest` pipeline and post-skill reaction stage, not by scattering special cases through damage, UI, or turn advancement.
+- Keep shared skill-action bookkeeping in `BattleSession::ExecuteSkillAction`; player-only turn advancement and opponent response should stay outside that helper.
+- Use `BattleSession::FinishNonSkillActionOpportunity` for pass, drill, stun, no-skill, and future forced-skip paths so cooldown and status timing stays consistent.
+- Keep battle setup validation, team construction, active-index selection, and start-result emission as separate helpers so future match formats do not bloat `StartBattle`.
+- Build battle events through `BattleEventFactory.h` helpers and keep farming/reward math in `BattleEconomySystem`.
+- Add timed status effects through `BattleStatusUtils.h` instead of adding separate tick/apply branches in battle and skill systems.
+- Keep `BattleSession.h` private helpers grouped by setup, combatant access, actions, statuses, turn flow, rewards, and views.
+- Keep action validation in `BattleSession` so UI availability, rejected commands, and turn-consuming blocked actions share one rule path.
 - `TrainerProfile` owns trainer-level save state and the roster. `PlayerProfileSystem` owns player-profile growth rules: XP, rank/evolution, passives, learned skills, and active skills.
 - `BattleSession` may track battle participation and return reward facts, but profile XP is applied outside battle through `PlayerProfileSystem`.
 
