@@ -13,6 +13,7 @@ signal spec_chosen
 @onready var prompt_panel: PanelContainer = $PromptPanel
 @onready var prompt_label: Label = $PromptPanel/PromptLabel
 @onready var trainer_panel: PanelContainer = $TrainerPanel
+@onready var trainer_tabs: TabContainer = $TrainerPanel/Margin/Tabs
 @onready var overview_text: Label = $TrainerPanel/Margin/Tabs/Overview/Scroll/Text
 @onready var players_text: Label = $TrainerPanel/Margin/Tabs/Players/Scroll/Text
 @onready var lineup_text: Label = $TrainerPanel/Margin/Tabs/Lineup/Scroll/Text
@@ -26,6 +27,7 @@ var pending_spec_choice := ""
 func _ready() -> void:
 	play_button.pressed.connect(_on_play_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
+	trainer_tabs.focus_mode = Control.FOCUS_ALL
 	main_menu_panel.visible = false
 	spec_choice_panel.visible = false
 	hide_prompt()
@@ -119,10 +121,27 @@ func set_trainer_visible(_is_visible: bool) -> void:
 	
 	if _is_visible:
 		hide_prompt()
+		trainer_tabs.grab_focus()
 
 
 func toggle_trainer() -> void:
 	set_trainer_visible(not trainer_panel.visible)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not trainer_panel.visible:
+		return
+
+	var key_event := event as InputEventKey
+	if key_event == null or not key_event.pressed or key_event.echo:
+		return
+
+	if key_event.keycode == KEY_LEFT:
+		_cycle_trainer_tab(-1)
+		get_viewport().set_input_as_handled()
+	elif key_event.keycode == KEY_RIGHT:
+		_cycle_trainer_tab(1)
+		get_viewport().set_input_as_handled()
 
 
 func _on_play_pressed() -> void:
@@ -136,3 +155,10 @@ func _on_quit_pressed() -> void:
 func _choose_spec(spec: String) -> void:
 	pending_spec_choice = spec
 	spec_chosen.emit()
+
+
+func _cycle_trainer_tab(direction: int) -> void:
+	var tab_count := trainer_tabs.get_tab_count()
+	if tab_count <= 0:
+		return
+	trainer_tabs.current_tab = wrapi(trainer_tabs.current_tab + direction, 0, tab_count)

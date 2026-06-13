@@ -72,6 +72,7 @@ namespace
         case SimulationError::NegativeXpAward: return "NegativeXpAward";
         case SimulationError::TrophyAlreadyEarned: return "TrophyAlreadyEarned";
         case SimulationError::RosterFull: return "RosterFull";
+        case SimulationError::InvalidSkillTarget: return "InvalidSkillTarget";
         }
 
         return "Unknown";
@@ -100,6 +101,7 @@ namespace
         case BattleEventType::MarkApplied: return "MarkApplied";
         case BattleEventType::MarkTriggered: return "MarkTriggered";
         case BattleEventType::MarkExpired: return "MarkExpired";
+        case BattleEventType::FarmingTriggered: return "FarmingTriggered";
         case BattleEventType::SkillXpGained: return "SkillXpGained";
         case BattleEventType::SkillLeveledUp: return "SkillLeveledUp";
         case BattleEventType::BattleFinished: return "BattleFinished";
@@ -782,6 +784,38 @@ namespace
             test.Expect(basic.accepted, "basic is legal at zero mana");
             test.Expect(ContainsEventType(basic.events, BattleEventType::ManaChanged), "basic generates mana");
             test.ExpectEqual(session.GetState().player.mana, Balance::StartingMana + Balance::BasicManaGain, "basic grants configured mana");
+        }
+
+        {
+            BattleSession session(data, 223);
+            BattleSetup setup;
+            setup.gameType = GameType::LeagueOfLegends;
+            setup.playerTeam.push_back(MakeAbilityBattleSlot(
+                0,
+                "Farm Tester",
+                Spec::Top,
+                { "top-basic" }));
+            setup.opponentSpec = Spec::Support;
+            setup.opponentMaxHp = 1000;
+
+            test.Expect(session.StartBattle(setup).accepted, "farm battle starts");
+            BattleActionResult farm = session.UsePlayerFarm();
+            test.Expect(farm.accepted, "farm action is accepted");
+            test.Expect(ContainsEventType(farm.events, BattleEventType::FarmingTriggered), "farm emits a farming event");
+            test.Expect(ContainsEventType(farm.events, BattleEventType::ManaChanged), "farm grants mana");
+            test.Expect(ContainsEventType(farm.events, BattleEventType::StatusApplied), "farm applies defense");
+            test.ExpectEqual(
+                session.GetState().player.mana,
+                Balance::StartingMana + BattleEconomySystem::FarmingManaGain,
+                "farm grants the configured mana");
+            test.ExpectEqual(
+                session.GetState().player.status.defenseModifierPercent,
+                BattleEconomySystem::FarmingDefenseModifierPercent,
+                "farm applies the configured defense modifier");
+            test.ExpectEqual(
+                session.GetState().player.status.defenseModifierTurns,
+                BattleEconomySystem::FarmingDefenseModifierTurns - 1,
+                "farm defense survives the enemy response");
         }
 
         {

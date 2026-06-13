@@ -25,6 +25,7 @@ public:
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId, int targetPlayerIndex = -1);
     BattleActionResult UsePlayerDrill(DrillResultQuality quality);
+    BattleActionResult UsePlayerFarm();
     BattleActionResult PassPlayerTurn();
     BattleActionResult SwitchPlayer(int playerIndex);
 
@@ -149,6 +150,7 @@ private:
     void ResolveOpponentTurn(BattleActionResult& result);
     void RegisterPlayerActionAndApplyFarming(BattleActionResult& result);
     void ResolveAfterPlayerAction(BattleActionResult& result);
+    void ApplyPlayerFarm(Competitor& player, BattleStatus& status, BattleActionResult& result) const;
     void AdvanceToNextPlayer(BattleActionResult& result);
     void AdvanceToNextOpponent(BattleActionResult& result);
     void ApplyTimedFarmingIfDue(BattleActionResult& result);

@@ -17,7 +17,7 @@ const NPC_BATTLES := {
 		"money_reward": 40,
 		"match_context": "tutorial",
 		"opponent_level": 1,
-		"opponent_hp": 85,
+		"opponent_hp": 65,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
 	},
@@ -31,7 +31,7 @@ const NPC_BATTLES := {
 		"money_reward": 45,
 		"match_context": "normal",
 		"opponent_level": 1,
-		"opponent_hp": 80,
+		"opponent_hp": 62,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
 	},
@@ -45,7 +45,7 @@ const NPC_BATTLES := {
 		"money_reward": 55,
 		"match_context": "normal",
 		"opponent_level": 1,
-		"opponent_hp": 88,
+		"opponent_hp": 70,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 0,
 	},
@@ -59,7 +59,7 @@ const NPC_BATTLES := {
 		"money_reward": 65,
 		"match_context": "normal",
 		"opponent_level": 2,
-		"opponent_hp": 98,
+		"opponent_hp": 82,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 1,
 	},
@@ -73,7 +73,7 @@ const NPC_BATTLES := {
 		"money_reward": 70,
 		"match_context": "normal",
 		"opponent_level": 2,
-		"opponent_hp": 102,
+		"opponent_hp": 86,
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": 1,
 	},
@@ -201,9 +201,9 @@ func recover_roster() -> String:
 	for index in range(roster.size()):
 		var player: Dictionary = roster[index]
 		player["current_hp"] = int(player.get("max_hp", 100))
-		player["current_mana"] = STARTING_MANA
+		player["current_mana"] = int(player.get("max_mana", player.get("max_focus", 100)))
 		roster[index] = player
-	return "LAN Cafe restored all HP."
+	return "Roster restored all HP and mana."
 
 
 func has_pending_battle() -> bool:

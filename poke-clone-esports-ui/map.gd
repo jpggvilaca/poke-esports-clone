@@ -80,9 +80,6 @@ func _use_interaction(interaction: Dictionary) -> void:
 			var npc = interaction.get("node")
 			if npc is Node2D:
 				_start_npc_battle(npc)
-		"recovery":
-			map_ui.show_prompt(GameState.recover_roster())
-			_refresh_trainer_menu()
 		"tournament":
 			_start_tournament_battle()
 

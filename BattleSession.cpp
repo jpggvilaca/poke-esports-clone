@@ -176,6 +176,45 @@ BattleActionResult BattleSession::UsePlayerDrill(DrillResultQuality quality)
     return result;
 }
 
+BattleActionResult BattleSession::UsePlayerFarm()
+{
+    if (!started_)
+    {
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
+    }
+
+    if (finished_)
+    {
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
+    }
+
+    Competitor& player = ActivePlayer();
+    BattleStatus& playerStatus = ActivePlayerStatus();
+
+    BattleActionResult result;
+    result.accepted = true;
+
+    if (playerStatus.stunnedTurns > 0)
+    {
+        FinishNonSkillActionOpportunity(
+            BattleActor::Player,
+            player,
+            playerStatus,
+            result,
+            "farm",
+            "Stunned");
+        ResolveAfterPlayerAction(result);
+        result.finalState = GetState();
+        return result;
+    }
+
+    ApplyPlayerFarm(player, playerStatus, result);
+    FinishNonSkillActionOpportunity(BattleActor::Player, player, playerStatus, result);
+    ResolveAfterPlayerAction(result);
+    result.finalState = GetState();
+    return result;
+}
+
 BattleActionResult BattleSession::PassPlayerTurn()
 {
     if (!started_)
@@ -1154,8 +1193,8 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
 
 void BattleSession::RegisterPlayerActionAndApplyFarming(BattleActionResult& result)
 {
+    (void)result;
     ++playerActionCount_;
-    ApplyTimedFarmingIfDue(result);
 }
 
 void BattleSession::ResolveAfterPlayerAction(BattleActionResult& result)
@@ -1178,6 +1217,57 @@ void BattleSession::ResolveAfterPlayerAction(BattleActionResult& result)
     {
         AdvanceToNextPlayer(result);
         FinishBattleIfNeeded(result);
+    }
+}
+
+void BattleSession::ApplyPlayerFarm(
+    Competitor& player,
+    BattleStatus& status,
+    BattleActionResult& result) const
+{
+    BattleEvent farmStarted = MakeActorEvent(
+        BattleEventType::FarmingTriggered,
+        MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
+        "farm");
+    farmStarted.amount = BattleEconomySystem::FarmingManaGain;
+    farmStarted.reason = "Farm";
+    result.events.push_back(farmStarted);
+
+    const int oldMana = player.mana;
+    player.mana = std::clamp(
+        player.mana + BattleEconomySystem::FarmingManaGain,
+        0,
+        player.maxMana);
+    if (player.mana != oldMana)
+    {
+        BattleEvent manaChanged = MakeActorEvent(
+            BattleEventType::ManaChanged,
+            MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
+            "farm");
+        manaChanged.oldValue = oldMana;
+        manaChanged.newValue = player.mana;
+        manaChanged.amount = player.mana - oldMana;
+        manaChanged.reason = "farming";
+        result.events.push_back(manaChanged);
+    }
+
+    if (ApplyBattleStatusEffect(
+            status,
+            SkillEffectType::DefenseModifier,
+            BattleEconomySystem::FarmingDefenseModifierPercent,
+            BattleEconomySystem::FarmingDefenseModifierTurns))
+    {
+        BattleEvent statusApplied = MakeTargetedEvent(
+            BattleEventType::StatusApplied,
+            MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
+            MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
+            "farm");
+        statusApplied.amount = BattleEconomySystem::FarmingDefenseModifierPercent;
+        statusApplied.effect.type = SkillEffectType::DefenseModifier;
+        statusApplied.effect.target = BattleActor::Player;
+        statusApplied.effect.value = BattleEconomySystem::FarmingDefenseModifierPercent;
+        statusApplied.effect.duration = BattleEconomySystem::FarmingDefenseModifierTurns - 1;
+        result.events.push_back(statusApplied);
     }
 }
 

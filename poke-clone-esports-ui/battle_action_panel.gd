@@ -2,7 +2,7 @@ class_name BattleActionPanel
 extends VBoxContainer
 
 signal fight_requested
-signal drill_requested
+signal farm_requested
 signal quit_requested
 signal skill_selected(skill: Dictionary)
 signal target_selected(target_index: int)
@@ -15,7 +15,7 @@ const SKILL_BUTTON_SCENE := preload("res://ui/components/skill_button.tscn")
 @onready var target_label: Label = $TargetLabel
 @onready var target_grid: GridContainer = $TargetGrid
 @onready var fight_button: Button = $MainMenuGrid/FightButton
-@onready var drill_button: Button = $MainMenuGrid/DrillButton
+@onready var farm_button: Button = $MainMenuGrid/DrillButton
 @onready var quit_button: Button = $MainMenuGrid/QuitButton
 @onready var back_button: Button = $BackButton
 @onready var return_button: Button = $ReturnButton
@@ -26,11 +26,10 @@ var target_buttons: Array[Button] = []
 
 func setup() -> void:
 	fight_button.pressed.connect(_on_fight_button_pressed)
-	drill_button.pressed.connect(_on_drill_button_pressed)
+	farm_button.pressed.connect(_on_farm_button_pressed)
 	quit_button.pressed.connect(_on_quit_button_pressed)
 	back_button.pressed.connect(_on_back_button_pressed)
 	return_button.pressed.connect(_on_return_button_pressed)
-	drill_button.visible = false
 
 
 func show_main_menu(input_locked: bool) -> void:
@@ -41,6 +40,7 @@ func show_main_menu(input_locked: bool) -> void:
 	back_button.visible = false
 	return_button.visible = false
 	set_buttons_disabled(input_locked)
+	_grab_first_enabled([fight_button, farm_button, quit_button])
 
 
 func show_fight_menu(skills: Array, input_locked: bool) -> void:
@@ -50,6 +50,12 @@ func show_fight_menu(skills: Array, input_locked: bool) -> void:
 	target_label.visible = false
 	target_grid.visible = false
 	back_button.visible = true
+	var focus_candidates: Array[Control] = []
+	for button in skill_buttons:
+		if button.visible:
+			focus_candidates.push_back(button)
+	focus_candidates.push_back(back_button)
+	_grab_first_enabled(focus_candidates)
 
 
 func show_target_menu(player_team: Array, input_locked: bool) -> void:
@@ -59,6 +65,12 @@ func show_target_menu(player_team: Array, input_locked: bool) -> void:
 	target_label.visible = true
 	target_grid.visible = true
 	back_button.visible = true
+	var focus_candidates: Array[Control] = []
+	for button in target_buttons:
+		if button.visible:
+			focus_candidates.push_back(button)
+	focus_candidates.push_back(back_button)
+	_grab_first_enabled(focus_candidates)
 
 
 func show_return_button() -> void:
@@ -69,17 +81,18 @@ func show_return_button() -> void:
 	target_grid.visible = false
 	back_button.visible = false
 	return_button.visible = true
+	return_button.disabled = false
+	return_button.grab_focus()
 
 
 func set_return_text(text: String) -> void:
 	return_button.text = text
 
 
-func refresh_drill_action(drill: Dictionary, input_locked: bool) -> void:
-	var display_name := String(drill.get("display_name", "Drill"))
-	drill_button.text = display_name
-	drill_button.tooltip_text = String(drill.get("description", ""))
-	drill_button.disabled = input_locked or not bool(drill.get("can_use", true))
+func refresh_farm_action(input_locked: bool) -> void:
+	farm_button.text = "Farm"
+	farm_button.tooltip_text = "Gain mana and defend against the enemy response."
+	farm_button.disabled = input_locked
 
 
 func refresh_skills(skills: Array, input_locked: bool) -> void:
@@ -134,6 +147,7 @@ func _ensure_target_button_count(count: int) -> void:
 
 func set_buttons_disabled(disabled: bool) -> void:
 	fight_button.disabled = disabled
+	farm_button.disabled = disabled
 	quit_button.disabled = disabled
 	back_button.disabled = disabled
 	for button in skill_buttons:
@@ -142,6 +156,22 @@ func set_buttons_disabled(disabled: bool) -> void:
 	for button in target_buttons:
 		if button.visible:
 			button.disabled = disabled
+
+
+func _grab_first_enabled(controls: Array) -> void:
+	for control in controls:
+		var button := control as BaseButton
+		if button != null and button.visible and not button.disabled:
+			button.grab_focus()
+			return
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("ui_cancel"):
+		return
+	if back_button.visible and not back_button.disabled:
+		get_viewport().set_input_as_handled()
+		show_main_menu(false)
 
 
 func _on_skill_button_selected(skill: Dictionary) -> void:
@@ -156,8 +186,8 @@ func _on_fight_button_pressed() -> void:
 	fight_requested.emit()
 
 
-func _on_drill_button_pressed() -> void:
-	drill_requested.emit()
+func _on_farm_button_pressed() -> void:
+	farm_requested.emit()
 
 
 func _on_quit_button_pressed() -> void:

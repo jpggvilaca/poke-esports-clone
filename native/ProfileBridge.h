@@ -30,6 +30,7 @@ protected:
 
 private:
     void apply_battle_vitals(TrainerProfile& trainer, godot::Array& roster, const godot::Dictionary& battle_state) const;
+    void restore_roster_vitals(godot::Array& roster) const;
     void apply_skill_progress(
         godot::Array& roster,
         int active_player_index,

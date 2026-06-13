@@ -10,7 +10,9 @@ class BattleEconomySystem
 public:
     static inline constexpr int PlayerWinXpReward = 120;
     static inline constexpr int FarmingActionInterval = 3;
-    static inline constexpr int FarmingManaGain = 20;
+    static inline constexpr int FarmingManaGain = 40;
+    static inline constexpr int FarmingDefenseModifierPercent = 40;
+    static inline constexpr int FarmingDefenseModifierTurns = 2;
 
     void ApplyTimedFarming(
         int playerActionCount,

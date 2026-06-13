@@ -117,6 +117,7 @@ Dictionary ProfileBridge::complete_trainer_battle(
     const String display_name = battle_config.has("display_name")
         ? String(battle_config["display_name"])
         : String("Opponent");
+    restore_roster_vitals(roster);
 
     Dictionary progression_changes;
     progression_changes["battle_xp_awards"] = battle_xp_awards;
@@ -181,6 +182,19 @@ void ProfileBridge::apply_battle_vitals(
         player["current_mana"] = player_state.get("mana", player.get("current_mana", player.get("current_focus", 0)));
         player["max_mana"] = player_state.get("max_mana", player.get("max_mana", player.get("max_focus", Balance::StartingMaxMana)));
         roster[profile_index] = player;
+    }
+}
+
+void ProfileBridge::restore_roster_vitals(Array& roster) const
+{
+    for (int index = 0; index < roster.size(); ++index)
+    {
+        Dictionary player = roster[index];
+        const int max_hp = get_min_int_field(player, "max_hp", 1, Balance::StartingMaxHp);
+        const int max_mana = get_min_int_field(player, "max_mana", 1, Balance::StartingMaxMana);
+        player["current_hp"] = max_hp;
+        player["current_mana"] = max_mana;
+        roster[index] = player;
     }
 }
 

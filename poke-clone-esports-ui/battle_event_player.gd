@@ -87,7 +87,7 @@ func _apply_event(event: Dictionary) -> void:
 		BattleEventTypes.MARK_EXPIRED:
 			message_log.push_log("%s mark expired." % _display_event_target(event))
 		BattleEventTypes.FARMING_TRIGGERED:
-			message_log.push_log("%s: lineup gained up to %s mana." % [event.get("reason", "Farm secured"), event.get("amount", 0)])
+			message_log.push_log("%s farms safely (+%s mana, defense up)." % [_display_event_actor(event), event.get("amount", 0)])
 		BattleEventTypes.SKILL_XP_GAINED:
 			reward_presenter.defer_progress_event(event)
 		BattleEventTypes.SKILL_LEVELED_UP:

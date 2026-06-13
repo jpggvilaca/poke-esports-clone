@@ -21,6 +21,7 @@ public:
     godot::Dictionary start_battle(const godot::Dictionary& setup);
     godot::Dictionary use_skill(const godot::String& skill_id, int target_player_index);
     godot::Dictionary use_drill(const godot::String& result_quality);
+    godot::Dictionary use_farm();
     godot::Dictionary pass_turn();
     godot::Dictionary get_battle_state() const;
     godot::Array get_available_skills() const;

@@ -30,7 +30,7 @@ func _ready() -> void:
 
 	battle_setup = GameState.build_battle_setup()
 	var result := bridge.start_battle(battle_setup)
-	_refresh_drill_action()
+	_refresh_farm_action()
 
 	if not result.get("accepted", false):
 		finished_result = result
@@ -51,7 +51,7 @@ func _ready() -> void:
 func _setup_children() -> void:
 	action_panel.setup()
 	action_panel.fight_requested.connect(_on_fight_requested)
-	action_panel.drill_requested.connect(_on_drill_requested)
+	action_panel.farm_requested.connect(_on_farm_requested)
 	action_panel.quit_requested.connect(_on_quit_requested)
 	action_panel.skill_selected.connect(_on_skill_selected)
 	action_panel.target_selected.connect(_on_target_selected)
@@ -88,7 +88,7 @@ func _show_bridge_error(text: String) -> void:
 
 func _show_main_menu() -> void:
 	action_panel.show_main_menu(input_locked)
-	_refresh_drill_action()
+	_refresh_farm_action()
 
 
 func _show_fight_menu() -> void:
@@ -107,17 +107,21 @@ func _on_fight_requested() -> void:
 	_show_fight_menu()
 
 
-func _on_drill_requested() -> void:
+func _on_farm_requested() -> void:
 	if input_locked:
 		return
 
-	var drill := bridge.get_drill_action()
-	if not bool(drill.get("can_use", true)):
-		message_log.set_message(String(drill.get("disabled_reason", "That action is unavailable.")))
+	_lock_input()
+	var result = bridge.use_farm()
+	if not result.get("accepted", false):
+		message_log.set_message(result.get("error", "That action failed."))
+		_unlock_input()
 		return
 
-	_lock_input()
-	drill_minigame.start(drill)
+	_record_result_events(result)
+	await _play_events(result.get("events", []))
+	_update_state(result.get("state", bridge.get_battle_state()))
+	await _continue_or_finish(result)
 
 
 func _on_drill_minigame_finished(quality: String) -> void:
@@ -135,7 +139,7 @@ func _on_drill_minigame_finished(quality: String) -> void:
 
 func _on_drill_minigame_cancelled() -> void:
 	_unlock_input()
-	_refresh_drill_action()
+	_refresh_farm_action()
 	_set_turn_prompt()
 	_show_main_menu()
 
@@ -170,10 +174,10 @@ func _maybe_auto_pass_stunned_turn() -> void:
 	await _continue_or_finish(result)
 
 
-func _refresh_drill_action() -> void:
+func _refresh_farm_action() -> void:
 	if bridge == null:
 		return
-	action_panel.refresh_drill_action(bridge.get_drill_action(), input_locked)
+	action_panel.refresh_farm_action(input_locked)
 
 
 func _refresh_skills() -> void:
@@ -246,7 +250,7 @@ func _continue_or_finish(result: Dictionary) -> void:
 		return
 
 	_refresh_skills()
-	_refresh_drill_action()
+	_refresh_farm_action()
 	_set_turn_prompt()
 	_unlock_input()
 	_show_main_menu()

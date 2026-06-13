@@ -20,7 +20,7 @@ func get_battle_overrides(fallback_name: String) -> Dictionary:
 		"opponent_spec": opponent_spec if not opponent_spec.is_empty() else "Mid",
 		"opponent_rating": rating,
 		"opponent_level": level,
-		"opponent_hp": max(70, 90 + int(rating_gap / 4)),
+		"opponent_hp": max(55, 72 + int(rating_gap / 5)),
 		"opponent_mana": 100,
 		"opponent_base_power_bonus": max(0, int(rating_gap / 70)),
 		"money_reward": max(25, 50 + int(rating_gap / 8)),
