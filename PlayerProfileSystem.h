@@ -10,7 +10,7 @@ namespace PlayerProfileBalance
 {
     inline constexpr int StartingLevel = 1;
     inline constexpr int StartingXp = 0;
-    inline constexpr int StartingSkillCount = 1;
+    inline constexpr int StartingSkillCount = 4;
     inline constexpr int MaxActiveSkills = 4;
     inline constexpr int BaseXpForNextLevel = 100;
     inline constexpr int XpGrowthPerLevel = 50;

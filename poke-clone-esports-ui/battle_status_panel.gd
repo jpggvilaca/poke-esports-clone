@@ -51,17 +51,15 @@ func set_status(data: Dictionary, fallback_name: String) -> void:
 
 
 func animate_hp(old_value: int, new_value: int) -> void:
-	hp_bar.value = old_value
+	hp_bar.value = new_value
 	hp_value.text = "%s/%s" % [new_value, int(hp_bar.max_value)]
 	_apply_hp_style(new_value, int(hp_bar.max_value))
-	create_tween().tween_property(hp_bar, "value", new_value, 0.30)
 
 
 func animate_mana(old_value: int, new_value: int) -> void:
-	mana_bar.value = old_value
+	mana_bar.value = new_value
 	mana_value.text = "%s/%s" % [new_value, int(mana_bar.max_value)]
 	_apply_progress_style(mana_bar, MANA_BLUE)
-	create_tween().tween_property(mana_bar, "value", new_value, 0.25)
 
 
 func get_display_name() -> String:

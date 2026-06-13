@@ -27,8 +27,11 @@ namespace Balance
     inline constexpr int StarterSkillsPerSpec = 4;
     inline constexpr int SkillXpPerUse = 25;
     inline constexpr int SkillXpPerLevel = 100;
+    inline constexpr int MaxSkillXpPerBattle = 50;
     inline constexpr int SkillLevelUpPower = 4;
     inline constexpr int SkillLevelUpEffectValue = 4;
+    inline constexpr int CriticalStrikeChancePercent = 15;
+    inline constexpr int CriticalStrikeDamagePercent = 200;
     inline constexpr int ClutchLowHpThresholdPercent = 35;
     inline constexpr double AdvantageModifier = 1.05;
     inline constexpr double DisadvantageModifier = 0.95;

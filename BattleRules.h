@@ -23,6 +23,11 @@ public:
         BattleStatus& attackerStatus,
         const Competitor& defender,
         BattleStatus& defenderStatus) const;
+    DamageResult CalculateObjectiveDamage(
+        const Skill& definition,
+        const SkillProgress& progress,
+        const Competitor& attacker,
+        const BattleStatus& attackerStatus) const;
 
 private:
     const TraitDefinition* FindTrait(const Competitor& competitor) const;

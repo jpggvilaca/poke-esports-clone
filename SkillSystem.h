@@ -25,6 +25,7 @@ struct SkillUseRequest
     SkillProgress* progress = nullptr;
     SkillActionTarget target;
     int playerIndex = -1;
+    int maxSkillXpAward = -1;
     bool boosted = false;
 };
 
@@ -63,7 +64,9 @@ private:
     void ResolveDamageStage(
         const SkillUseRequest& request,
         const Skill& definition,
+        std::mt19937& randomEngine,
         SkillUseResult& result) const;
+    bool CanCrit(const SkillUseRequest& request, const Skill& definition) const;
     void ResolvePostSkillReactionsStage(
         const SkillUseRequest& request,
         const Skill& definition,

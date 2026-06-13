@@ -12,6 +12,8 @@
 #include <godot_cpp/core/class_db.hpp>
 
 #include <algorithm>
+#include <string>
+#include <unordered_map>
 
 using godot::Array;
 using godot::Dictionary;
@@ -211,6 +213,7 @@ void ProfileBridge::apply_skill_progress(
     }
 
     Array events = battle_result["events"];
+    std::unordered_map<std::string, int> awarded_skill_xp_by_key;
     for (int index = 0; index < events.size(); ++index)
     {
         Dictionary event = events[index];
@@ -251,25 +254,46 @@ void ProfileBridge::apply_skill_progress(
 
         if (event_type == "skill_xp_gained")
         {
-            progress["xp"] = event.get("new_value", progress.get("xp", 0));
+            const std::string progress_key = std::to_string(profile_index) + ":" + to_std_string(skill_id);
+            const int already_awarded = awarded_skill_xp_by_key[progress_key];
+            const int remaining_award = std::max(0, Balance::MaxSkillXpPerBattle - already_awarded);
+            const int xp_award = std::min(remaining_award, get_int_field(event, "amount"));
+            if (xp_award <= 0)
+            {
+                continue;
+            }
+
+            const int old_xp = get_int_field(progress, "xp");
+            const int old_level = get_min_int_field(progress, "level", 1, 1);
+            int new_xp = old_xp + xp_award;
+            int new_level = old_level;
+            while (new_xp >= Balance::SkillXpPerLevel)
+            {
+                new_xp -= Balance::SkillXpPerLevel;
+                ++new_level;
+            }
+
+            awarded_skill_xp_by_key[progress_key] = already_awarded + xp_award;
+            progress["xp"] = new_xp;
+            progress["level"] = new_level;
+
             Dictionary change;
             change["profile_index"] = profile_index;
             change["skill_id"] = skill_id;
             change["field"] = "xp";
-            change["old_value"] = event.get("old_value", 0);
+            change["old_value"] = old_xp;
             change["new_value"] = progress["xp"];
             skill_progress_changes.push_back(change);
-        }
-        else if (event_type == "skill_leveled_up")
-        {
-            progress["level"] = event.get("new_level", progress.get("level", 1));
-            Dictionary change;
-            change["profile_index"] = profile_index;
-            change["skill_id"] = skill_id;
-            change["field"] = "level";
-            change["old_value"] = event.get("old_level", 1);
-            change["new_value"] = progress["level"];
-            skill_progress_changes.push_back(change);
+            if (new_level != old_level)
+            {
+                Dictionary level_change;
+                level_change["profile_index"] = profile_index;
+                level_change["skill_id"] = skill_id;
+                level_change["field"] = "level";
+                level_change["old_value"] = old_level;
+                level_change["new_value"] = new_level;
+                skill_progress_changes.push_back(level_change);
+            }
         }
         else
         {
@@ -312,6 +336,7 @@ void ProfileBridge::award_participant_xp(
         PlayerProfileState player_profile = bridge_serializers::PlayerProfileFromDictionary(player, data_);
         const int old_level = player_profile.level;
         const int old_xp = player_profile.xp;
+        const PassiveBonuses old_bonuses = player_profile.passiveBonuses;
         const ProfileCommandResult xp_result = profiles.AwardXp(player_profile, battle_xp);
         if (!xp_result.accepted)
         {
@@ -349,7 +374,30 @@ void ProfileBridge::award_participant_xp(
         level_up_messages.push_back(String("XP: ") + player_name + String(" gained ") + String::num_int64(battle_xp) + String(" player XP."));
         if (xp_result.leveledUp)
         {
-            level_up_messages.push_back(String("LEVEL UP: ") + player_name + String(" reached Lv") + String::num_int64(player_profile.level) + String("."));
+            const PassiveBonuses new_bonuses = player_profile.passiveBonuses;
+            String details;
+            const int hp_gain = new_bonuses.maxHpBonus - old_bonuses.maxHpBonus;
+            const int power_gain = new_bonuses.basePowerBonus - old_bonuses.basePowerBonus;
+            const int counter_gain = new_bonuses.counterDamageBonusPercent - old_bonuses.counterDamageBonusPercent;
+            if (hp_gain != 0)
+            {
+                details += String(" +") + String::num_int64(hp_gain) + String(" HP");
+            }
+            if (power_gain != 0)
+            {
+                if (!details.is_empty()) details += String(",");
+                details += String(" +") + String::num_int64(power_gain) + String(" power");
+            }
+            if (counter_gain != 0)
+            {
+                if (!details.is_empty()) details += String(",");
+                details += String(" +") + String::num_int64(counter_gain) + String("% counter damage");
+            }
+            if (details.is_empty())
+            {
+                details = String(" no stat change");
+            }
+            level_up_messages.push_back(String("LEVEL UP: ") + player_name + String(" reached Lv") + String::num_int64(player_profile.level) + String(" (") + details.strip_edges() + String(")."));
         }
     }
 }

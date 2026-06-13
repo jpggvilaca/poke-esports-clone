@@ -69,13 +69,28 @@ func _apply_event(event: Dictionary) -> void:
 			message_log.set_message("It missed.")
 			message_log.push_log("The play missed.")
 		BattleEventTypes.DAMAGE_APPLIED:
-			_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
-			_show_floating_number(String(event.get("target", "none")), int(event.get("amount", 0)), false, int(event.get("target_player_index", -1)))
-			message_log.push_log("%s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
+			if String(event.get("reason", "")) == "objective":
+				message_log.push_log("%s took %s structure damage." % [_display_event_target(event), event.get("amount", 0)])
+			elif String(event.get("reason", "")) == "neutral":
+				message_log.push_log("%s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
+			elif String(event.get("reason", "")) == "dragon_retaliation":
+				_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
+				_show_floating_number(String(event.get("target", "none")), int(event.get("amount", 0)), false, int(event.get("target_player_index", -1)))
+				message_log.push_log("Dragon hit %s for %s damage." % [_display_event_target(event), event.get("amount", 0)])
+			else:
+				_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
+				_show_floating_number(String(event.get("target", "none")), int(event.get("amount", 0)), false, int(event.get("target_player_index", -1)))
+				if bool(event.get("critical", false)):
+					message_log.push_log("Critical hit! %s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
+				else:
+					message_log.push_log("%s took %s damage." % [_display_event_target(event), event.get("amount", 0)])
 		BattleEventTypes.HEALING_APPLIED:
 			_animate_hp(String(event.get("target", "none")), int(event.get("old_value", 0)), int(event.get("new_value", 0)), int(event.get("target_player_index", -1)))
 			_show_floating_number(String(event.get("target", "none")), int(event.get("amount", 0)), true, int(event.get("target_player_index", -1)))
-			message_log.push_log("%s recovered %s HP." % [_display_event_target(event), event.get("amount", 0)])
+			if String(event.get("reason", "")) == "respawn":
+				message_log.push_log("%s respawned with %s HP." % [_display_event_target(event), event.get("new_value", 0)])
+			else:
+				message_log.push_log("%s recovered %s HP." % [_display_event_target(event), event.get("amount", 0)])
 		BattleEventTypes.STATUS_APPLIED:
 			message_log.push_log(_format_status_log(event))
 		BattleEventTypes.STATUS_EXPIRED:
@@ -87,7 +102,18 @@ func _apply_event(event: Dictionary) -> void:
 		BattleEventTypes.MARK_EXPIRED:
 			message_log.push_log("%s mark expired." % _display_event_target(event))
 		BattleEventTypes.FARMING_TRIGGERED:
-			message_log.push_log("%s farms safely (+%s mana, defense up)." % [_display_event_actor(event), event.get("amount", 0)])
+			message_log.push_log("%s farms safely (+%s mana)." % [_display_event_actor(event), event.get("amount", 0)])
+		BattleEventTypes.OBJECTIVE_DESTROYED:
+			message_log.set_message("%s destroyed!" % _display_event_target(event))
+			message_log.push_log(message_log.get_message())
+		BattleEventTypes.REINFORCEMENT_STARTED:
+			message_log.push_log("%s is KO'd and respawns in %s turn(s)." % [_display_event_actor(event), event.get("new_value", 0)])
+		BattleEventTypes.NEUTRAL_OBJECTIVE_SPAWNED:
+			message_log.set_message("%s has spawned." % _display_event_target(event))
+			message_log.push_log(message_log.get_message())
+		BattleEventTypes.NEUTRAL_OBJECTIVE_SLAIN:
+			message_log.set_message("%s claimed %s." % [_display_event_actor(event), _display_event_target(event)])
+			message_log.push_log("%s (+%s%% power)." % [message_log.get_message(), event.get("amount", 0)])
 		BattleEventTypes.SKILL_XP_GAINED:
 			reward_presenter.defer_progress_event(event)
 		BattleEventTypes.SKILL_LEVELED_UP:

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class SimulationData;
@@ -24,6 +25,9 @@ public:
 
     BattleActionResult StartBattle(const BattleSetup& setup);
     BattleActionResult UsePlayerSkill(const std::string& skillId, int targetPlayerIndex = -1);
+    BattleActionResult UsePlayerSkillOnObjective(const std::string& skillId);
+    BattleActionResult UsePlayerPushObjective();
+    BattleActionResult UsePlayerAttackDragon();
     BattleActionResult UsePlayerDrill(DrillResultQuality quality);
     BattleActionResult UsePlayerFarm();
     BattleActionResult PassPlayerTurn();
@@ -55,6 +59,8 @@ private:
     void ResetBattleState();
     void BuildPlayerTeam(const BattleSetup& setup);
     void BuildOpponentTeam(const BattleSetup& setup);
+    void BuildLaneObjectives();
+    void ResetNeutralObjectives();
     void SelectStartingOpponent(int requestedOpponentIndex);
     BattleActionResult CreateBattleStartedResult() const;
     Competitor CreateCompetitor(
@@ -89,6 +95,32 @@ private:
     bool HasLivingOpponent() const;
     int FirstLivingOpponentIndex() const;
     int NextLivingOpponentIndex(int fromOpponentIndex) const;
+
+    // Lane objectives
+    int GetActiveObjectiveIndex(const std::vector<LaneObjective>& objectives) const;
+    LaneObjective* GetActiveEnemyObjective(BattleActor attacker);
+    const LaneObjective* GetActiveEnemyObjective(BattleActor attacker) const;
+    bool IsEnemyObjectiveVulnerable(BattleActor attacker) const;
+    SkillProgress* SelectBasicDamageSkill(Competitor& competitor, BattleStatus& status) const;
+    void ApplyObjectiveDamage(
+        BattleActor attacker,
+        Competitor& competitor,
+        const Skill& definition,
+        SkillProgress& progress,
+        BattleActionResult& result);
+    void ApplyDragonDamage(
+        BattleActor attacker,
+        Competitor& competitor,
+        const Skill& definition,
+        SkillProgress& progress,
+        BattleActionResult& result);
+    void SpawnDragon(BattleActionResult& result);
+    void TickNeutralObjectives(BattleActionResult& result);
+    void ApplyTeamPowerBuff(BattleActor actor, int percent);
+    std::string SkillXpAwardKey(BattleActor actor, int profileIndex, const std::string& skillId) const;
+    int GetRemainingSkillXpAward(BattleActor actor, int profileIndex, const std::string& skillId) const;
+    void RegisterSkillXpAward(BattleActor actor, int profileIndex, const std::string& skillId, int amount);
+    SkillXpResult AwardCappedSkillXp(BattleActor actor, int profileIndex, SkillProgress& progress);
 
     // Skill actions
     bool IsBasicAbility(const Skill& definition) const;
@@ -144,10 +176,23 @@ private:
         BattleActor actor,
         const std::string& skillId,
         const std::string& reason) const;
+    int GetReinforcementTurns() const;
+    void StartKnockoutTimers(BattleActionResult& result);
+    void StartKnockoutTimerForTeam(
+        BattleActor actor,
+        std::vector<Competitor>& team,
+        BattleActionResult& result);
+    void TickReinforcementTimers(BattleActionResult& result);
+    void TickReinforcementTimersForTeam(
+        BattleActor actor,
+        std::vector<Competitor>& team,
+        BattleActionResult& result);
 
     // Turn flow and battle completion
     void MarkParticipant(int playerIndex);
     void ResolveOpponentTurn(BattleActionResult& result);
+    SkillProgress* SelectObjectivePushSkill(Competitor& competitor, BattleStatus& status) const;
+    void ResolveOpponentObjectivePushes(BattleActionResult& result);
     void RegisterPlayerActionAndApplyFarming(BattleActionResult& result);
     void ResolveAfterPlayerAction(BattleActionResult& result);
     void ApplyPlayerFarm(Competitor& player, BattleStatus& status, BattleActionResult& result) const;
@@ -182,5 +227,11 @@ private:
     std::vector<Competitor> opponentTeam_;
     std::vector<BattleStatus> opponentStatuses_;
     std::vector<int> participatingPlayerIndices_;
+    std::vector<LaneObjective> playerObjectives_;
+    std::vector<LaneObjective> opponentObjectives_;
+    NeutralObjectiveState dragon_;
+    int playerPowerBuffPercent_ = 0;
+    int opponentPowerBuffPercent_ = 0;
     int activeOpponentIndex_ = 0;
+    std::unordered_map<std::string, int> skillXpAwardedThisBattle_;
 };

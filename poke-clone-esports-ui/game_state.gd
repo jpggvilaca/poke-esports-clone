@@ -568,6 +568,7 @@ func _ensure_started() -> void:
 			player["max_mana"] = int(player.get("max_focus", 100))
 		if not player.has("current_mana"):
 			player["current_mana"] = int(player.get("current_focus", STARTING_MANA))
+		player = _ensure_full_skill_kit(player)
 		roster[index] = player
 	_sanitize_lineup_indices()
 
@@ -626,6 +627,40 @@ func _ensure_player_identity_fields(player: Dictionary) -> Dictionary:
 	for key in ["trait_id", "trait_name", "trait_description"]:
 		if snapshot.has(key):
 			player[key] = snapshot[key]
+	return player
+
+
+func _ensure_full_skill_kit(player: Dictionary) -> Dictionary:
+	var bridge := _ensure_profile_bridge()
+	if bridge == null:
+		return player
+
+	var snapshot: Dictionary = bridge.create_player_profile(
+		String(player.get("name", "Player")),
+		String(player.get("spec", "Top")))
+	var starter_skills: Array = snapshot.get("active_skill_ids", [])
+	if starter_skills.is_empty():
+		return player
+
+	var learned: Array = player.get("learned_skill_ids", []).duplicate()
+	var active: Array = player.get("active_skill_ids", []).duplicate()
+	var progress: Dictionary = player.get("skill_progress", {}).duplicate(true)
+	for skill_id_value in starter_skills:
+		var skill_id := String(skill_id_value)
+		if not learned.has(skill_id):
+			learned.push_back(skill_id)
+		if not active.has(skill_id) and active.size() < 4:
+			active.push_back(skill_id)
+		if not progress.has(skill_id):
+			progress[skill_id] = {
+				"skill_id": skill_id,
+				"level": 1,
+				"xp": 0,
+			}
+
+	player["learned_skill_ids"] = learned
+	player["active_skill_ids"] = active
+	player["skill_progress"] = progress
 	return player
 
 

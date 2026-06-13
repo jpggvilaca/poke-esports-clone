@@ -2,14 +2,19 @@
 
 #include "SimulationData.h"
 
-SkillXpResult ProgressionSystem::AwardSkillXp(SkillProgress& progress) const
+#include <algorithm>
+
+SkillXpResult ProgressionSystem::AwardSkillXp(SkillProgress& progress, int maxAward) const
 {
     SkillXpResult result;
-    result.xpGained = Balance::SkillXpPerUse;
+    const int xpAward = maxAward < 0
+        ? Balance::SkillXpPerUse
+        : std::min(Balance::SkillXpPerUse, std::max(0, maxAward));
+    result.xpGained = xpAward;
     result.oldXp = progress.xp;
     result.oldLevel = progress.level;
 
-    progress.xp += Balance::SkillXpPerUse;
+    progress.xp += xpAward;
     while (progress.xp >= Balance::SkillXpPerLevel)
     {
         progress.xp -= Balance::SkillXpPerLevel;

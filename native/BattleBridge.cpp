@@ -20,6 +20,9 @@ void BattleBridge::_bind_methods()
 {
     godot::ClassDB::bind_method(godot::D_METHOD("start_battle", "setup"), &BattleBridge::start_battle);
     godot::ClassDB::bind_method(godot::D_METHOD("use_skill", "skill_id", "target_player_index"), &BattleBridge::use_skill);
+    godot::ClassDB::bind_method(godot::D_METHOD("use_skill_on_objective", "skill_id"), &BattleBridge::use_skill_on_objective);
+    godot::ClassDB::bind_method(godot::D_METHOD("use_push_objective"), &BattleBridge::use_push_objective);
+    godot::ClassDB::bind_method(godot::D_METHOD("use_attack_dragon"), &BattleBridge::use_attack_dragon);
     godot::ClassDB::bind_method(godot::D_METHOD("use_drill", "result_quality"), &BattleBridge::use_drill);
     godot::ClassDB::bind_method(godot::D_METHOD("use_farm"), &BattleBridge::use_farm);
     godot::ClassDB::bind_method(godot::D_METHOD("pass_turn"), &BattleBridge::pass_turn);
@@ -48,6 +51,42 @@ Dictionary BattleBridge::use_skill(const String& skill_id, int target_player_ind
     }
 
     last_result_ = session_->UsePlayerSkill(to_std_string(skill_id), target_player_index);
+    return bridge_serializers::BattleResultToDictionary(last_result_, data_);
+}
+
+Dictionary BattleBridge::use_skill_on_objective(const String& skill_id)
+{
+    if (session_ == nullptr)
+    {
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return bridge_serializers::BattleResultToDictionary(last_result_, data_);
+    }
+
+    last_result_ = session_->UsePlayerSkillOnObjective(to_std_string(skill_id));
+    return bridge_serializers::BattleResultToDictionary(last_result_, data_);
+}
+
+Dictionary BattleBridge::use_push_objective()
+{
+    if (session_ == nullptr)
+    {
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return bridge_serializers::BattleResultToDictionary(last_result_, data_);
+    }
+
+    last_result_ = session_->UsePlayerPushObjective();
+    return bridge_serializers::BattleResultToDictionary(last_result_, data_);
+}
+
+Dictionary BattleBridge::use_attack_dragon()
+{
+    if (session_ == nullptr)
+    {
+        last_result_ = reject_action(SimulationError::BattleNotStarted, "Start a battle first.");
+        return bridge_serializers::BattleResultToDictionary(last_result_, data_);
+    }
+
+    last_result_ = session_->UsePlayerAttackDragon();
     return bridge_serializers::BattleResultToDictionary(last_result_, data_);
 }
 

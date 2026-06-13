@@ -57,6 +57,7 @@ func show_spec_choice(options: Array[String]) -> String:
 		var button := Button.new()
 		button.text = spec
 		button.custom_minimum_size = Vector2(220, 44)
+		_apply_spec_button_style(button)
 		button.pressed.connect(_choose_spec.bind(spec))
 		spec_buttons.add_child(button)
 
@@ -155,6 +156,36 @@ func _on_quit_pressed() -> void:
 func _choose_spec(spec: String) -> void:
 	pending_spec_choice = spec
 	spec_chosen.emit()
+
+
+func _apply_spec_button_style(button: Button) -> void:
+	button.focus_mode = Control.FOCUS_ALL
+	button.add_theme_font_size_override("font_size", 20)
+	button.add_theme_color_override("font_color", Color(0.94, 0.97, 1.0, 1.0))
+	button.add_theme_color_override("font_focus_color", Color(1.0, 0.96, 0.58, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(1.0, 0.96, 0.58, 1.0))
+	button.add_theme_color_override("font_pressed_color", Color(1.0, 0.96, 0.58, 1.0))
+
+	var normal := _make_spec_button_style(Color(0.08, 0.10, 0.13, 0.96), Color(0.28, 0.40, 0.52, 1.0), 2)
+	var hover := _make_spec_button_style(Color(0.13, 0.18, 0.22, 1.0), Color(0.74, 0.84, 0.94, 1.0), 3)
+	var selected := _make_spec_button_style(Color(0.18, 0.16, 0.04, 1.0), Color(1.0, 0.86, 0.20, 1.0), 5)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", selected)
+	button.add_theme_stylebox_override("focus", selected)
+
+
+func _make_spec_button_style(fill_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 16
+	style.content_margin_top = 10
+	style.content_margin_right = 16
+	style.content_margin_bottom = 10
+	return style
 
 
 func _cycle_trainer_tab(direction: int) -> void:

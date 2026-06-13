@@ -5,5 +5,5 @@
 class ProgressionSystem
 {
 public:
-    SkillXpResult AwardSkillXp(SkillProgress& progress) const;
+    SkillXpResult AwardSkillXp(SkillProgress& progress, int maxAward = -1) const;
 };

@@ -102,6 +102,10 @@ namespace
         case BattleEventType::MarkTriggered: return "MarkTriggered";
         case BattleEventType::MarkExpired: return "MarkExpired";
         case BattleEventType::FarmingTriggered: return "FarmingTriggered";
+        case BattleEventType::ObjectiveDestroyed: return "ObjectiveDestroyed";
+        case BattleEventType::ReinforcementStarted: return "ReinforcementStarted";
+        case BattleEventType::NeutralObjectiveSpawned: return "NeutralObjectiveSpawned";
+        case BattleEventType::NeutralObjectiveSlain: return "NeutralObjectiveSlain";
         case BattleEventType::SkillXpGained: return "SkillXpGained";
         case BattleEventType::SkillLeveledUp: return "SkillLeveledUp";
         case BattleEventType::BattleFinished: return "BattleFinished";
@@ -282,10 +286,13 @@ namespace
         test.ExpectEqual(player.xp, 0, "starter begins with no XP");
         test.ExpectEqual(player.xpRequiredForNextLevel, 100, "level 1 needs 100 XP");
         test.ExpectEqual(player.rank, CareerRank::Rookie, "starter begins as Rookie");
-        test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(1), "starter learns one skill");
-        test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(1), "starter equips one skill");
+        test.ExpectEqual(player.learnedSkillIds.size(), static_cast<std::size_t>(4), "starter learns the full spec kit");
+        test.ExpectEqual(player.activeSkillIds.size(), static_cast<std::size_t>(4), "starter equips the full spec kit");
         test.ExpectEqual(player.learnedSkillIds[0], std::string("top-basic"), "starter loadout begins with the spec basic");
         test.ExpectEqual(player.activeSkillIds[0], std::string("top-basic"), "starter active skill is the spec basic");
+        test.ExpectEqual(player.activeSkillIds[1], std::string("top-sunder"), "starter second skill is the mana damage skill");
+        test.ExpectEqual(player.activeSkillIds[2], std::string("top-hold-line"), "starter third skill is the effect skill");
+        test.ExpectEqual(player.activeSkillIds[3], std::string("top-gamebreaker"), "starter fourth skill is the ultimate");
         test.ExpectEqual(player.traitId, std::string("clutch-player"), "top starter receives the top default trait");
 
         test.ExpectEqual(
@@ -323,13 +330,6 @@ namespace
 
         ProfileCommandResult duplicateLearn = profiles.LearnSkill(player, "jungle-gank");
         test.Expect(!duplicateLearn.accepted, "cannot learn the same skill twice");
-
-        profiles.LearnSkill(player, "top-hold-line");
-        profiles.LearnSkill(player, "top-sunder");
-        profiles.LearnSkill(player, "top-gamebreaker");
-        profiles.EquipSkill(player, "top-hold-line");
-        profiles.EquipSkill(player, "top-sunder");
-        profiles.EquipSkill(player, "top-gamebreaker");
 
         ProfileCommandResult equipWhenFull = profiles.EquipSkill(player, "jungle-gank");
         test.Expect(!equipWhenFull.accepted, "cannot equip when all active slots are full");
@@ -437,22 +437,19 @@ namespace
         const Skill* topPressure = data.FindSkill("top-sunder");
         const Skill* midBasic = data.FindSkill("mid-basic");
         const Skill* adcAllIn = data.FindSkill("adc-bullet-time");
-        const Skill* jungleDisrupt = data.FindSkill("jungle-invade");
+        const Skill* jungleDisrupt = data.FindSkill("jungle-gank");
         const Skill* supportRecover = data.FindSkill("support-peel");
-        const Skill* supportGuard = data.FindSkill("top-gamebreaker");
         test.Expect(topPressure != nullptr, "top pressure skill exists");
         test.Expect(midBasic != nullptr, "mid basic skill exists");
         test.Expect(adcAllIn != nullptr, "ADC all-in skill exists");
         test.Expect(jungleDisrupt != nullptr, "jungle disrupt skill exists");
         test.Expect(supportRecover != nullptr, "support recover skill exists");
-        test.Expect(supportGuard != nullptr, "support guard skill exists");
 
         if (topPressure == nullptr
             || midBasic == nullptr
             || adcAllIn == nullptr
             || jungleDisrupt == nullptr
-            || supportRecover == nullptr
-            || supportGuard == nullptr)
+            || supportRecover == nullptr)
         {
             return;
         }
@@ -460,9 +457,9 @@ namespace
         SkillProgress progress{ topPressure->id, 1, 0 };
         Competitor clutch = MakeCompetitor(Spec::Top, "clutch-player");
         clutch.hp = 35;
-        test.ExpectEqual(rules.GetManaCost(*topPressure, progress, clutch), 45, "clutch does not trigger at 35 percent HP");
+        test.ExpectEqual(rules.GetManaCost(*topPressure, progress, clutch), 35, "clutch does not trigger at 35 percent HP");
         clutch.hp = 34;
-        test.ExpectEqual(rules.GetManaCost(*topPressure, progress, clutch), 33, "clutch discounts paid abilities below 35 percent HP");
+        test.ExpectEqual(rules.GetManaCost(*topPressure, progress, clutch), 26, "clutch discounts paid abilities below 35 percent HP");
 
         Competitor mid = MakeCompetitor(Spec::Mid, "lane-bully");
         Competitor adc = MakeCompetitor(Spec::Adc, "precision-carry");
@@ -481,18 +478,14 @@ namespace
         Competitor jungle = MakeCompetitor(Spec::Jungle, "shotcaller");
         test.ExpectEqual(
             rules.GetEffectValue(*jungleDisrupt, { jungleDisrupt->id, 1, 0 }, jungle),
-            60,
-            "shotcaller strengthens disruption effects");
+            0,
+            "jungle effect skill applies mark setup");
 
         Competitor support = MakeCompetitor(Spec::Support, "stabilizer");
         test.ExpectEqual(
             rules.GetEffectValue(*supportRecover, { supportRecover->id, 1, 0 }, support),
             48,
             "stabilizer strengthens healing effects");
-        test.ExpectEqual(
-            rules.GetEffectValue(*supportGuard, { supportGuard->id, 1, 0 }, support),
-            36,
-            "stabilizer strengthens positive defense effects");
     }
 
     void TestTrainerProfile(TestContext& test)
@@ -607,7 +600,7 @@ namespace
         test.ExpectEqual(first.candidates.size(), static_cast<std::size_t>(3), "first scout offer has three candidates");
         test.ExpectEqual(first.candidates[0].name, std::string("Mira"), "first scout candidate name is hydrated");
         test.ExpectEqual(first.candidates[0].spec, Spec::Support, "first scout candidate spec is hydrated");
-        test.ExpectEqual(first.candidates[0].activeSkillIds.size(), static_cast<std::size_t>(1), "scout candidate receives starter skills");
+        test.ExpectEqual(first.candidates[0].activeSkillIds.size(), static_cast<std::size_t>(4), "scout candidate receives starter skills");
 
         ScoutOfferView third = scouts.GetNextOffer(1200, { "first-scout" }, { "second-scout" });
         test.Expect(third.available, "completed and declined offers are skipped");
@@ -667,10 +660,27 @@ namespace
         test.ExpectEqual(firstAction.newPlayerName, std::string("Closer"), "turn advance tracks new player name");
         test.ExpectEqual(session.GetState().activePlayerIndex, 1, "second player is active after automatic turn advance");
 
+        auto activeBasicSkill = [&session]() {
+            return session.GetState().player.name == "Closer"
+                ? std::string("jungle-basic")
+                : std::string("top-basic");
+        };
+        auto hasLivingOpponent = [&session]() {
+            for (const CompetitorView& opponent : session.GetState().opponentTeam)
+            {
+                if (opponent.hp > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
         BattleActionResult finalAction;
-        for (int attempt = 0; attempt < 20 && !session.GetState().finished; ++attempt)
+        for (int attempt = 0; attempt < 20 && hasLivingOpponent(); ++attempt)
         {
-            finalAction = session.UsePlayerSkill("jungle-basic");
+            finalAction = session.UsePlayerSkill(activeBasicSkill());
             test.Expect(finalAction.accepted, "active player can use their basic skill");
             if (!finalAction.accepted)
             {
@@ -678,9 +688,34 @@ namespace
             }
         }
 
+        test.Expect(!session.GetState().finished, "defeating the opponent opens objectives instead of ending the battle");
+        test.Expect(session.GetState().opponentObjectiveVulnerable, "enemy objective becomes vulnerable after the opponent lineup is down");
+        BattleActionResult blockedChampionHit = session.UsePlayerSkill(activeBasicSkill());
+        test.Expect(!blockedChampionHit.accepted, "champion attacks stop once no living opponent remains");
+        test.ExpectEqual(blockedChampionHit.errorCode, SimulationError::InvalidSkillTarget, "dead champion targeting rejects with invalid target");
+
+        for (int attempt = 0; attempt < 120 && !session.GetState().finished; ++attempt)
+        {
+            if (hasLivingOpponent())
+            {
+                finalAction = session.UsePlayerSkill(activeBasicSkill());
+                test.Expect(finalAction.accepted, "active player can fight a respawned opponent");
+            }
+            else
+            {
+                finalAction = session.UsePlayerPushObjective();
+                test.Expect(finalAction.accepted, "active player can push while the enemy team is down");
+            }
+            if (!finalAction.accepted)
+            {
+                break;
+            }
+        }
+
         BattleState finalState = session.GetState();
-        test.Expect(finalState.finished, "battle finishes after the boosted switched player attacks");
+        test.Expect(finalState.finished, "battle finishes after the player destroys the enemy Nexus");
         test.ExpectEqual(finalState.winner, BattleWinner::Player, "player team wins the battle");
+        test.ExpectEqual(finalState.opponentObjectives[2].hp, 0, "enemy Nexus is destroyed");
         test.Expect(!finalAction.events.empty(), "winning action includes timeline events");
         if (!finalAction.events.empty())
         {
@@ -688,7 +723,7 @@ namespace
             test.ExpectEqual(finalAction.events[0].actor, BattleActor::Player, "first skill event belongs to the player");
         }
         test.Expect(ContainsEventType(finalAction.events, BattleEventType::DamageApplied), "winning timeline includes damage");
-        test.Expect(ContainsEventType(finalAction.events, BattleEventType::SkillXpGained), "winning timeline includes skill XP");
+        test.Expect(!ContainsEventType(finalAction.events, BattleEventType::SkillXpGained), "winning timeline respects the per-skill XP cap");
         test.Expect(ContainsEventType(finalAction.events, BattleEventType::BattleFinished), "winning timeline includes battle finish");
         test.Expect(ContainsEventType(finalAction.events, BattleEventType::RewardGranted), "winning timeline includes reward grant");
         test.Expect(finalAction.finalState.finished, "winning result carries the final state snapshot");
@@ -709,7 +744,7 @@ namespace
         setup.gameType = GameType::LeagueOfLegends;
         for (int index = 0; index < 3; ++index)
         {
-            BattleSetup::PlayerSlot slot = MakeBattleSlot(300 + index, "Player " + std::to_string(index + 1), Spec::Top, "adc-trap");
+            BattleSetup::PlayerSlot slot = MakeBattleSlot(300 + index, "Player " + std::to_string(index + 1), Spec::Top, "adc-basic");
             slot.currentMana = 100;
             slot.skills[0].level = 80;
             setup.playerTeam.push_back(slot);
@@ -726,7 +761,7 @@ namespace
         test.ExpectEqual(startState.opponentTeam.size(), static_cast<std::size_t>(3), "3v3 state exposes three opponent slots");
         test.ExpectEqual(startState.activeOpponentIndex, 0, "first rival member starts active");
 
-        BattleActionResult firstKo = session.UsePlayerSkill("adc-trap");
+        BattleActionResult firstKo = session.UsePlayerSkill("adc-basic");
         test.Expect(firstKo.accepted, "player can attack the first rival member");
         test.Expect(!firstKo.battleFinished, "defeating one rival member does not finish a 3v3 battle");
         BattleState afterFirstKo = session.GetState();
@@ -734,9 +769,20 @@ namespace
         test.ExpectEqual(afterFirstKo.opponent.name, std::string("Rival Jungle"), "active opponent snapshot follows the second rival member");
 
         BattleActionResult finalAction = firstKo;
-        for (int attempt = 0; attempt < 8 && !session.GetState().finished; ++attempt)
+        auto hasLivingOpponent = [&session]() {
+            for (const CompetitorView& opponent : session.GetState().opponentTeam)
+            {
+                if (opponent.hp > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        for (int attempt = 0; attempt < 20 && hasLivingOpponent(); ++attempt)
         {
-            finalAction = session.UsePlayerSkill("adc-trap");
+            finalAction = session.UsePlayerSkill("adc-basic");
             test.Expect(finalAction.accepted, "next player can keep fighting the rival lineup");
             if (!finalAction.accepted)
             {
@@ -744,15 +790,162 @@ namespace
             }
         }
 
+        test.Expect(!session.GetState().finished, "3v3 battle continues into the fight-push loop");
+        for (int attempt = 0; attempt < 160 && !session.GetState().finished; ++attempt)
+        {
+            if (hasLivingOpponent())
+            {
+                finalAction = session.UsePlayerSkill("adc-basic");
+                test.Expect(finalAction.accepted, "next player can fight a respawned rival");
+            }
+            else
+            {
+                finalAction = session.UsePlayerPushObjective();
+                test.Expect(finalAction.accepted, "next player can push while rivals are down");
+            }
+            if (!finalAction.accepted)
+            {
+                break;
+            }
+        }
+
         BattleState finalState = session.GetState();
-        test.Expect(finalState.finished, "3v3 battle finishes after all rival members are down");
+        test.Expect(finalState.finished, "3v3 battle finishes after the enemy Nexus falls");
         test.ExpectEqual(finalState.winner, BattleWinner::Player, "player team wins the 3v3 test battle");
         test.ExpectEqual(finalState.opponentTeam.size(), static_cast<std::size_t>(3), "final state keeps all rival members for UI display");
-        for (const CompetitorView& opponent : finalState.opponentTeam)
-        {
-            test.ExpectEqual(opponent.hp, 0, opponent.name + " is down");
-        }
+        test.ExpectEqual(finalState.opponentObjectives[2].hp, 0, "3v3 enemy Nexus is destroyed");
         test.Expect(finalAction.reward.awarded, "3v3 win grants the battle reward");
+    }
+
+    void TestBattleSessionPlayerKoRequiresObjectiveFinish(TestContext& test)
+    {
+        SimulationData data;
+        BattleSession session(data, 3030);
+
+        BattleSetup setup;
+        setup.gameType = GameType::LeagueOfLegends;
+        BattleSetup::PlayerSlot player;
+        player.profileIndex = 404;
+        player.name = "Fragile Top";
+        player.spec = Spec::Top;
+        player.currentHp = 1;
+        player.skills.push_back({ "top-basic", 1, 0 });
+        setup.playerTeam.push_back(player);
+
+        BattleSetup::OpponentSlot opponent = MakeOpponentSlot("Fed ADC", Spec::Adc, 1000);
+        opponent.skills.push_back({ "adc-basic", 80, 0 });
+        setup.opponentTeam.push_back(opponent);
+
+        test.Expect(session.StartBattle(setup).accepted, "KO objective battle starts");
+        BattleActionResult result = session.PassPlayerTurn();
+        test.Expect(result.accepted, "player can pass into the opponent turn");
+        test.Expect(ContainsEventType(result.events, BattleEventType::DamageApplied), "opponent first KOs the player");
+        test.Expect(ContainsEventType(result.events, BattleEventType::ReinforcementStarted), "KO starts the player respawn timer");
+        test.Expect(!ContainsEventType(result.events, BattleEventType::ObjectiveDestroyed), "opponent does not immediately push after the KO");
+        test.Expect(!session.GetState().finished, "KO does not finish the battle");
+        test.ExpectEqual(session.GetState().player.hp, 0, "player champion is KO'd");
+        test.ExpectEqual(session.GetState().player.reinforcementTimer, 2, "early KO starts a two-turn respawn timer");
+
+        BattleActionResult firstWait = session.PassPlayerTurn();
+        test.Expect(firstWait.accepted, "KO'd player can wait one turn");
+        test.ExpectEqual(session.GetState().player.reinforcementTimer, 1, "waiting ticks the respawn timer");
+        test.Expect(!session.GetState().finished, "one wait turn does not finish the battle");
+
+        BattleActionResult secondWait = session.PassPlayerTurn();
+        test.Expect(secondWait.accepted, "KO'd player can wait a second turn");
+        test.Expect(ContainsEventType(secondWait.events, BattleEventType::HealingApplied), "player respawns after the timer expires");
+
+        BattleState finalState = session.GetState();
+        test.Expect(!finalState.finished, "respawn happens before the Nexus falls");
+        test.ExpectEqual(finalState.player.hp, finalState.player.maxHp, "player respawns at full HP");
+        test.ExpectEqual(finalState.player.reinforcementTimer, 0, "respawn clears the timer");
+        test.Expect(finalState.playerObjectives[2].hp > 0, "player Nexus survives the death timer window");
+    }
+
+    void TestBattleSessionOpponentKoRespawns(TestContext& test)
+    {
+        SimulationData data;
+        BattleSession session(data, 5050);
+
+        BattleSetup setup;
+        setup.gameType = GameType::LeagueOfLegends;
+        BattleSetup::PlayerSlot player = MakeAbilityBattleSlot(
+            0,
+            "Enemy Respawn Tester",
+            Spec::Top,
+            { "top-basic" });
+        player.passiveBonuses.basePowerBonus = 1000;
+        player.passiveBonuses.maxHpBonus = 10000;
+        player.skills[0].level = 80;
+        setup.playerTeam.push_back(player);
+        setup.opponentSpec = Spec::Support;
+        setup.opponentMaxHp = 120;
+
+        test.Expect(session.StartBattle(setup).accepted, "enemy respawn battle starts");
+        BattleActionResult ko = session.UsePlayerSkill("top-basic");
+        test.Expect(ko.accepted, "player can KO the enemy");
+        test.Expect(ContainsEventType(ko.events, BattleEventType::ReinforcementStarted), "enemy KO starts a respawn timer");
+        test.ExpectEqual(session.GetState().opponent.hp, 0, "enemy is KO'd");
+        test.ExpectEqual(session.GetState().opponent.reinforcementTimer, 2, "enemy gets the same two-turn respawn timer");
+
+        BattleActionResult firstWait = session.UsePlayerFarm();
+        test.Expect(firstWait.accepted, "player can act while enemy is down");
+        test.ExpectEqual(session.GetState().opponent.reinforcementTimer, 1, "enemy respawn timer ticks");
+
+        BattleActionResult secondWait = session.UsePlayerFarm();
+        test.Expect(secondWait.accepted, "player can take the second wait action");
+        test.Expect(ContainsEventType(secondWait.events, BattleEventType::HealingApplied), "enemy respawns after the timer expires");
+        test.ExpectEqual(session.GetState().opponent.hp, session.GetState().opponent.maxHp, "enemy respawns at full HP");
+        test.Expect(!session.GetState().opponentObjectiveVulnerable, "enemy respawn restores the objective shield");
+    }
+
+    void TestBattleSessionDragonObjective(TestContext& test)
+    {
+        SimulationData data;
+        BattleSession session(data, 6060);
+
+        BattleSetup setup;
+        setup.gameType = GameType::LeagueOfLegends;
+        BattleSetup::PlayerSlot player = MakeAbilityBattleSlot(
+            0,
+            "Dragon Tester",
+            Spec::Top,
+            { "top-basic" });
+        player.passiveBonuses.basePowerBonus = 1000;
+        player.passiveBonuses.maxHpBonus = 10000;
+        player.skills[0].level = 80;
+        setup.playerTeam.push_back(player);
+        setup.opponentSpec = Spec::Support;
+        setup.opponentMaxHp = 1000;
+
+        test.Expect(session.StartBattle(setup).accepted, "dragon battle starts");
+        test.Expect(!session.GetState().neutralObjective.active, "dragon starts off the map");
+        test.ExpectEqual(session.GetState().neutralObjective.respawnTimer, 6, "dragon starts with a six-turn spawn timer");
+
+        BattleActionResult spawnAction;
+        for (int turn = 1; turn <= 6; ++turn)
+        {
+            spawnAction = session.UsePlayerFarm();
+            test.Expect(spawnAction.accepted, "dragon setup action is accepted");
+            if (turn < 6)
+            {
+                test.Expect(!session.GetState().neutralObjective.active, "dragon stays hidden before turn six");
+            }
+        }
+        test.Expect(ContainsEventType(spawnAction.events, BattleEventType::NeutralObjectiveSpawned), "sixth action spawns dragon");
+        test.Expect(session.GetState().neutralObjective.active, "dragon is active after spawn");
+        test.ExpectEqual(session.GetState().neutralObjective.hp, session.GetState().neutralObjective.maxHp, "dragon spawns at full HP");
+
+        BattleActionResult dragonAction = session.UsePlayerAttackDragon();
+        test.Expect(dragonAction.accepted, "player can attack dragon");
+        test.Expect(ContainsEventType(dragonAction.events, BattleEventType::DamageApplied), "dragon attack deals neutral damage");
+        test.Expect(ContainsEventType(dragonAction.events, BattleEventType::NeutralObjectiveSlain), "dragon can be slain");
+
+        BattleState finalState = session.GetState();
+        test.Expect(!finalState.neutralObjective.active, "dragon leaves the map after being slain");
+        test.ExpectEqual(finalState.neutralObjective.respawnTimer, 4, "dragon starts a four-turn respawn timer after being slain");
+        test.ExpectEqual(finalState.playerPowerBuffPercent, 15, "slaying dragon grants the player team power buff");
+        test.ExpectEqual(finalState.player.powerBuffPercent, 15, "active player view exposes the dragon buff");
     }
 
     void TestManaCooldownAndControlMechanics(TestContext& test)
@@ -803,19 +996,19 @@ namespace
             test.Expect(farm.accepted, "farm action is accepted");
             test.Expect(ContainsEventType(farm.events, BattleEventType::FarmingTriggered), "farm emits a farming event");
             test.Expect(ContainsEventType(farm.events, BattleEventType::ManaChanged), "farm grants mana");
-            test.Expect(ContainsEventType(farm.events, BattleEventType::StatusApplied), "farm applies defense");
+            test.Expect(!ContainsEventType(farm.events, BattleEventType::StatusApplied), "farm does not apply defense");
             test.ExpectEqual(
                 session.GetState().player.mana,
                 Balance::StartingMana + BattleEconomySystem::FarmingManaGain,
                 "farm grants the configured mana");
             test.ExpectEqual(
                 session.GetState().player.status.defenseModifierPercent,
-                BattleEconomySystem::FarmingDefenseModifierPercent,
-                "farm applies the configured defense modifier");
+                0,
+                "farm leaves defense unchanged");
             test.ExpectEqual(
                 session.GetState().player.status.defenseModifierTurns,
-                BattleEconomySystem::FarmingDefenseModifierTurns - 1,
-                "farm defense survives the enemy response");
+                0,
+                "farm does not create a defense duration");
         }
 
         {
@@ -879,13 +1072,13 @@ namespace
                 0,
                 "Jungle",
                 Spec::Jungle,
-                { "jungle-basic", "jungle-smite-fight" },
+                { "jungle-basic", "jungle-gank" },
                 100));
             setup.opponentSpec = Spec::Support;
             setup.opponentMaxHp = 1000;
 
             test.Expect(session.StartBattle(setup).accepted, "mark battle starts");
-            BattleActionResult mark = session.UsePlayerSkill("jungle-smite-fight");
+            BattleActionResult mark = session.UsePlayerSkill("jungle-gank");
             test.Expect(mark.accepted, "mark ability is accepted");
             test.Expect(ContainsEventType(mark.events, BattleEventType::MarkApplied), "mark is applied");
 
@@ -1026,6 +1219,9 @@ int main()
         { "ScoutSystem", TestScoutSystem },
         { "BattleSession switching and XP sharing", TestBattleSessionSwitchingAndXpShare },
         { "BattleSession opponent team 3v3", TestBattleSessionOpponentTeam3v3 },
+        { "BattleSession player KO requires objective finish", TestBattleSessionPlayerKoRequiresObjectiveFinish },
+        { "BattleSession opponent KO respawns", TestBattleSessionOpponentKoRespawns },
+        { "BattleSession dragon objective", TestBattleSessionDragonObjective },
         { "Mana, cooldown, and control mechanics", TestManaCooldownAndControlMechanics },
         { "Marks, modifiers, and opponent AI", TestMarksBuffsDebuffsAndOpponentAI },
         { "BattleSession seeded replay", TestBattleSessionSeededReplay },

@@ -105,7 +105,7 @@ SkillUseResult SkillSystem::UseSkill(const SkillUseRequest& request, std::mt1993
         return result;
     }
 
-    ResolveDamageStage(request, *definition, result);
+    ResolveDamageStage(request, *definition, randomEngine, result);
     ResolvePostSkillReactionsStage(request, *definition, result);
     ResolveSecondaryEffectsStage(request, *definition, result);
     AwardSkillXpStage(request, *definition, result);
@@ -182,6 +182,7 @@ bool SkillSystem::ResolveHitRoll(
 void SkillSystem::ResolveDamageStage(
     const SkillUseRequest& request,
     const Skill& definition,
+    std::mt19937& randomEngine,
     SkillUseResult& result) const
 {
     if (definition.power <= 0)
@@ -200,6 +201,14 @@ void SkillSystem::ResolveDamageStage(
         attackerStatus,
         target,
         targetStatus);
+    if (CanCrit(request, definition)
+        && Chance(Balance::CriticalStrikeChancePercent / 100.0, randomEngine))
+    {
+        result.damage.critical = true;
+        result.damage.amount = std::max(
+            1,
+            result.damage.amount * Balance::CriticalStrikeDamagePercent / 100);
+    }
     target.hp = std::max(0, target.hp - result.damage.amount);
     result.newTargetHp = target.hp;
 
@@ -213,6 +222,17 @@ void SkillSystem::ResolveDamageStage(
     damageApplied.amount = result.damage.amount;
     damageApplied.damage = result.damage;
     result.events.push_back(damageApplied);
+}
+
+bool SkillSystem::CanCrit(const SkillUseRequest& request, const Skill& definition) const
+{
+    if (definition.power <= 0)
+    {
+        return false;
+    }
+
+    return (request.actor == BattleActor::Player && request.target.actor == BattleActor::Opponent)
+        || (request.actor == BattleActor::Opponent && request.target.actor == BattleActor::Player);
 }
 
 void SkillSystem::ResolvePostSkillReactionsStage(
@@ -337,7 +357,7 @@ void SkillSystem::AwardSkillXpStage(
     SkillUseResult& result) const
 {
     Competitor& attacker = *request.competitor;
-    result.xp = progression_.AwardSkillXp(*request.progress);
+    result.xp = progression_.AwardSkillXp(*request.progress, request.maxSkillXpAward);
     if (result.xp.xpGained > 0)
     {
         BattleEvent xpGained = MakeActorEvent(

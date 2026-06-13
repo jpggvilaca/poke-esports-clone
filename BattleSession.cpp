@@ -5,6 +5,7 @@
 #include "SimulationData.h"
 
 #include <algorithm>
+#include <random>
 #include <string>
 
 namespace
@@ -53,6 +54,8 @@ BattleActionResult BattleSession::StartBattle(const BattleSetup& setup)
     MarkParticipant(activePlayerIndex_);
 
     BuildOpponentTeam(setup);
+    BuildLaneObjectives();
+    ResetNeutralObjectives();
     SelectStartingOpponent(setup.activeOpponentIndex);
 
     started_ = true;
@@ -128,6 +131,156 @@ BattleActionResult BattleSession::UsePlayerSkill(const std::string& skillId, int
     ExecuteSkillAction(request, *definition, result);
     ResolveAfterPlayerAction(result);
 
+    result.finalState = GetState();
+    return result;
+}
+
+BattleActionResult BattleSession::UsePlayerSkillOnObjective(const std::string& skillId)
+{
+    if (!started_)
+    {
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
+    }
+
+    if (finished_)
+    {
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
+    }
+
+    Competitor& player = ActivePlayer();
+    BattleStatus& playerStatus = ActivePlayerStatus();
+    SkillProgress* progress = player.FindSkill(skillId);
+    const Skill* definition = data_.FindSkill(skillId);
+    if (progress == nullptr || definition == nullptr)
+    {
+        return RejectAction(SimulationError::UnknownSkill, "Unknown skill.");
+    }
+
+    AbilityRuntimeState& abilityState = EnsureAbilityState(player, skillId);
+    const SkillActionValidation validation = ValidateSkillAction(
+        player,
+        playerStatus,
+        *definition,
+        *progress,
+        abilityState.cooldownRemaining);
+    if (!validation.canUse && validation.consumesTurn)
+    {
+        BattleActionResult result;
+        result.accepted = true;
+        FinishNonSkillActionOpportunity(
+            BattleActor::Player,
+            player,
+            playerStatus,
+            result,
+            skillId,
+            validation.disabledReason);
+        ResolveAfterPlayerAction(result);
+        result.finalState = GetState();
+        return result;
+    }
+
+    if (!validation.canUse)
+    {
+        return RejectSkillAction(validation.errorCode, validation.message, BattleActor::Player, skillId);
+    }
+
+    if (definition->power <= 0)
+    {
+        return RejectSkillAction(
+            SimulationError::InvalidSkillTarget,
+            "Only damaging skills can target objectives.",
+            BattleActor::Player,
+            skillId);
+    }
+
+    if (!IsEnemyObjectiveVulnerable(BattleActor::Player))
+    {
+        return RejectSkillAction(
+            SimulationError::InvalidSkillTarget,
+            "The backdoor shield blocks the objective while an enemy champion is active.",
+            BattleActor::Player,
+            skillId);
+    }
+
+    BattleActionResult result;
+    result.accepted = true;
+    ApplyObjectiveDamage(BattleActor::Player, player, *definition, *progress, result);
+    ResolveAfterPlayerAction(result);
+
+    result.finalState = GetState();
+    return result;
+}
+
+BattleActionResult BattleSession::UsePlayerPushObjective()
+{
+    if (!started_)
+    {
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
+    }
+
+    if (finished_)
+    {
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
+    }
+
+    Competitor& player = ActivePlayer();
+    BattleStatus& playerStatus = ActivePlayerStatus();
+    SkillProgress* progress = SelectBasicDamageSkill(player, playerStatus);
+    if (progress == nullptr)
+    {
+        return RejectSkillAction(
+            SimulationError::InvalidSkillTarget,
+            "No basic objective attack is available.",
+            BattleActor::Player,
+            "push");
+    }
+
+    return UsePlayerSkillOnObjective(progress->skillId);
+}
+
+BattleActionResult BattleSession::UsePlayerAttackDragon()
+{
+    if (!started_)
+    {
+        return RejectAction(SimulationError::BattleNotStarted, "Start a battle first.");
+    }
+
+    if (finished_)
+    {
+        return RejectAction(SimulationError::BattleAlreadyFinished, "The battle is already finished.");
+    }
+
+    if (!dragon_.active)
+    {
+        return RejectSkillAction(
+            SimulationError::InvalidSkillTarget,
+            "Dragon is not active.",
+            BattleActor::Player,
+            "dragon");
+    }
+
+    Competitor& player = ActivePlayer();
+    BattleStatus& playerStatus = ActivePlayerStatus();
+    SkillProgress* progress = SelectBasicDamageSkill(player, playerStatus);
+    if (progress == nullptr)
+    {
+        return RejectSkillAction(
+            SimulationError::InvalidSkillTarget,
+            "No basic Dragon attack is available.",
+            BattleActor::Player,
+            "dragon");
+    }
+
+    const Skill* definition = data_.FindSkill(progress->skillId);
+    if (definition == nullptr)
+    {
+        return RejectAction(SimulationError::UnknownSkill, "Unknown skill.");
+    }
+
+    BattleActionResult result;
+    result.accepted = true;
+    ApplyDragonDamage(BattleActor::Player, player, *definition, *progress, result);
+    ResolveAfterPlayerAction(result);
     result.finalState = GetState();
     return result;
 }
@@ -280,6 +433,15 @@ BattleState BattleSession::GetState() const
     {
         state.opponentTeam.push_back(CreateCompetitorView(opponentTeam_[index], opponentStatuses_[index]));
     }
+    state.playerObjectives = playerObjectives_;
+    state.opponentObjectives = opponentObjectives_;
+    state.activePlayerObjectiveIndex = GetActiveObjectiveIndex(playerObjectives_);
+    state.activeOpponentObjectiveIndex = GetActiveObjectiveIndex(opponentObjectives_);
+    state.playerObjectiveVulnerable = IsEnemyObjectiveVulnerable(BattleActor::Opponent);
+    state.opponentObjectiveVulnerable = IsEnemyObjectiveVulnerable(BattleActor::Player);
+    state.neutralObjective = dragon_;
+    state.playerPowerBuffPercent = playerPowerBuffPercent_;
+    state.opponentPowerBuffPercent = opponentPowerBuffPercent_;
     return state;
 }
 
@@ -389,6 +551,12 @@ void BattleSession::ResetBattleState()
     opponentTeam_.clear();
     opponentStatuses_.clear();
     participatingPlayerIndices_.clear();
+    playerObjectives_.clear();
+    opponentObjectives_.clear();
+    ResetNeutralObjectives();
+    playerPowerBuffPercent_ = 0;
+    opponentPowerBuffPercent_ = 0;
+    skillXpAwardedThisBattle_.clear();
     finished_ = false;
     winner_ = BattleWinner::None;
     playerActionCount_ = 0;
@@ -425,6 +593,31 @@ void BattleSession::BuildOpponentTeam(const BattleSetup& setup)
         opponentTeam_.push_back(CreateCompetitor(slot, setup.gameType));
         opponentStatuses_.push_back({});
     }
+}
+
+void BattleSession::BuildLaneObjectives()
+{
+    playerObjectives_ = {
+        { "outer_turret", "Outer turret", 75, 75, false },
+        { "inhibitor", "Inhibitor", 75, 75, false },
+        { "nexus", "Nexus", 75, 75, false },
+    };
+    opponentObjectives_ = {
+        { "outer_turret", "Outer turret", 75, 75, false },
+        { "inhibitor", "Inhibitor", 75, 75, false },
+        { "nexus", "Nexus", 75, 75, false },
+    };
+}
+
+void BattleSession::ResetNeutralObjectives()
+{
+    dragon_ = {};
+    dragon_.id = "dragon";
+    dragon_.name = "Dragon";
+    dragon_.hp = 0;
+    dragon_.maxHp = 80;
+    dragon_.active = false;
+    dragon_.respawnTimer = 6;
 }
 
 void BattleSession::SelectStartingOpponent(int requestedOpponentIndex)
@@ -747,6 +940,460 @@ int BattleSession::NextLivingOpponentIndex(int fromOpponentIndex) const
     return -1;
 }
 
+int BattleSession::GetActiveObjectiveIndex(const std::vector<LaneObjective>& objectives) const
+{
+    for (int index = 0; index < static_cast<int>(objectives.size()); ++index)
+    {
+        if (!objectives[index].destroyed && objectives[index].hp > 0)
+        {
+            return index;
+        }
+    }
+
+    return objectives.empty() ? -1 : static_cast<int>(objectives.size()) - 1;
+}
+
+LaneObjective* BattleSession::GetActiveEnemyObjective(BattleActor attacker)
+{
+    std::vector<LaneObjective>& objectives = attacker == BattleActor::Player
+        ? opponentObjectives_
+        : playerObjectives_;
+    const int index = GetActiveObjectiveIndex(objectives);
+    if (index < 0 || index >= static_cast<int>(objectives.size()))
+    {
+        return nullptr;
+    }
+
+    return &objectives[index];
+}
+
+const LaneObjective* BattleSession::GetActiveEnemyObjective(BattleActor attacker) const
+{
+    const std::vector<LaneObjective>& objectives = attacker == BattleActor::Player
+        ? opponentObjectives_
+        : playerObjectives_;
+    const int index = GetActiveObjectiveIndex(objectives);
+    if (index < 0 || index >= static_cast<int>(objectives.size()))
+    {
+        return nullptr;
+    }
+
+    return &objectives[index];
+}
+
+bool BattleSession::IsEnemyObjectiveVulnerable(BattleActor attacker) const
+{
+    const std::vector<LaneObjective>& objectives = attacker == BattleActor::Player
+        ? opponentObjectives_
+        : playerObjectives_;
+    const int index = GetActiveObjectiveIndex(objectives);
+    if (index < 0 || index >= static_cast<int>(objectives.size()))
+    {
+        return false;
+    }
+
+    if (index > 0 && !objectives[index - 1].destroyed)
+    {
+        return false;
+    }
+
+    const bool defenderHasChampion = attacker == BattleActor::Player
+        ? HasLivingOpponent()
+        : HasLivingPlayer();
+    return !defenderHasChampion;
+}
+
+void BattleSession::ApplyObjectiveDamage(
+    BattleActor attacker,
+    Competitor& competitor,
+    const Skill& definition,
+    SkillProgress& progress,
+    BattleActionResult& result)
+{
+    LaneObjective* objective = GetActiveEnemyObjective(attacker);
+    if (objective == nullptr)
+    {
+        return;
+    }
+
+    const int attackerIndex = attacker == BattleActor::Player ? activePlayerIndex_ : activeOpponentIndex_;
+    BattleStatus& attackerStatus = attacker == BattleActor::Player
+        ? ActivePlayerStatus()
+        : ActiveOpponentStatus();
+    const BattleActor targetActor = attacker == BattleActor::Player
+        ? BattleActor::Opponent
+        : BattleActor::Player;
+
+    SkillUseResult skillUse;
+    skillUse.used = true;
+    skillUse.actor = attacker;
+    skillUse.target = targetActor;
+    skillUse.skillId = definition.id;
+    skillUse.oldMana = competitor.mana;
+    skillUse.newMana = competitor.mana;
+    skillUse.oldActorHp = competitor.hp;
+    skillUse.newActorHp = competitor.hp;
+    skillUse.oldTargetHp = objective->hp;
+    skillUse.newTargetHp = objective->hp;
+
+    BattleEventParticipant actorParticipant = MakeBattleEventParticipant(attacker, attackerIndex, competitor);
+    BattleEventParticipant targetParticipant;
+    targetParticipant.actor = targetActor;
+    targetParticipant.name = objective->name;
+
+    BattleEvent started = MakeTargetedEvent(
+        BattleEventType::SkillStarted,
+        actorParticipant,
+        targetParticipant,
+        definition.id);
+    result.events.push_back(started);
+    skillUse.events.push_back(started);
+
+    competitor.mana = std::clamp(
+        competitor.mana - rules_.GetManaCost(definition, progress, competitor) + rules_.GetManaGain(definition, progress),
+        0,
+        competitor.maxMana);
+    skillUse.newMana = competitor.mana;
+    if (skillUse.oldMana != skillUse.newMana)
+    {
+        BattleEvent manaChanged = MakeActorEvent(BattleEventType::ManaChanged, actorParticipant, definition.id);
+        manaChanged.skillId = definition.id;
+        manaChanged.oldValue = skillUse.oldMana;
+        manaChanged.newValue = skillUse.newMana;
+        manaChanged.amount = skillUse.newMana - skillUse.oldMana;
+        result.events.push_back(manaChanged);
+        skillUse.events.push_back(manaChanged);
+    }
+
+    std::uniform_real_distribution<double> roll(0.0, 1.0);
+    if (roll(randomEngine_) >= rules_.GetAccuracy(definition, progress, competitor))
+    {
+        skillUse.hit = false;
+        BattleEvent missed = MakeTargetedEvent(
+            BattleEventType::AttackMissed,
+            actorParticipant,
+            targetParticipant,
+            definition.id);
+        result.events.push_back(missed);
+        skillUse.events.push_back(missed);
+    }
+    else
+    {
+        skillUse.damage = rules_.CalculateObjectiveDamage(definition, progress, competitor, attackerStatus);
+        objective->hp = std::max(0, objective->hp - skillUse.damage.amount);
+        objective->destroyed = objective->hp <= 0;
+        skillUse.newTargetHp = objective->hp;
+
+        BattleEvent damageApplied = MakeTargetedEvent(
+            BattleEventType::DamageApplied,
+            actorParticipant,
+            targetParticipant,
+            definition.id);
+        damageApplied.oldValue = skillUse.oldTargetHp;
+        damageApplied.newValue = skillUse.newTargetHp;
+        damageApplied.amount = skillUse.damage.amount;
+        damageApplied.damage = skillUse.damage;
+        damageApplied.reason = "objective";
+        result.events.push_back(damageApplied);
+        skillUse.events.push_back(damageApplied);
+
+        if (objective->destroyed)
+        {
+            BattleEvent destroyed = MakeTargetedEvent(
+                BattleEventType::ObjectiveDestroyed,
+                actorParticipant,
+                targetParticipant,
+                definition.id);
+            destroyed.reason = objective->name;
+            result.events.push_back(destroyed);
+            skillUse.events.push_back(destroyed);
+        }
+    }
+
+    skillUse.xp = AwardCappedSkillXp(attacker, competitor.profileIndex, progress);
+    if (skillUse.xp.xpGained > 0)
+    {
+        BattleEvent xpGained = MakeActorEvent(BattleEventType::SkillXpGained, actorParticipant, definition.id);
+        xpGained.oldValue = skillUse.xp.oldXp;
+        xpGained.newValue = skillUse.xp.newXp;
+        xpGained.amount = skillUse.xp.xpGained;
+        xpGained.xp = skillUse.xp;
+        result.events.push_back(xpGained);
+        skillUse.events.push_back(xpGained);
+    }
+    if (skillUse.xp.leveledUp)
+    {
+        BattleEvent leveledUp = MakeActorEvent(BattleEventType::SkillLeveledUp, actorParticipant, definition.id);
+        leveledUp.oldLevel = skillUse.xp.oldLevel;
+        leveledUp.newLevel = skillUse.xp.newLevel;
+        leveledUp.xp = skillUse.xp;
+        result.events.push_back(leveledUp);
+        skillUse.events.push_back(leveledUp);
+    }
+
+    TickCooldowns(attacker, competitor, result);
+    StartCooldown(attacker, competitor, attackerStatus, definition, result);
+    TickActionStatusDurations(attacker, attackerStatus, result);
+
+    result.skillUses.push_back(skillUse);
+}
+
+void BattleSession::ApplyDragonDamage(
+    BattleActor attacker,
+    Competitor& competitor,
+    const Skill& definition,
+    SkillProgress& progress,
+    BattleActionResult& result)
+{
+    if (!dragon_.active)
+    {
+        return;
+    }
+
+    const int attackerIndex = attacker == BattleActor::Player ? activePlayerIndex_ : activeOpponentIndex_;
+    BattleStatus& attackerStatus = attacker == BattleActor::Player
+        ? ActivePlayerStatus()
+        : ActiveOpponentStatus();
+
+    SkillUseResult skillUse;
+    skillUse.used = true;
+    skillUse.actor = attacker;
+    skillUse.target = BattleActor::None;
+    skillUse.skillId = definition.id;
+    skillUse.oldMana = competitor.mana;
+    skillUse.newMana = competitor.mana;
+    skillUse.oldActorHp = competitor.hp;
+    skillUse.newActorHp = competitor.hp;
+    skillUse.oldTargetHp = dragon_.hp;
+    skillUse.newTargetHp = dragon_.hp;
+
+    BattleEventParticipant actorParticipant = MakeBattleEventParticipant(attacker, attackerIndex, competitor);
+    BattleEventParticipant dragonParticipant;
+    dragonParticipant.actor = BattleActor::None;
+    dragonParticipant.name = dragon_.name;
+
+    BattleEvent started = MakeTargetedEvent(
+        BattleEventType::SkillStarted,
+        actorParticipant,
+        dragonParticipant,
+        definition.id);
+    result.events.push_back(started);
+    skillUse.events.push_back(started);
+
+    competitor.mana = std::clamp(
+        competitor.mana - rules_.GetManaCost(definition, progress, competitor) + rules_.GetManaGain(definition, progress),
+        0,
+        competitor.maxMana);
+    skillUse.newMana = competitor.mana;
+    if (skillUse.oldMana != skillUse.newMana)
+    {
+        BattleEvent manaChanged = MakeActorEvent(BattleEventType::ManaChanged, actorParticipant, definition.id);
+        manaChanged.skillId = definition.id;
+        manaChanged.oldValue = skillUse.oldMana;
+        manaChanged.newValue = skillUse.newMana;
+        manaChanged.amount = skillUse.newMana - skillUse.oldMana;
+        result.events.push_back(manaChanged);
+        skillUse.events.push_back(manaChanged);
+    }
+
+    std::uniform_real_distribution<double> roll(0.0, 1.0);
+    if (roll(randomEngine_) >= rules_.GetAccuracy(definition, progress, competitor))
+    {
+        skillUse.hit = false;
+        BattleEvent missed = MakeTargetedEvent(
+            BattleEventType::AttackMissed,
+            actorParticipant,
+            dragonParticipant,
+            definition.id);
+        result.events.push_back(missed);
+        skillUse.events.push_back(missed);
+    }
+    else
+    {
+        skillUse.damage = rules_.CalculateObjectiveDamage(definition, progress, competitor, attackerStatus);
+        dragon_.hp = std::max(0, dragon_.hp - skillUse.damage.amount);
+        skillUse.newTargetHp = dragon_.hp;
+
+        BattleEvent damageApplied = MakeTargetedEvent(
+            BattleEventType::DamageApplied,
+            actorParticipant,
+            dragonParticipant,
+            definition.id);
+        damageApplied.oldValue = skillUse.oldTargetHp;
+        damageApplied.newValue = skillUse.newTargetHp;
+        damageApplied.amount = skillUse.damage.amount;
+        damageApplied.damage = skillUse.damage;
+        damageApplied.reason = "neutral";
+        result.events.push_back(damageApplied);
+        skillUse.events.push_back(damageApplied);
+
+        if (dragon_.hp <= 0)
+        {
+            dragon_.active = false;
+            dragon_.respawnTimer = 4;
+            ApplyTeamPowerBuff(attacker, 15);
+
+            BattleEvent slain = MakeTargetedEvent(
+                BattleEventType::NeutralObjectiveSlain,
+                actorParticipant,
+                dragonParticipant,
+                definition.id);
+            slain.amount = 15;
+            slain.reason = dragon_.name;
+            result.events.push_back(slain);
+            skillUse.events.push_back(slain);
+        }
+        else
+        {
+            const int oldHp = competitor.hp;
+            competitor.hp = std::max(0, competitor.hp - 15);
+            BattleEvent retaliation = MakeTargetedEvent(
+                BattleEventType::DamageApplied,
+                dragonParticipant,
+                actorParticipant,
+                "dragon-retaliation");
+            retaliation.oldValue = oldHp;
+            retaliation.newValue = competitor.hp;
+            retaliation.amount = oldHp - competitor.hp;
+            retaliation.reason = "dragon_retaliation";
+            result.events.push_back(retaliation);
+            skillUse.events.push_back(retaliation);
+        }
+    }
+
+    skillUse.xp = AwardCappedSkillXp(attacker, competitor.profileIndex, progress);
+    if (skillUse.xp.xpGained > 0)
+    {
+        BattleEvent xpGained = MakeActorEvent(BattleEventType::SkillXpGained, actorParticipant, definition.id);
+        xpGained.oldValue = skillUse.xp.oldXp;
+        xpGained.newValue = skillUse.xp.newXp;
+        xpGained.amount = skillUse.xp.xpGained;
+        xpGained.xp = skillUse.xp;
+        result.events.push_back(xpGained);
+        skillUse.events.push_back(xpGained);
+    }
+    if (skillUse.xp.leveledUp)
+    {
+        BattleEvent leveledUp = MakeActorEvent(BattleEventType::SkillLeveledUp, actorParticipant, definition.id);
+        leveledUp.oldLevel = skillUse.xp.oldLevel;
+        leveledUp.newLevel = skillUse.xp.newLevel;
+        leveledUp.xp = skillUse.xp;
+        result.events.push_back(leveledUp);
+        skillUse.events.push_back(leveledUp);
+    }
+
+    TickCooldowns(attacker, competitor, result);
+    StartCooldown(attacker, competitor, attackerStatus, definition, result);
+    TickActionStatusDurations(attacker, attackerStatus, result);
+    result.skillUses.push_back(skillUse);
+}
+
+void BattleSession::SpawnDragon(BattleActionResult& result)
+{
+    dragon_.id = "dragon";
+    dragon_.name = "Dragon";
+    dragon_.hp = dragon_.maxHp;
+    dragon_.active = true;
+    dragon_.respawnTimer = 0;
+
+    BattleEvent event = MakeBattleEvent(BattleEventType::NeutralObjectiveSpawned, BattleActor::None);
+    event.targetName = dragon_.name;
+    event.newValue = dragon_.hp;
+    event.reason = dragon_.name;
+    result.events.push_back(event);
+}
+
+void BattleSession::TickNeutralObjectives(BattleActionResult& result)
+{
+    if (dragon_.active)
+    {
+        return;
+    }
+
+    for (const BattleEvent& event : result.events)
+    {
+        if (event.type == BattleEventType::NeutralObjectiveSlain)
+        {
+            return;
+        }
+    }
+
+    if (dragon_.respawnTimer > 0)
+    {
+        --dragon_.respawnTimer;
+        if (dragon_.respawnTimer > 0)
+        {
+            return;
+        }
+    }
+
+    if (dragon_.respawnTimer == 0 && dragon_.hp <= 0)
+    {
+        SpawnDragon(result);
+    }
+}
+
+void BattleSession::ApplyTeamPowerBuff(BattleActor actor, int percent)
+{
+    std::vector<Competitor>& team = actor == BattleActor::Player
+        ? playerTeam_
+        : opponentTeam_;
+    int& teamBuff = actor == BattleActor::Player
+        ? playerPowerBuffPercent_
+        : opponentPowerBuffPercent_;
+    teamBuff += percent;
+    for (Competitor& competitor : team)
+    {
+        competitor.powerBuffPercent = teamBuff;
+    }
+}
+
+std::string BattleSession::SkillXpAwardKey(
+    BattleActor actor,
+    int profileIndex,
+    const std::string& skillId) const
+{
+    const char* actorPrefix = actor == BattleActor::Player ? "player" : "opponent";
+    return std::string(actorPrefix) + ":" + std::to_string(profileIndex) + ":" + skillId;
+}
+
+int BattleSession::GetRemainingSkillXpAward(
+    BattleActor actor,
+    int profileIndex,
+    const std::string& skillId) const
+{
+    const std::string key = SkillXpAwardKey(actor, profileIndex, skillId);
+    const auto found = skillXpAwardedThisBattle_.find(key);
+    const int awarded = found == skillXpAwardedThisBattle_.end() ? 0 : found->second;
+    return std::max(0, Balance::MaxSkillXpPerBattle - awarded);
+}
+
+void BattleSession::RegisterSkillXpAward(
+    BattleActor actor,
+    int profileIndex,
+    const std::string& skillId,
+    int amount)
+{
+    if (amount <= 0)
+    {
+        return;
+    }
+
+    skillXpAwardedThisBattle_[SkillXpAwardKey(actor, profileIndex, skillId)] += amount;
+}
+
+SkillXpResult BattleSession::AwardCappedSkillXp(
+    BattleActor actor,
+    int profileIndex,
+    SkillProgress& progress)
+{
+    SkillXpResult xp = progression_.AwardSkillXp(
+        progress,
+        GetRemainingSkillXpAward(actor, profileIndex, progress.skillId));
+    RegisterSkillXpAward(actor, profileIndex, progress.skillId, xp.xpGained);
+    return xp;
+}
+
 bool BattleSession::IsBasicAbility(const Skill& definition) const
 {
     return definition.manaCost == 0 && definition.cooldownTurns == 0;
@@ -841,6 +1488,10 @@ SkillActionTarget BattleSession::ResolvePlayerSkillTarget(const Skill& definitio
 
     if (definition.power > 0)
     {
+        if (!HasLivingOpponent())
+        {
+            return {};
+        }
         return target;
     }
 
@@ -901,7 +1552,24 @@ SkillUseResult BattleSession::ExecuteSkillAction(
     const Skill& definition,
     BattleActionResult& result)
 {
-    SkillUseResult skillUse = skills_.UseSkill(request, randomEngine_);
+    SkillUseRequest cappedRequest = request;
+    if (cappedRequest.competitor != nullptr && cappedRequest.progress != nullptr)
+    {
+        cappedRequest.maxSkillXpAward = GetRemainingSkillXpAward(
+            cappedRequest.actor,
+            cappedRequest.competitor->profileIndex,
+            cappedRequest.progress->skillId);
+    }
+
+    SkillUseResult skillUse = skills_.UseSkill(cappedRequest, randomEngine_);
+    if (cappedRequest.competitor != nullptr && cappedRequest.progress != nullptr)
+    {
+        RegisterSkillXpAward(
+            cappedRequest.actor,
+            cappedRequest.competitor->profileIndex,
+            cappedRequest.progress->skillId,
+            skillUse.xp.xpGained);
+    }
     AppendEvents(result, skillUse.events);
     result.skillUses.push_back(skillUse);
 
@@ -1144,8 +1812,105 @@ void BattleSession::AppendActionBlocked(
     result.events.push_back(event);
 }
 
+int BattleSession::GetReinforcementTurns() const
+{
+    if (playerActionCount_ <= 10)
+    {
+        return 2;
+    }
+    if (playerActionCount_ <= 20)
+    {
+        return 3;
+    }
+
+    return 4;
+}
+
+void BattleSession::StartKnockoutTimers(BattleActionResult& result)
+{
+    StartKnockoutTimerForTeam(BattleActor::Player, playerTeam_, result);
+    StartKnockoutTimerForTeam(BattleActor::Opponent, opponentTeam_, result);
+}
+
+void BattleSession::StartKnockoutTimerForTeam(
+    BattleActor actor,
+    std::vector<Competitor>& team,
+    BattleActionResult& result)
+{
+    for (int index = 0; index < static_cast<int>(team.size()); ++index)
+    {
+        Competitor& competitor = team[index];
+        if (competitor.hp > 0 || competitor.reinforcementTimer > 0)
+        {
+            continue;
+        }
+
+        competitor.reinforcementTimer = GetReinforcementTurns();
+        BattleEvent event = MakeActorEvent(
+            BattleEventType::ReinforcementStarted,
+            MakeBattleEventParticipant(actor, index, competitor));
+        event.newValue = competitor.reinforcementTimer;
+        event.reason = "KO";
+        result.events.push_back(event);
+    }
+}
+
+void BattleSession::TickReinforcementTimers(BattleActionResult& result)
+{
+    TickReinforcementTimersForTeam(BattleActor::Player, playerTeam_, result);
+    TickReinforcementTimersForTeam(BattleActor::Opponent, opponentTeam_, result);
+}
+
+void BattleSession::TickReinforcementTimersForTeam(
+    BattleActor actor,
+    std::vector<Competitor>& team,
+    BattleActionResult& result)
+{
+    for (int index = 0; index < static_cast<int>(team.size()); ++index)
+    {
+        Competitor& competitor = team[index];
+        if (competitor.hp > 0 || competitor.reinforcementTimer <= 0)
+        {
+            continue;
+        }
+
+        const int oldTimer = competitor.reinforcementTimer;
+        --competitor.reinforcementTimer;
+        if (competitor.reinforcementTimer > 0)
+        {
+            continue;
+        }
+
+        const int oldHp = competitor.hp;
+        competitor.hp = std::max(1, competitor.maxHp);
+        BattleEvent event = MakeTargetedEvent(
+            BattleEventType::HealingApplied,
+            MakeBattleEventParticipant(actor, index, competitor),
+            MakeBattleEventParticipant(actor, index, competitor),
+            "reinforcement");
+        event.oldValue = oldHp;
+        event.newValue = competitor.hp;
+        event.amount = competitor.hp - oldHp;
+        event.oldLevel = oldTimer;
+        event.newValue = competitor.hp;
+        event.reason = "respawn";
+        result.events.push_back(event);
+    }
+}
+
 void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
 {
+    if (!HasLivingPlayer())
+    {
+        ResolveOpponentObjectivePushes(result);
+        return;
+    }
+
+    if (!HasLivingOpponent())
+    {
+        return;
+    }
+
     Competitor& opponent = ActiveOpponent();
     BattleStatus& opponentStatus = ActiveOpponentStatus();
 
@@ -1191,6 +1956,102 @@ void BattleSession::ResolveOpponentTurn(BattleActionResult& result)
     ExecuteSkillAction(request, *definition, result);
 }
 
+SkillProgress* BattleSession::SelectBasicDamageSkill(Competitor& competitor, BattleStatus& status) const
+{
+    SkillProgress* fallback = nullptr;
+    for (SkillProgress& progress : competitor.skills)
+    {
+        const Skill* definition = data_.FindSkill(progress.skillId);
+        if (definition == nullptr || definition->power <= 0 || definition->manaCost > 0)
+        {
+            continue;
+        }
+
+        const SkillActionValidation validation = ValidateSkillAction(
+            competitor,
+            status,
+            *definition,
+            progress,
+            GetCooldownRemaining(competitor, progress.skillId));
+        if (!validation.canUse)
+        {
+            continue;
+        }
+
+        if (fallback == nullptr)
+        {
+            fallback = &progress;
+        }
+        if (progress.skillId.find("-basic") != std::string::npos)
+        {
+            return &progress;
+        }
+    }
+
+    return fallback;
+}
+
+SkillProgress* BattleSession::SelectObjectivePushSkill(Competitor& competitor, BattleStatus& status) const
+{
+    SkillProgress* selected = nullptr;
+    int selectedPower = -1;
+    for (SkillProgress& progress : competitor.skills)
+    {
+        const Skill* definition = data_.FindSkill(progress.skillId);
+        if (definition == nullptr || definition->power <= 0)
+        {
+            continue;
+        }
+
+        const SkillActionValidation validation = ValidateSkillAction(
+            competitor,
+            status,
+            *definition,
+            progress,
+            GetCooldownRemaining(competitor, progress.skillId));
+        if (!validation.canUse)
+        {
+            continue;
+        }
+
+        const int power = rules_.GetPower(*definition, progress);
+        if (power > selectedPower)
+        {
+            selected = &progress;
+            selectedPower = power;
+        }
+    }
+
+    return selected;
+}
+
+void BattleSession::ResolveOpponentObjectivePushes(BattleActionResult& result)
+{
+    if (finished_ || HasLivingPlayer() || !HasLivingOpponent())
+    {
+        return;
+    }
+
+    AdvanceToNextOpponent(result);
+    Competitor& opponent = ActiveOpponent();
+    BattleStatus& opponentStatus = ActiveOpponentStatus();
+    SkillProgress* progress = SelectObjectivePushSkill(opponent, opponentStatus);
+    if (progress == nullptr)
+    {
+        FinishNonSkillActionOpportunity(BattleActor::Opponent, opponent, opponentStatus, result);
+        return;
+    }
+
+    const Skill* definition = data_.FindSkill(progress->skillId);
+    if (definition == nullptr)
+    {
+        return;
+    }
+
+    ApplyObjectiveDamage(BattleActor::Opponent, opponent, *definition, *progress, result);
+    FinishBattleIfNeeded(result);
+}
+
 void BattleSession::RegisterPlayerActionAndApplyFarming(BattleActionResult& result)
 {
     (void)result;
@@ -1213,9 +2074,25 @@ void BattleSession::ResolveAfterPlayerAction(BattleActionResult& result)
         FinishBattleIfNeeded(result);
     }
 
-    if (!finished_)
+    if (!finished_ && HasLivingPlayer())
     {
         AdvanceToNextPlayer(result);
+        FinishBattleIfNeeded(result);
+    }
+
+    if (!finished_)
+    {
+        TickReinforcementTimers(result);
+        StartKnockoutTimers(result);
+        TickNeutralObjectives(result);
+        if (!HasLivingPlayer())
+        {
+            AdvanceToNextPlayer(result);
+        }
+        if (!HasLivingOpponent())
+        {
+            AdvanceToNextOpponent(result);
+        }
         FinishBattleIfNeeded(result);
     }
 }
@@ -1225,6 +2102,8 @@ void BattleSession::ApplyPlayerFarm(
     BattleStatus& status,
     BattleActionResult& result) const
 {
+    (void)status;
+
     BattleEvent farmStarted = MakeActorEvent(
         BattleEventType::FarmingTriggered,
         MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
@@ -1249,25 +2128,6 @@ void BattleSession::ApplyPlayerFarm(
         manaChanged.amount = player.mana - oldMana;
         manaChanged.reason = "farming";
         result.events.push_back(manaChanged);
-    }
-
-    if (ApplyBattleStatusEffect(
-            status,
-            SkillEffectType::DefenseModifier,
-            BattleEconomySystem::FarmingDefenseModifierPercent,
-            BattleEconomySystem::FarmingDefenseModifierTurns))
-    {
-        BattleEvent statusApplied = MakeTargetedEvent(
-            BattleEventType::StatusApplied,
-            MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
-            MakeBattleEventParticipant(BattleActor::Player, activePlayerIndex_, player),
-            "farm");
-        statusApplied.amount = BattleEconomySystem::FarmingDefenseModifierPercent;
-        statusApplied.effect.type = SkillEffectType::DefenseModifier;
-        statusApplied.effect.target = BattleActor::Player;
-        statusApplied.effect.value = BattleEconomySystem::FarmingDefenseModifierPercent;
-        statusApplied.effect.duration = BattleEconomySystem::FarmingDefenseModifierTurns - 1;
-        result.events.push_back(statusApplied);
     }
 }
 
@@ -1389,6 +2249,8 @@ CompetitorView BattleSession::CreateCompetitorView(
     view.maxMana = competitor.maxMana;
     view.basePower = competitor.basePower;
     view.counterDamageBonusPercent = competitor.counterDamageBonusPercent;
+    view.powerBuffPercent = competitor.powerBuffPercent;
+    view.reinforcementTimer = competitor.reinforcementTimer;
     view.status = status;
     return view;
 }
@@ -1400,13 +2262,23 @@ void BattleSession::FinishBattleIfNeeded(BattleActionResult& result)
         return;
     }
 
-    if (HasLivingOpponent() && HasLivingPlayer())
+    if (!opponentObjectives_.empty()
+        && opponentObjectives_.back().hp <= 0)
+    {
+        finished_ = true;
+        winner_ = BattleWinner::Player;
+    }
+    else if (!playerObjectives_.empty()
+        && playerObjectives_.back().hp <= 0)
+    {
+        finished_ = true;
+        winner_ = BattleWinner::Opponent;
+    }
+    else
     {
         return;
     }
 
-    finished_ = true;
-    winner_ = HasLivingOpponent() ? BattleWinner::Opponent : BattleWinner::Player;
     result.battleFinished = true;
     result.winner = winner_;
     BattleEvent event = MakeBattleEvent(BattleEventType::BattleFinished, BattleActor::None);

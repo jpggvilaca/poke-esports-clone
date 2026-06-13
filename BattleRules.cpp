@@ -169,6 +169,10 @@ DamageResult BattleRules::CalculateDamage(
     {
         damage *= (100.0 + attackerStatus.attackModifierPercent) / 100.0;
     }
+    if (attacker.powerBuffPercent > 0)
+    {
+        damage *= (100.0 + attacker.powerBuffPercent) / 100.0;
+    }
 
     if (defenderStatus.defenseModifierTurns > 0)
     {
@@ -194,6 +198,29 @@ DamageResult BattleRules::CalculateDamage(
     // Edit status percentages in SimulationData.cpp to tune buffs. A successful
     // damaging hit always deals at least one damage.
     result.amount = std::max(1, static_cast<int>(std::round(damage)) + result.markBonusDamage);
+    return result;
+}
+
+DamageResult BattleRules::CalculateObjectiveDamage(
+    const Skill& definition,
+    const SkillProgress& progress,
+    const Competitor& attacker,
+    const BattleStatus& attackerStatus) const
+{
+    DamageResult result;
+    result.applied = true;
+
+    double damage = attacker.basePower + GetPower(definition, progress);
+    if (attackerStatus.attackModifierTurns > 0)
+    {
+        damage *= (100.0 + attackerStatus.attackModifierPercent) / 100.0;
+    }
+    if (attacker.powerBuffPercent > 0)
+    {
+        damage *= (100.0 + attacker.powerBuffPercent) / 100.0;
+    }
+
+    result.amount = std::max(1, static_cast<int>(std::round(damage)));
     return result;
 }
 

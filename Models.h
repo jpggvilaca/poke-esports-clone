@@ -162,6 +162,10 @@ enum class BattleEventType
     MarkTriggered,
     MarkExpired,
     FarmingTriggered,
+    ObjectiveDestroyed,
+    ReinforcementStarted,
+    NeutralObjectiveSpawned,
+    NeutralObjectiveSlain,
     SkillXpGained,
     SkillLeveledUp,
     BattleFinished,
@@ -341,6 +345,8 @@ struct Competitor
     int maxMana = 100;
     int basePower = 5;
     int counterDamageBonusPercent = 0;
+    int powerBuffPercent = 0;
+    int reinforcementTimer = 0;
     std::vector<SkillProgress> skills;
     std::vector<AbilityRuntimeState> abilityStates;
 
@@ -395,6 +401,25 @@ struct Competitor
 
         return nullptr;
     }
+};
+
+struct LaneObjective
+{
+    std::string id;
+    std::string name;
+    int hp = 150;
+    int maxHp = 150;
+    bool destroyed = false;
+};
+
+struct NeutralObjectiveState
+{
+    std::string id = "dragon";
+    std::string name = "Dragon";
+    int hp = 0;
+    int maxHp = 120;
+    bool active = false;
+    int respawnTimer = 0;
 };
 
 struct BattleSetup
@@ -466,6 +491,8 @@ struct CompetitorView
     int maxMana = 0;
     int basePower = 0;
     int counterDamageBonusPercent = 0;
+    int powerBuffPercent = 0;
+    int reinforcementTimer = 0;
     BattleStatus status;
 };
 
@@ -480,6 +507,15 @@ struct BattleState
     std::vector<CompetitorView> playerTeam;
     CompetitorView opponent;
     std::vector<CompetitorView> opponentTeam;
+    std::vector<LaneObjective> playerObjectives;
+    std::vector<LaneObjective> opponentObjectives;
+    int activePlayerObjectiveIndex = 0;
+    int activeOpponentObjectiveIndex = 0;
+    bool playerObjectiveVulnerable = false;
+    bool opponentObjectiveVulnerable = false;
+    NeutralObjectiveState neutralObjective;
+    int playerPowerBuffPercent = 0;
+    int opponentPowerBuffPercent = 0;
 };
 
 struct SkillView
@@ -535,6 +571,7 @@ struct DamageResult
     bool applied = false;
     int amount = 0;
     int markBonusDamage = 0;
+    bool critical = false;
     double specModifier = 1.0;
     Effectiveness effectiveness = Effectiveness::Neutral;
 };

@@ -100,6 +100,10 @@ String EventTypeToString(BattleEventType type)
     case BattleEventType::MarkTriggered: return "mark_triggered";
     case BattleEventType::MarkExpired: return "mark_expired";
     case BattleEventType::FarmingTriggered: return "farming_triggered";
+    case BattleEventType::ObjectiveDestroyed: return "objective_destroyed";
+    case BattleEventType::ReinforcementStarted: return "reinforcement_started";
+    case BattleEventType::NeutralObjectiveSpawned: return "neutral_objective_spawned";
+    case BattleEventType::NeutralObjectiveSlain: return "neutral_objective_slain";
     case BattleEventType::SkillXpGained: return "skill_xp_gained";
     case BattleEventType::SkillLeveledUp: return "skill_leveled_up";
     case BattleEventType::BattleFinished: return "battle_finished";
@@ -419,6 +423,39 @@ Dictionary BattleRewardToDictionary(const BattleRewardResult& reward)
     return dictionary;
 }
 
+Dictionary LaneObjectiveToDictionary(const LaneObjective& objective)
+{
+    Dictionary dictionary;
+    dictionary["id"] = String(objective.id.c_str());
+    dictionary["name"] = String(objective.name.c_str());
+    dictionary["hp"] = objective.hp;
+    dictionary["max_hp"] = objective.maxHp;
+    dictionary["destroyed"] = objective.destroyed;
+    return dictionary;
+}
+
+Dictionary NeutralObjectiveToDictionary(const NeutralObjectiveState& objective)
+{
+    Dictionary dictionary;
+    dictionary["id"] = String(objective.id.c_str());
+    dictionary["name"] = String(objective.name.c_str());
+    dictionary["hp"] = objective.hp;
+    dictionary["max_hp"] = objective.maxHp;
+    dictionary["active"] = objective.active;
+    dictionary["respawn_timer"] = objective.respawnTimer;
+    return dictionary;
+}
+
+Array LaneObjectivesToArray(const std::vector<LaneObjective>& objectives)
+{
+    Array values;
+    for (const LaneObjective& objective : objectives)
+    {
+        values.push_back(LaneObjectiveToDictionary(objective));
+    }
+    return values;
+}
+
 Dictionary CompetitorToDictionary(const CompetitorView& competitor, const SimulationData& data)
 {
     Dictionary dictionary;
@@ -450,6 +487,8 @@ Dictionary CompetitorToDictionary(const CompetitorView& competitor, const Simula
     dictionary["max_mana"] = competitor.maxMana;
     dictionary["base_power"] = competitor.basePower;
     dictionary["counter_damage_bonus_percent"] = competitor.counterDamageBonusPercent;
+    dictionary["power_buff_percent"] = competitor.powerBuffPercent;
+    dictionary["reinforcement_timer"] = competitor.reinforcementTimer;
     dictionary["status"] = status;
     return dictionary;
 }
@@ -478,6 +517,15 @@ Dictionary BattleStateToDictionary(const BattleState& state, const SimulationDat
         opponent_team.push_back(CompetitorToDictionary(opponent, data));
     }
     dictionary["opponent_team"] = opponent_team;
+    dictionary["player_objectives"] = LaneObjectivesToArray(state.playerObjectives);
+    dictionary["opponent_objectives"] = LaneObjectivesToArray(state.opponentObjectives);
+    dictionary["active_player_objective_index"] = state.activePlayerObjectiveIndex;
+    dictionary["active_opponent_objective_index"] = state.activeOpponentObjectiveIndex;
+    dictionary["player_objective_vulnerable"] = state.playerObjectiveVulnerable;
+    dictionary["opponent_objective_vulnerable"] = state.opponentObjectiveVulnerable;
+    dictionary["neutral_objective"] = NeutralObjectiveToDictionary(state.neutralObjective);
+    dictionary["player_power_buff_percent"] = state.playerPowerBuffPercent;
+    dictionary["opponent_power_buff_percent"] = state.opponentPowerBuffPercent;
     return dictionary;
 }
 
@@ -505,6 +553,7 @@ Dictionary BattleEventToDictionary(const BattleEvent& event)
     dictionary["new_level"] = event.newLevel;
     dictionary["winner"] = WinnerToString(event.winner);
     dictionary["damage"] = event.damage.amount;
+    dictionary["critical"] = event.damage.critical;
     dictionary["mark_bonus_damage"] = event.damage.markBonusDamage > 0
         ? event.damage.markBonusDamage
         : event.effect.markBonusDamage;
